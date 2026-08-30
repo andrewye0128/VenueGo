@@ -1,4 +1,4 @@
-\# VenueGo
+# VenueGo
 
 
 
@@ -6,7 +6,7 @@
 
 
 
-\## 專案介紹
+## 專案介紹
 
 
 
@@ -16,43 +16,43 @@ VenueGo 是以 ASP.NET Core MVC 開發的球館預約後台管理系統，
 
 
 
-\## 技術架構
+## 技術架構
 
 
 
-\- ASP.NET Core MVC
+- ASP.NET Core MVC
 
-\- .NET 10
+- .NET 10
 
-\- Entity Framework Core
+- Entity Framework Core
 
-\- SQL Server
+- SQL Server
 
-\- Bootstrap 5
+- Bootstrap 5
 
-\- jQuery
+- jQuery
 
-\- Git
+- Git
 
-\- GitHub
-
-
-
-\## 開發環境
+- GitHub
 
 
 
-\- Visual Studio
-
-\- .NET 10 SDK
-
-\- SQL Server
-
-\- SQL Server Management Studio
+## 開發環境
 
 
 
-\## 專案架構
+- Visual Studio
+
+- .NET 10 SDK
+
+- SQL Server
+
+- SQL Server Management Studio
+
+
+
+## 專案架構
 
 
 

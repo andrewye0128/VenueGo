@@ -1,0 +1,53 @@
+@*
+    放置路徑：Views/Shared/_Header.cshtml
+    頁首：選單開關、頁面標題、通知、全螢幕、使用者選單
+*@
+@{
+    var pageTitle = ViewData["Title"] as string ?? "儀表板";
+    var notifyCount = 3;   // TODO: 之後改由 ViewComponent 或 ViewBag 帶入
+    var userName = "管理員";
+    var userEmail = "admin@venuego.com";
+}
+
+<header class="admin-header">
+
+    <div class="header-left">
+        <button type="button" class="icon-btn" id="sidebarToggle" aria-label="切換選單">
+            <i class="bi bi-list"></i>
+        </button>
+
+        <div class="page-title">
+            <h1>@pageTitle</h1>
+        </div>
+    </div>
+
+    <div class="header-right">
+        <button type="button" class="icon-btn" id="notifyBtn" aria-label="通知">
+            <i class="bi bi-bell"></i>
+            @if (notifyCount > 0)
+            {
+                <span class="badge-count">@notifyCount</span>
+            }
+        </button>
+
+        <button type="button" class="icon-btn" id="fullscreenBtn" aria-label="全螢幕">
+            <i class="bi bi-arrows-fullscreen"></i>
+        </button>
+
+        <div class="dropdown">
+            <button type="button" class="user-box" data-bs-toggle="dropdown" aria-expanded="false">
+                <span class="avatar">@userName.Substring(0, 1)</span>
+                <span class="user-info">
+                    <span class="user-name">@userName</span>
+                    <span class="user-email">@userEmail</span>
+                </span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end">
+                <li><a class="dropdown-item" asp-controller="Member" asp-action="Profile">個人資料</a></li>
+                <li><a class="dropdown-item" asp-controller="Setting" asp-action="Index">系統設定</a></li>
+                <li><hr class="dropdown-divider" /></li>
+                <li><a class="dropdown-item text-danger" asp-controller="Account" asp-action="Logout">登出</a></li>
+            </ul>
+        </div>
+    </div>
+</header>

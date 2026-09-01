@@ -1,0 +1,364 @@
+/* 放置路徑：wwwroot/css/admin.css
+   VenueGo 後台版型樣式 */
+
+:root {
+    --sidebar-w: 232px;
+    --sidebar-w-collapsed: 76px;
+    --header-h: 64px;
+
+    --sidebar-bg: #1e293b;
+    --sidebar-text: #cbd5e1;
+    --sidebar-text-hover: #ffffff;
+    --sidebar-active: #2563eb;
+
+    --page-bg: #f4f6fa;
+    --surface: #ffffff;
+    --border: #e5e7eb;
+    --text: #111827;
+    --text-muted: #6b7280;
+    --brand: #2563eb;
+}
+
+.admin-body {
+    background: var(--page-bg);
+    color: var(--text);
+    font-family: "Noto Sans TC", "Microsoft JhengHei", -apple-system, "Segoe UI", sans-serif;
+}
+
+.admin-layout {
+    min-height: 100vh;
+}
+
+/* ---------- Sidebar ---------- */
+.admin-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-w);
+    background: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    z-index: 1040;
+    transition: width .2s ease, transform .2s ease;
+}
+
+.sidebar-brand {
+    height: var(--header-h);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 16px;
+    flex-shrink: 0;
+}
+
+.sidebar-brand .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    overflow: hidden;
+}
+
+.brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
+    background: var(--brand);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.brand-name {
+    color: #fff;
+    font-size: 19px;
+    font-weight: 700;
+    letter-spacing: .3px;
+    white-space: nowrap;
+}
+
+.sidebar-close {
+    color: var(--sidebar-text);
+    display: none; /* 僅手機版顯示 */
+}
+
+.sidebar-nav {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 12px;
+}
+
+.sidebar-nav ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.sidebar-nav .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 46px;
+    padding: 0 14px;
+    margin-bottom: 4px;
+    border-radius: 10px;
+    color: var(--sidebar-text);
+    text-decoration: none;
+    font-size: 15px;
+    white-space: nowrap;
+    transition: background-color .15s ease, color .15s ease;
+}
+
+.sidebar-nav .nav-item i {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+.sidebar-nav .nav-item:hover {
+    background: rgba(255, 255, 255, .08);
+    color: var(--sidebar-text-hover);
+}
+
+.sidebar-nav .nav-item.active {
+    background: var(--sidebar-active);
+    color: #fff;
+    font-weight: 500;
+}
+
+.sidebar-collapse {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 52px;
+    padding: 0 26px;
+    border: 0;
+    border-top: 1px solid rgba(255, 255, 255, .08);
+    background: transparent;
+    color: var(--sidebar-text);
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.sidebar-collapse:hover {
+    color: #fff;
+}
+
+/* 收合狀態 */
+.admin-layout.is-collapsed .admin-sidebar {
+    width: var(--sidebar-w-collapsed);
+}
+
+.admin-layout.is-collapsed .brand-name,
+.admin-layout.is-collapsed .nav-text {
+    display: none;
+}
+
+.admin-layout.is-collapsed .sidebar-nav .nav-item,
+.admin-layout.is-collapsed .sidebar-collapse {
+    justify-content: center;
+    padding: 0;
+}
+
+.admin-layout.is-collapsed .sidebar-collapse i {
+    transform: rotate(180deg);
+}
+
+/* ---------- 主區塊 ---------- */
+.admin-main {
+    margin-left: var(--sidebar-w);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    transition: margin-left .2s ease;
+}
+
+.admin-layout.is-collapsed .admin-main {
+    margin-left: var(--sidebar-w-collapsed);
+}
+
+/* ---------- Header ---------- */
+.admin-header {
+    position: sticky;
+    top: 0;
+    z-index: 1030;
+    height: var(--header-h);
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 20px;
+    gap: 16px;
+}
+
+.header-left,
+.header-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.page-title {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-left: 8px;
+}
+
+.page-title h1 {
+    font-size: 17px;
+    font-weight: 600;
+    margin: 0;
+}
+
+.icon-btn {
+    width: 38px;
+    height: 38px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #374151;
+    font-size: 19px;
+    display: inline-grid;
+    place-items: center;
+    position: relative;
+}
+
+.icon-btn:hover {
+    background: #f3f4f6;
+}
+
+.icon-btn-sm {
+    width: 28px;
+    height: 28px;
+    font-size: 15px;
+    color: var(--text-muted);
+}
+
+.badge-count {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    min-width: 17px;
+    height: 17px;
+    padding: 0 4px;
+    border-radius: 999px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 11px;
+    line-height: 17px;
+    text-align: center;
+}
+
+.user-box {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 4px 8px;
+    border: 0;
+    border-radius: 10px;
+    background: transparent;
+    text-align: left;
+}
+
+.user-box:hover {
+    background: #f3f4f6;
+}
+
+.avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: var(--brand);
+    color: #fff;
+    display: grid;
+    place-items: center;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.user-info {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+}
+
+.user-name {
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.user-email {
+    font-size: 12px;
+    color: var(--text-muted);
+}
+
+/* ---------- 內容區 ---------- */
+.admin-content {
+    flex: 1;
+    padding: 24px;
+}
+
+/* 給各頁面共用的卡片外觀 */
+.admin-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 20px;
+}
+
+/* ---------- 手機版 ---------- */
+.admin-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, .45);
+    z-index: 1035;
+}
+
+@media (max-width: 991.98px) {
+    .admin-sidebar {
+        transform: translateX(-100%);
+        width: var(--sidebar-w);
+    }
+
+    .admin-layout.is-open .admin-sidebar {
+        transform: translateX(0);
+    }
+
+    .admin-layout.is-open .admin-backdrop {
+        display: block;
+    }
+
+    .admin-main,
+    .admin-layout.is-collapsed .admin-main {
+        margin-left: 0;
+    }
+
+    .sidebar-close {
+        display: inline-grid;
+    }
+
+    .user-info {
+        display: none;
+    }
+
+    .admin-content {
+        padding: 16px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .admin-sidebar,
+    .admin-main {
+        transition: none;
+    }
+}
+
+:focus-visible {
+    outline: 2px solid var(--brand);
+    outline-offset: 2px;
+}

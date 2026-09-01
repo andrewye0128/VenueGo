@@ -1,0 +1,53 @@
+@*
+    放置路徑：Views/Shared/_Sidebar.cshtml
+    左側主選單。選單項目集中在下方 menus 陣列，新增子系統時只要加一筆。
+*@
+@{
+    // 目前所在的 Controller，用來判斷選單要不要 active
+    var current = ViewContext.RouteData.Values["controller"]?.ToString() ?? "";
+
+    var menus = new[]
+    {
+        new { Text = "儀表板",   Icon = "bi-house-door",       Controller = "Dashboard", Action = "Index" },
+        new { Text = "場館管理", Icon = "bi-buildings",        Controller = "Venue",     Action = "Index" },
+        new { Text = "場地管理", Icon = "bi-grid-3x3-gap",     Controller = "Court",     Action = "Index" },
+        new { Text = "預約管理", Icon = "bi-calendar-check",   Controller = "Booking",   Action = "Index" },
+        new { Text = "訂單管理", Icon = "bi-receipt",          Controller = "Order",     Action = "Index" },
+        new { Text = "會員管理", Icon = "bi-people",           Controller = "Member",    Action = "Index" },
+        new { Text = "付款管理", Icon = "bi-credit-card",      Controller = "Payment",   Action = "Index" },
+        new { Text = "統計報表", Icon = "bi-bar-chart",        Controller = "Report",    Action = "Index" },
+        new { Text = "系統設定", Icon = "bi-gear",             Controller = "Setting",   Action = "Index" },
+    };
+}
+
+<aside class="admin-sidebar" id="adminSidebar">
+
+    <div class="sidebar-brand">
+        <a class="brand" asp-controller="Dashboard" asp-action="Index">
+            <span class="brand-mark"><i class="bi bi-buildings-fill"></i></span>
+            <span class="brand-name">VenueGo</span>
+        </a>
+    </div>
+
+    <nav class="sidebar-nav" aria-label="主選單">
+        <ul>
+            @foreach (var m in menus)
+            {
+                var isActive = string.Equals(current, m.Controller, StringComparison.OrdinalIgnoreCase);
+                <li>
+                    <a class="nav-item @(isActive ? "active" : "")"
+                       asp-controller="@m.Controller" asp-action="@m.Action"
+                       title="@m.Text">
+                        <i class="bi @m.Icon"></i>
+                        <span class="nav-text">@m.Text</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    </nav>
+
+    <button type="button" class="sidebar-collapse" id="sidebarCollapse">
+        <i class="bi bi-chevron-double-left"></i>
+        <span class="nav-text">收合選單</span>
+    </button>
+</aside>

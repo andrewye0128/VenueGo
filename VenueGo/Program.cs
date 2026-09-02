@@ -1,7 +1,24 @@
+using Microsoft.EntityFrameworkCore;
+using VenueGo.Data;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// 讀取每個人的本機設定
+builder.Configuration.AddJsonFile(
+    "appsettings.Local.json",
+    optional: true,
+    reloadOnChange: true
+);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+
+// 註冊 EF Core DbContext
+builder.Services.AddDbContext<dbVenueContext>(options =>
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection")
+    ));
 
 var app = builder.Build();
 

@@ -1,6 +1,6 @@
 ﻿namespace VenueGo.ViewModels
 {
-    public class CTest
+    public class TestViewModels
     {
     }
 }

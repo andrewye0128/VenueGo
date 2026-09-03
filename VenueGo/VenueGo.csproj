@@ -17,6 +17,11 @@
 
   <ItemGroup>
     <Folder Include="Helpers\" />
+    <Folder Include="Models\MemberModels\" />
+    <Folder Include="Models\CheckinModels\" />
+    <Folder Include="Models\OperationModels\" />
+    <Folder Include="Models\ReservationModels\" />
+    <Folder Include="Models\VenueModels\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />
     <Folder Include="wwwroot\images\venues\" />

@@ -20,6 +20,9 @@ builder.Services.AddDbContext<dbVenueContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection")
     ));
 
+// 註冊 Session
+builder.Services.AddSession();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -32,7 +35,8 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseRouting();
-
+//啟動 Sesion
+app.UseSession();
 app.UseAuthorization();
 
 app.MapStaticAssets();

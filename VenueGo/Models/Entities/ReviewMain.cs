@@ -36,4 +36,16 @@ public partial class ReviewMain
     public DateTime? RepliedAt { get; set; }
 
     public int? RepliedByEmployeeId { get; set; }
+
+    public bool IsPinned { get; set; }
+
+    public DateTime? ReplyViewedAt { get; set; }
+
+    public byte? ReplySatisfaction { get; set; }
+
+    public DateTime? SpamMarkedAt { get; set; }
+
+    public int? SpamMarkedByEmployeeId { get; set; }
+
+    public byte? SpamReason { get; set; }
 }

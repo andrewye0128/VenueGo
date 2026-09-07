@@ -17,6 +17,8 @@ public partial class Venue
 
     public int? Capacity { get; set; }
 
+    public string? PhotoPath { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public int CreatedBy { get; set; }

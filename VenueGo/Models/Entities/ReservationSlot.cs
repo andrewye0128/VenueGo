@@ -13,5 +13,5 @@ public partial class ReservationSlot
 
     public DateOnly BookingDate { get; set; }
 
-    public TimeOnly SlotStartTime { get; set; }
+    public TimeOnly SlotTime { get; set; }
 }

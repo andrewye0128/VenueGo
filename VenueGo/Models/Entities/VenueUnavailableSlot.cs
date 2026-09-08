@@ -11,7 +11,7 @@ public partial class VenueUnavailableSlot
 
     public DateOnly UnavailableDate { get; set; }
 
-    public TimeOnly UnavailableStartTime { get; set; }
+    public TimeOnly UnavailableTime { get; set; }
 
     public string Reason { get; set; } = null!;
 

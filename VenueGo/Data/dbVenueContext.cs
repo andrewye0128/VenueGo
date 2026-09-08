@@ -325,6 +325,7 @@ public partial class dbVenueContext : DbContext
 
         modelBuilder.Entity<SportTypePriceRule>(entity =>
         {
+            entity.HasIndex(e => e.SportTypeId, "UQ_SportTypePriceRules_SportTypeId").IsUnique();
             entity.Property(e => e.PeakStartTime).HasPrecision(0);
             entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });
@@ -368,29 +369,31 @@ public partial class dbVenueContext : DbContext
 
         modelBuilder.Entity<Venue>(entity =>
         {
+            entity.HasIndex(e => e.SportTypeId, "IX_Venues_SportTypeId");
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(0)
                 .HasDefaultValueSql("(sysdatetime())", "DF_Venues_CreatedAt");
             entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_Venues_IsActive");
             entity.Property(e => e.Location).HasMaxLength(200);
+            entity.Property(e => e.PhotoPath).HasMaxLength(500);
             entity.Property(e => e.UpdatedAt).HasPrecision(0);
             entity.Property(e => e.VenueName).HasMaxLength(40);
         });
 
         modelBuilder.Entity<VenueUnavailableSlot>(entity =>
         {
+            entity.HasIndex(e => new { e.VenueId, e.UnavailableDate, e.UnavailableTime }, "UQ_VenueUnavailableSlots_VenueDateTime").IsUnique();
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(0)
                 .HasDefaultValueSql("(sysdatetime())", "DF_VenueUnavailableSlots_CreatedAt");
             entity.Property(e => e.Reason).HasMaxLength(500);
-            entity.Property(e => e.UnavailableStartTime).HasPrecision(0);
+            entity.Property(e => e.UnavailableTime).HasPrecision(0);
         });
 
         modelBuilder.Entity<WeekBusinessHour>(entity =>
         {
             entity.HasKey(e => e.BusinessHoursId);
 
-            entity.Property(e => e.BusinessHoursId).ValueGeneratedNever();
             entity.Property(e => e.CloseTime).HasPrecision(0);
             entity.Property(e => e.OpenTime).HasPrecision(0);
             entity.Property(e => e.UpdatedAt).HasPrecision(0);

@@ -1,0 +1,51 @@
+@model IEnumerable<VenueGo.Models.VenueModels.CSportTypeWrap>
+
+@{
+    ViewData["Title"] = "Index";
+}
+
+<h1>運動類型</h1>
+
+<p>
+    <a asp-action="SportTypeCreate">新增運動類型</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                序
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.SportName)
+            </th>
+
+            <th>操作</th>
+        </tr>
+    </thead>
+    <tbody>
+        @{
+            int count = 0;
+
+
+            foreach (var item in Model) {
+                count++;
+        <tr>
+            <td>
+                @count
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.SportName)
+            </td>
+            
+            <td>
+                <a asp-action="SportTypeEdit" asp-route-id="@item.SportTypeId">編輯</a> |
+
+                <a asp-action="SportTypeDelete" asp-route-id="@item.SportTypeId" onclick="return confirm('確定要刪除該筆運動類型嗎?')">刪除</a>
+            </td>
+        </tr>
+}
+        
+        }
+        
+    </tbody>
+</table>

@@ -1,0 +1,116 @@
+﻿@model IEnumerable<VenueGo.ViewModels.RoleListItemViewModel>
+
+@{
+    ViewData["Title"] = "角色權限管理";
+}
+
+<!-- 功能頁籤 (為未來擴充預留) -->
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link active" asp-controller="Setting" asp-action="Roles">
+            <i class="bi bi-shield-lock me-1"></i>角色權限管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "CreateUser" ? "active" : "")"
+           asp-controller="Setting" asp-action="CreateUser">
+            <i class="bi bi-person-plus me-1"></i>新增帳號
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">
+            <i class="bi bi-gear me-1"></i>系統參數設定 (未開放)
+        </a>
+    </li>
+</ul>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-people-fill me-2 text-primary"></i>角色列表</h5>
+        @* 未來如需新增角色，可在這裡放按鈕 *@
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">角色 ID</th>
+                        <th>角色名稱</th>
+                        <th>描述</th>
+                        <th>綁定使用者數</th>
+                        <th>擁有權限</th>
+                        <th>狀態</th>
+                        <th class="text-end pe-4">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center py-4 text-muted">目前尚無角色資料</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                <td class="ps-4 fw-bold">#@item.RoleId</td>
+                                <td><span class="badge bg-primary fs-6">@item.RoleName</span></td>
+                                <td>@(string.IsNullOrEmpty(item.Description) ? "-" : item.Description)</td>
+                                <td>
+                                    <span class="badge bg-light text-dark border">
+                                        <i class="bi bi-person me-1"></i>@item.UserCount 人
+                                    </span>
+                                </td>
+                                <td>
+                                    @if (item.PermissionNames.Any())
+                                    {
+                                        <div class="d-flex flex-wrap gap-1">
+                                            @foreach (var perm in item.PermissionNames.Take(3))
+                                            {
+                                                <span class="badge bg-info text-dark">@perm</span>
+                                            }
+                                            @if (item.PermissionNames.Count > 3)
+                                            {
+                                                <span class="badge bg-secondary">+@(item.PermissionNames.Count - 3)</span>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">無系統權限</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (item.Status)
+                                    {
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">啟用中</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">已停用</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <a asp-controller="Setting" asp-action="EditRole" asp-route-id="@item.RoleId"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil-square me-1"></i>編輯權限
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

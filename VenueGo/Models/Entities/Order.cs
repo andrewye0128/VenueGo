@@ -20,4 +20,6 @@ public partial class Order
     public DateTime OrderCreatedAt { get; set; }
 
     public byte OrderStatus { get; set; }
+
+    public int PersonMount { get; set; }
 }

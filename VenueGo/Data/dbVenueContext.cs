@@ -251,7 +251,9 @@ public partial class dbVenueContext : DbContext
 
             entity.ToTable("ReviewMain");
 
-            entity.HasIndex(e => e.CreatedAt, "IX_ReviewMain_PendingReply").HasFilter("([ReadAt] IS NOT NULL AND [RepliedAt] IS NULL AND [SpamMarkedAt] IS NULL)");
+            entity.HasIndex(e => new { e.IsPinned, e.CreatedAt }, "IX_ReviewMain_PendingReply")
+                .IsDescending(true, false)
+                .HasFilter("([ReadAt] IS NOT NULL AND [RepliedAt] IS NULL AND [SpamMarkedAt] IS NULL)");
 
             entity.HasIndex(e => new { e.StarRating, e.CreatedAt }, "IX_ReviewMain_Rating").IsDescending(false, true);
 
@@ -269,6 +271,7 @@ public partial class dbVenueContext : DbContext
                 .IsUnique()
                 .HasFilter("([ReviewPerVisitId] IS NOT NULL)");
 
+            entity.Property(e => e.AnonymousNickname).HasMaxLength(50);
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(0)
                 .HasDefaultValueSql("(sysdatetime())", "DF_ReviewMain_CreatedAt");
@@ -276,7 +279,9 @@ public partial class dbVenueContext : DbContext
             entity.Property(e => e.ReadAt).HasPrecision(0);
             entity.Property(e => e.RepliedAt).HasPrecision(0);
             entity.Property(e => e.ReplyContent).HasMaxLength(1000);
+            entity.Property(e => e.ReplyViewedAt).HasPrecision(0);
             entity.Property(e => e.ReviewContent).HasMaxLength(1000);
+            entity.Property(e => e.SpamMarkedAt).HasPrecision(0);
         });
 
         modelBuilder.Entity<ReviewPerBooking>(entity =>
@@ -305,7 +310,7 @@ public partial class dbVenueContext : DbContext
                 .HasDefaultValueSql("(sysdatetime())", "DF_ReviewPerVisit_CreatedAt");
             entity.Property(e => e.ExpiredAt).HasPrecision(0);
             entity.Property(e => e.Qrtoken)
-                .HasMaxLength(1)
+                .HasMaxLength(64)
                 .IsUnicode(false)
                 .HasColumnName("QRToken");
             entity.Property(e => e.RentEndTime).HasPrecision(0);
@@ -337,14 +342,20 @@ public partial class dbVenueContext : DbContext
 
         modelBuilder.Entity<SportType>(entity =>
         {
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())", "DF_SportTypes_CreatedAt");
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_SportTypes_CreatedAt");
             entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_SportTypes_IsActive");
-            entity.Property(e => e.SportName).HasMaxLength(1);
+            entity.Property(e => e.SportName).HasMaxLength(20);
+            entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });
 
         modelBuilder.Entity<SportTypePriceRule>(entity =>
         {
             entity.HasIndex(e => e.SportTypeId, "UQ_SportTypePriceRules_SportTypeId").IsUnique();
+
+            entity.Property(e => e.PeakStartTime).HasPrecision(0);
+            entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });
 
         modelBuilder.Entity<User>(entity =>
@@ -388,24 +399,34 @@ public partial class dbVenueContext : DbContext
         {
             entity.HasIndex(e => e.SportTypeId, "IX_Venues_SportTypeId");
 
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())", "DF_Venues_CreatedAt");
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_Venues_CreatedAt");
             entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_Venues_IsActive");
-            entity.Property(e => e.Location).HasMaxLength(1);
-            entity.Property(e => e.PhotoPath).HasMaxLength(1);
-            entity.Property(e => e.VenueName).HasMaxLength(1);
+            entity.Property(e => e.Location).HasMaxLength(200);
+            entity.Property(e => e.PhotoPath).HasMaxLength(500);
+            entity.Property(e => e.UpdatedAt).HasPrecision(0);
+            entity.Property(e => e.VenueName).HasMaxLength(40);
         });
 
         modelBuilder.Entity<VenueUnavailableSlot>(entity =>
         {
             entity.HasIndex(e => new { e.VenueId, e.UnavailableDate, e.UnavailableTime }, "UQ_VenueUnavailableSlots_VenueDateTime").IsUnique();
 
-            entity.Property(e => e.CreatedAt).HasDefaultValueSql("(sysdatetime())", "DF_VenueUnavailableSlots_CreatedAt");
-            entity.Property(e => e.Reason).HasMaxLength(1);
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_VenueUnavailableSlots_CreatedAt");
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.UnavailableTime).HasPrecision(0);
         });
 
         modelBuilder.Entity<WeekBusinessHour>(entity =>
         {
             entity.HasKey(e => e.BusinessHoursId);
+
+            entity.Property(e => e.CloseTime).HasPrecision(0);
+            entity.Property(e => e.OpenTime).HasPrecision(0);
+            entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });
 
         OnModelCreatingPartial(modelBuilder);

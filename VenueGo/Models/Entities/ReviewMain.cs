@@ -48,4 +48,6 @@ public partial class ReviewMain
     public int? SpamMarkedByEmployeeId { get; set; }
 
     public byte? SpamReason { get; set; }
+
+    public string? AnonymousNickname { get; set; }
 }

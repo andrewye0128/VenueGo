@@ -1,0 +1,83 @@
+@* @model IEnumerable<VenueGo.Models.Entities.Reservation> *@
+@* @model IEnumerable<VenueGo.Models.ReservationModels.CReservationWrap> *@
+@model IEnumerable<VenueGo.ViewModels.ReservationListViewModel>
+
+@{
+    ViewData["Title"] = "預約管理";
+}
+
+<h1>預約管理</h1>
+
+<p>
+    <a asp-action="Create">新增預約</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>
+                編號
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.UserName)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.VenueName)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.BookingDate)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.TimeRange)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.ReservationStatus)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.PaymentStatus)
+            </th>
+            <th>
+                操作
+            </th>
+        </tr>
+    </thead>
+    <tbody>
+        @{
+            int count = 0;
+            foreach (var item in Model)
+            {
+                count++;
+                <tr>
+
+                    <td>
+                        @count
+                    </td>
+                    <td>
+                        @Html.DisplayFor(model => item.UserName)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(model => item.VenueName)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(model => item.BookingDate.ToString("yyyy/MM/dd"))
+                    </td>
+                    <td>
+                        // @Html.DisplayFor(model => item.StartTime) ~ @Html.DisplayFor(model => item.EndTime)
+                        @Html.DisplayFor(model => item.TimeRange)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(model => item.ReservationStatus)
+                    </td>
+                    <td>
+                        @Html.DisplayFor(model => item.PaymentStatusText)
+                    </td>
+
+                    <td>
+                        <a asp-action="Details" asp-route-id="@item.ReservationId">查看</a> |
+                        <a asp-action="Edit" asp-route-id="@item.ReservationId">編輯</a> |
+                        <a asp-action="Delete" asp-route-id="@item.ReservationId">刪除</a>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>

@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 
 namespace VenueGo.ViewModels.ReviewVM
 {
@@ -7,8 +8,9 @@ namespace VenueGo.ViewModels.ReviewVM
     /// 刻意不包含 SpamReason、ReadByEmployeeId 等館方內部欄位，
     /// 從結構上杜絕洩漏。
     /// </summary>
-    public class ReviewCardViewModel
+    public class ReviewCardVM
     {
+        [Key]
         public int ReviewId { get; init; }
         [DisplayName("評分")]
         public byte StarRating { get; init; }
@@ -16,8 +18,9 @@ namespace VenueGo.ViewModels.ReviewVM
         public string? Content { get; init; }
         [DisplayName("評論時間")]
         public DateTime CreatedAt { get; init; }
-
+        [DisplayName("提及場地")]
         public bool MentionsVenue { get; init; }
+        [DisplayName("提及服務")]
         public bool MentionsStaff { get; init; }
 
         /// <summary>場地名稱。預約類評論為 null，版面要能處理它不存在。</summary>

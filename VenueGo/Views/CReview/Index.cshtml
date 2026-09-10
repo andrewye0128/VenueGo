@@ -1,0 +1,42 @@
+﻿@using VenueGo.Helpers
+@model VenueGo.ViewModels.ReviewVM.ReviewCreateInputVM
+@{
+      ViewData["Title"] = "Index";
+}
+
+<h1>評論主頁</h1>
+<hr />
+<div class="row">
+      <div class="col-md-6">
+            @* <a asp-action="CreateForVisit" asp-route-id="@item.FId" onclick="return confirm('確定要刪除嗎？')">刪除</a> *@
+            <form asp-action="CreateForVisit" method="get">
+                  <label name="token" class="control-label">
+                        請輸入評論用QRToken ( TESTVISIT0001 )
+                  </label>
+                  <input type="text" name="token" class="form-control" />
+                  <button class="btn btn-primary">開始評論</button>
+            </form>
+      </div>
+</div>
+
+@{
+      if (TempData[CDictionary.TK_MSG_Input錯誤] != null)
+      {
+            <script>
+                  var msgInputError = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_Input錯誤]));
+                  alert(msgInputError);</script>
+      }
+      if (TempData[CDictionary.TK_MSG_找不到指定物件] != null)
+      {
+                  <script>
+                        var msgNotFound = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_找不到指定物件]));
+                        alert(msgNotFound);</script>
+      }
+}
+
+
+@section Scripts {
+      @{
+            await Html.RenderPartialAsync("_ValidationScriptsPartial");
+      }
+}

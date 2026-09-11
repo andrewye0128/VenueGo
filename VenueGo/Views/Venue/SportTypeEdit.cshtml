@@ -1,0 +1,35 @@
+@model VenueGo.Models.VenueModels.CSportTypeWrap
+
+@{
+    ViewData["Title"] = "Edit";
+}
+
+<h1>運動類型編輯</h1>
+
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="SportTypeEdit">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            <input type="hidden" asp-for="SportTypeId" />
+            
+            <div class="form-group">
+                <label asp-for="SportName" class="control-label"></label>
+                <input asp-for="SportName" class="form-control" value="@Model.SportName" />
+                <span asp-validation-for="SportName" class="text-danger"></span>
+            </div>
+           
+            <div class="form-group">
+                <input type="submit" value="送出修改" class="btn btn-primary mt-2" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="SportTypeIndex">取消修改</a>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}

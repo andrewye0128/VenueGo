@@ -7,6 +7,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Views\ReviewCardViewModel\**" />
+    <Compile Remove="Views\ReviewCreateInputVM\**" />
+    <Content Remove="Views\ReviewCardViewModel\**" />
+    <Content Remove="Views\ReviewCreateInputVM\**" />
+    <EmbeddedResource Remove="Views\ReviewCardViewModel\**" />
+    <EmbeddedResource Remove="Views\ReviewCreateInputVM\**" />
+    <None Remove="Views\ReviewCardViewModel\**" />
+    <None Remove="Views\ReviewCreateInputVM\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11">
@@ -20,8 +31,6 @@
     <Folder Include="Models\CheckinModels\" />
     <Folder Include="Models\OperationModels\" />
     <Folder Include="Models\VenueModels\" />
-    <Folder Include="Views\ReviewCardViewModel\" />
-    <Folder Include="Views\ReviewCreateInputVM\" />
     <Folder Include="Views\Reservation\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />

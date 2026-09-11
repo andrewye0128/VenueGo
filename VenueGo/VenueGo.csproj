@@ -27,8 +27,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Models\MemberModels\" />
     <Folder Include="Models\CheckinModels\" />
+    <Folder Include="Models\MemberModels\" />
     <Folder Include="Models\OperationModels\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="Views\Reservation\" />

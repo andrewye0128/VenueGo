@@ -1,0 +1,80 @@
+﻿@model VenueGo.ViewModels.VenueEditViewModel
+
+@{
+    ViewData["Title"] = "Edit";
+}
+
+<h1>編輯場地資料</h1>
+
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="VenueEdit" method="POST" enctype="multipart/form-data">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <div class="form-group">
+                <input asp-for="VenueId" class="form-control" type="hidden" />
+            </div>
+
+            <div class="form-group">
+                <input asp-for="PhotoPath" class="form-control" type="hidden" />
+            </div>
+
+            <div class="form-group">
+                <label asp-for="VenueName" class="control-label"></label>
+                <input asp-for="VenueName" class="form-control" />
+                <span asp-validation-for="VenueName" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Location" class="control-label"></label>
+                <input asp-for="Location" class="form-control" />
+                <span asp-validation-for="Location" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Capacity" class="control-label"></label>
+                <input asp-for="Capacity" class="form-control" />
+                <span asp-validation-for="Capacity" class="text-danger"></span>
+            </div>
+
+  
+            <div class="form-group">
+                <label asp-for="SportTypeId" class="control-label">運動種類</label>
+                <select asp-for="SportTypeId"
+                        asp-items="Model.SportTypes">
+                    <option value="">請選擇運動種類</option>
+                </select>
+                <span asp-validation-for="SportTypeId" class="text-danger"></span>
+
+            </div>
+
+            <div class="form-group">
+                <label asp-for="PhotoFile"></label>
+                <input asp-for="PhotoFile" type="file" class="form-control" accept="image/*" />
+                <span asp-validation-for="PhotoFile" class="text-danger"></span>
+                <div>
+                    <h6 class="fs-6">目前照片</h6>
+                    @if (!string.IsNullOrEmpty(Model.PhotoPath))
+                    {
+                        <img src="@Model.PhotoPath" alt="@Model.VenueName"
+                             class="rounded-start"
+                             style="width: 180px; height: 130px; object-fit: cover;" />
+                    }
+                    else
+                    {
+                        <p class="text-muted">尚未上傳照片</p>
+                    }
+                </div>
+            </div>
+
+            <div class="form-group">
+                <input type="submit" value="送出修改" class="btn btn-primary mt-2" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="VenueIndex">取消編輯</a>
+</div>

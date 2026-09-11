@@ -35,7 +35,7 @@ namespace VenueGo.Models.VenueModels
         public CSportTypeWrap QueryById(int? id)
         {
             CSportTypeWrap SportTypeWrap = new CSportTypeWrap();
-            SportType SportTypeDb = null;
+            SportType? SportTypeDb = null;
             dbVenueContext db = new dbVenueContext();
             if (id != null)
             {

@@ -28,10 +28,16 @@
       }
       if (TempData[CDictionary.TK_MSG_找不到指定物件] != null)
       {
-                  <script>
-                        var msgNotFound = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_找不到指定物件]));
-                        alert(msgNotFound);</script>
+            <script>
+                var msgNotFound = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_找不到指定物件]));
+                alert(msgNotFound);</script>
       }
+        if (TempData[CDictionary.TK_MSG_評論資格過期] != null)
+        {
+            <script>
+                    var msgHasExpired = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_評論資格過期]));
+                    alert(msgHasExpired);</script>
+            }
 }
 
 

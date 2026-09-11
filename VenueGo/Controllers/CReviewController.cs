@@ -10,6 +10,7 @@ namespace VenueGo.Controllers
     {
         // 將注入的 db 指派給私有唯讀欄位
         private readonly dbVenueContext _db = db;
+
         [HttpGet]
         public IActionResult Index() // 評論專區
         {            
@@ -30,6 +31,8 @@ namespace VenueGo.Controllers
         [HttpGet]
         public IActionResult CreateForVisit(string? token) // 填寫評論(現場)
         {
+            DateTime dtNow = DateTimeOffset.Now.DateTime; // 取得當前時間
+
             if (token == null) // 沒token
             {
                 TempData[CDictionary.TK_MSG_Input錯誤] = "你忘記輸入囉～";
@@ -41,12 +44,20 @@ namespace VenueGo.Controllers
                 TempData[CDictionary.TK_MSG_找不到指定物件] = "找不到你要的東西耶";
                 return RedirectToAction("Index");
             }
+
             int pvid = pVisit.ReviewPerVisitId;
             var rv = _db.ReviewMains.FirstOrDefault(s => s.ReviewPerVisitId == pvid);
             if (rv != null) // 已寫過評論
             {
                 return RedirectToAction("ShowPublicReview");
             }
+
+            if (dtNow >= pVisit.ExpiredAt) // 評論資格逾時
+            {
+                TempData[CDictionary.TK_MSG_評論資格過期] = "超過可以評論的時間囉，下次請早";
+                return RedirectToAction("Index");
+            }
+
             ReviewCreateInputVM vm = new ReviewCreateInputVM();
             vm.ReviewPerVisitId = pvid;
             vm.QrToken = token;
@@ -59,9 +70,7 @@ namespace VenueGo.Controllers
             vm.IsPublic = true; // 預設公開
 
             var venue = _db.Venues.FirstOrDefault(s => s.VenueId == pVisit.VenueId);
-            if (venue == null)
-                vm.VenueName = null;
-            vm.VenueName = venue.VenueName;
+            vm.VenueName = venue?.VenueName; // venue 為null則回傳null
             vm.RentStartTime = pVisit.RentStartTime;
 
             return View(vm);
@@ -69,6 +78,13 @@ namespace VenueGo.Controllers
         [HttpPost]
         public IActionResult CreateForVisit(ReviewCreateInputVM vm) // 送出CreateForVisit
         {
+            if (!ModelState.IsValid)
+            {
+                return View(vm); // 驗證失敗，返回原頁面並顯示錯誤
+            }
+            
+            DateTime dtNow = DateTimeOffset.Now.DateTime; // 取得當前時間
+
             int? userId = null; // _currentUser.MemberId
             if (userId == null)
                 vm.IsAnonymous = true;
@@ -83,7 +99,7 @@ namespace VenueGo.Controllers
                 ReviewPerVisitId = vm.ReviewPerVisitId,
                 ReviewPerBookingId = null,          // XOR：現場評論這欄必為 null
                 UserId = userId,
-                StarRating = vm.StarRating!.Value,
+                StarRating = vm.StarRating!.Value, // ! 保證StarRating不為null
                 ReviewContent = string.IsNullOrWhiteSpace(vm.ReviewContent)
                           ? null        // 純空白要存 null，
                           : vm.ReviewContent,   // 否則撞 CHK_..._Content_NotBlank
@@ -92,7 +108,7 @@ namespace VenueGo.Controllers
                 MentionsVenue = vm.MentionsVenue,
                 MentionsStaff = vm.MentionsStaff,
                 AnonymousNickname = nickname,
-                CreatedAt = DateTime.Now
+                CreatedAt = dtNow
             };
 
             //ReviewMain rv = new ReviewMain();
@@ -111,6 +127,7 @@ namespace VenueGo.Controllers
             //rv.AnonymousNickname = NicknameGenerator.Generate();
 
             _db.ReviewMains.Add(review);
+            _db.SaveChanges(); // 別忘記儲存
 
             return RedirectToAction("Index");
         }

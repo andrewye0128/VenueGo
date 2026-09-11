@@ -3,6 +3,13 @@
 @{
       ViewData["Title"] = "Index";
 }
+<style>
+    /* 修正：精準指定表單內的群組區塊，不影響外層佈局 */
+    div.form-group .control-label,.form-control,.btn {
+        margin-bottom: 10px; /* 只推上下間距，左右留空 */
+    }
+    
+</style>
 
 <h1>評論主頁</h1>
 <hr />
@@ -10,39 +17,59 @@
       <div class="col-md-6">
             @* <a asp-action="CreateForVisit" asp-route-id="@item.FId" onclick="return confirm('確定要刪除嗎？')">刪除</a> *@
             <form asp-action="CreateForVisit" method="get">
+                <div class="form-group">
                   <label name="token" class="control-label">
                         請輸入評論用QRToken ( TESTVISIT0001 )
                   </label>
-                  <input type="text" name="token" class="form-control" />
+                  <input type="text" name="token" id="tokenInput" class="form-control" />
                   <button class="btn btn-primary">開始評論</button>
+                </div>
             </form>
       </div>
 </div>
 
-@{
-      if (TempData[CDictionary.TK_MSG_Input錯誤] != null)
-      {
-            <script>
-                  var msgInputError = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_Input錯誤]));
-                  alert(msgInputError);</script>
-      }
-      if (TempData[CDictionary.TK_MSG_找不到指定物件] != null)
-      {
-            <script>
-                var msgNotFound = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_找不到指定物件]));
-                alert(msgNotFound);</script>
-      }
-        if (TempData[CDictionary.TK_MSG_評論資格過期] != null)
-        {
-            <script>
-                    var msgHasExpired = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_評論資格過期]));
-                    alert(msgHasExpired);</script>
-            }
-}
 
 
 @section Scripts {
       @{
+            @* 這裡只用來放載入 Partial 視窗的 C# 區塊 *@
             await Html.RenderPartialAsync("_ValidationScriptsPartial");
-      }
+       }
+
+       <script>
+            // 畫面一載入，立刻強制聚焦到輸入框
+            document.addEventListener("DOMContentLoaded", function() {
+                  document.getElementById("tokenInput").focus();
+            });
+      </script>
+
+            @* 把彈出視窗的邏輯集中放到這裡 *@
+            @if (TempData[CDictionary.TK_MSG_Input錯誤] != null)
+            {
+                <script>
+                      @* 使用 setTimeout(..., 30) 讓 JavaScript 稍微收手，給瀏覽器時間「畫」出背景 *@
+                      setTimeout(function() {
+                           var msgInputError = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_Input錯誤]));
+                           alert(msgInputError);
+                      }, 20);</script>
+            }
+            @if (TempData[CDictionary.TK_MSG_找不到指定物件] != null)
+            {
+                    <script>
+                        setTimeout(function() {
+                            var msgNotFound = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_找不到指定物件]));
+                            alert(msgNotFound);
+                        }, 20);
+                        </script>
+            }
+            @if (TempData[CDictionary.TK_MSG_評論資格過期] != null)
+            {
+                <script>
+                        setTimeout(function() {
+                            var msgHasExpired = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_評論資格過期]));
+                            alert(msgHasExpired);
+                        }, 20);
+                        </script>
+            }
+      
 }

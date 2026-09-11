@@ -181,9 +181,3 @@ public async Task<IActionResult> CreateForVisit(ReviewCreateInputViewModel vm)
 }
 
 */
-
-// ⚠️ AnonymousNickname 是 db 指令2 PART 1 的欄位，你還沒執行，
-//    所以現在資料表裡沒有這一欄，反向工程出來的實體也沒有。
-//    上面那段要能跑，指令2 的 PART 1 必須先執行、
-//    並在 Models/Entities/ReviewMain.cs 手動補上這個屬性
-//    （建議書已說明：不要重跑 scaffold，會覆蓋整個 Entities 資料夾）。

@@ -40,4 +40,24 @@ namespace VenueGo.ViewModels
         public string? Description { get; set; }
         public bool Status { get; set; }
     }
+
+    // 新增角色的 View Model
+    public class RoleCreateViewModel
+    {
+        [Required(ErrorMessage = "請輸入角色名稱")]
+        [StringLength(50, ErrorMessage = "角色名稱長度不能超過 50 個字")]
+        [Display(Name = "角色名稱")]
+        public string RoleName { get; set; } = string.Empty;
+
+        [Display(Name = "角色描述")]
+        public string? Description { get; set; }
+
+        [Display(Name = "狀態")]
+        public bool Status { get; set; } = true;
+
+        [Display(Name = "勾選權限")]
+        public List<int> SelectedPermissionIds { get; set; } = new();
+
+        public List<PermissionOptionDto> AvailablePermissions { get; set; } = new();
+    }
 }

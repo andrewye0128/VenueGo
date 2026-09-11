@@ -1,0 +1,100 @@
+﻿@model VenueGo.ViewModels.RoleCreateViewModel
+
+@{
+    ViewData["Title"] = "新增角色";
+}
+
+<div class="mb-3">
+    <a asp-controller="Setting" asp-action="Roles" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>返回角色列表
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-shield-plus me-2 text-primary"></i>建立新角色與權限分配</h5>
+    </div>
+    <div class="card-body">
+        <form asp-controller="Setting" asp-action="CreateRole" method="post">
+            @Html.AntiForgeryToken()
+
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label asp-for="RoleName" class="form-label fw-bold">角色名稱 <span class="text-danger">*</span></label>
+                    <input asp-for="RoleName" class="form-control" placeholder="例如：場館專員、財務會計" />
+                    <span asp-validation-for="RoleName" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">角色狀態</label>
+                    <div class="form-check form-switch mt-2">
+                        <input class="form-check-input" type="checkbox" asp-for="Status" id="roleStatus">
+                        <label class="form-check-label" for="roleStatus">預設啟用此角色</label>
+                    </div>
+                </div>
+                <div class="col-12">
+                    <label asp-for="Description" class="form-label fw-bold">角色描述</label>
+                    <input asp-for="Description" class="form-control" placeholder="請輸入該角色的職責說明..." />
+                </div>
+            </div>
+
+            <hr class="my-4" />
+
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h6 class="fw-bold mb-0"><i class="bi bi-key me-1"></i>初始系統權限配置</h6>
+                <div>
+                    <button type="button" class="btn btn-sm btn-light border" id="selectAllBtn">全選</button>
+                    <button type="button" class="btn btn-sm btn-light border me-2" id="deselectAllBtn">全取消</button>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                @if (Model.AvailablePermissions != null && Model.AvailablePermissions.Any())
+                {
+                    @foreach (var perm in Model.AvailablePermissions)
+                    {
+                        <div class="col-md-4 col-sm-6">
+                            <div class="card h-100 border-light-subtle bg-light">
+                                <div class="card-body p-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input perm-checkbox"
+                                               type="checkbox"
+                                               name="SelectedPermissionIds"
+                                               value="@perm.PermissionId"
+                                               id="perm_@perm.PermissionId" />
+                                        <label class="form-check-label fw-bold" for="perm_@perm.PermissionId">
+                                            @perm.PermissionName
+                                        </label>
+                                        <div class="text-muted fs-7 mt-1">
+                                            <code>@perm.PermissionCode</code>
+                                            @if (!string.IsNullOrEmpty(perm.Description))
+                                            {
+                                                <div>@perm.Description</div>
+                                            }
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                }
+            </div>
+
+            <div class="mt-4 pt-3 border-top text-end">
+                <a asp-controller="Setting" asp-action="Roles" class="btn btn-light me-2">取消</a>
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-floppy me-1"></i>建立角色
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        $(document).ready(function () {
+            $('#selectAllBtn').click(function () { $('.perm-checkbox').prop('checked', true); });
+            $('#deselectAllBtn').click(function () { $('.perm-checkbox').prop('checked', false); });
+        });
+    </script>
+}

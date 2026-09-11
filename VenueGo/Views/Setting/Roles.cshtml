@@ -4,19 +4,34 @@
     ViewData["Title"] = "角色權限管理";
 }
 
-<!-- 功能頁籤 (為未來擴充預留) -->
+<!-- 功能頁籤 -->
 <ul class="nav nav-tabs mb-4">
     <li class="nav-item">
-        <a class="nav-link active" asp-controller="Setting" asp-action="Roles">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "Roles" || ViewContext.RouteData.Values["action"]?.ToString() == "CreateRole" || ViewContext.RouteData.Values["action"]?.ToString() == "EditRole" ? "active" : "")"
+           asp-controller="Setting" asp-action="Roles">
             <i class="bi bi-shield-lock me-1"></i>角色權限管理
         </a>
     </li>
     <li class="nav-item">
-        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "CreateUser" ? "active" : "")"
-           asp-controller="Setting" asp-action="CreateUser">
-            <i class="bi bi-person-plus me-1"></i>新增帳號
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "UserList" || ViewContext.RouteData.Values["action"]?.ToString() == "EditUser" ? "active" : "")"
+           asp-controller="Setting" asp-action="UserList">
+            <i class="bi bi-people me-1"></i>員工帳號管理
         </a>
     </li>
+    @* <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "CreateUser" ? "active" : "")"
+           asp-controller="Setting" asp-action="CreateUser">
+            <i class="bi bi-person-plus me-1"></i>新增員工帳號
+        </a>
+    </li>
+    <!-- 新增：會員轉任員工頁籤 -->
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "ConvertToEmployee" ? "active" : "")"
+           asp-controller="Setting" asp-action="ConvertToEmployee">
+            <i class="bi bi-person-up me-1"></i>會員轉任員工
+        </a>
+    </li> *@
+
     <li class="nav-item">
         <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">
             <i class="bi bi-gear me-1"></i>系統參數設定 (未開放)
@@ -35,7 +50,9 @@
 <div class="card shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
         <h5 class="mb-0 fw-bold"><i class="bi bi-people-fill me-2 text-primary"></i>角色列表</h5>
-        @* 未來如需新增角色，可在這裡放按鈕 *@
+        <a asp-controller="Setting" asp-action="CreateRole" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>新增角色
+        </a>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">

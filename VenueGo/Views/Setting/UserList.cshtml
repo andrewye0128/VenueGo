@@ -1,0 +1,171 @@
+﻿
+@model VenueGo.ViewModels.UserListViewModel
+
+@{
+    ViewData["Title"] = "帳號權限管理";
+}
+
+<!-- 頂部頁籤 -->
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link" asp-controller="Setting" asp-action="Roles">
+            <i class="bi bi-shield-lock me-1"></i>角色權限管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link active fw-bold" asp-controller="Setting" asp-action="UserList">
+            <i class="bi bi-people me-1"></i>帳號列表管理
+        </a>
+    </li>
+</ul>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="fw-bold mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>帳號列表</h4>
+    <a asp-controller="Setting" asp-action="CreateUser" class="btn btn-primary">
+        <i class="bi bi-person-plus-fill me-1"></i>新增員工帳號
+    </a>
+</div>
+
+<!-- 搜尋與篩選區塊 -->
+<div class="card shadow-sm mb-4">
+    <div class="card-body">
+        <form asp-controller="Setting" asp-action="UserList" method="get" class="row g-3">
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted">帳號類型</label>
+                <select name="userType" class="form-select">
+                    <option value="all" selected="@(Model.SelectedUserType == "all")">全部使用者</option>
+                    <option value="employee" selected="@(Model.SelectedUserType == "employee")">僅顯示員工</option>
+                    <option value="member" selected="@(Model.SelectedUserType == "member")">僅顯示一般會員 (非員工)</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label small fw-bold text-muted">關鍵字搜尋</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
+                    <input type="text" name="keyword" value="@Model.Keyword" class="form-control" placeholder="搜尋姓名、Email 或員工編號..." />
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted">依角色篩選</label>
+                <select name="roleId" class="form-select">
+                    <option value="">全部角色</option>
+                    @foreach (var role in Model.AvailableRoles)
+                    {
+                        <option value="@role.RoleId" selected="@(Model.SelectedRoleId == role.RoleId)">
+                            @role.RoleName
+                        </option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small fw-bold text-muted">依狀態篩選</label>
+                <select name="status" class="form-select">
+                    <option value="">全部狀態</option>
+                    <option value="Active" selected="@(Model.SelectedStatus == "Active")">啟用中</option>
+                    <option value="Inactive" selected="@(Model.SelectedStatus == "Inactive")">已停用</option>
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end gap-2">
+                <button type="submit" class="btn btn-primary flex-fill">篩選</button>
+                <a asp-controller="Setting" asp-action="UserList" class="btn btn-outline-secondary">重置</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 使用者列表表格 -->
+<div class="card shadow-sm">
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3">員工編號</th>
+                        <th>姓名 / Email</th>
+                        <th>職稱</th>
+                        <th>擁有角色</th>
+                        <th>狀態</th>
+                        <th>建立時間</th>
+                        <th class="text-end pe-3">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.Users != null && Model.Users.Any())
+                    {
+                        @foreach (var user in Model.Users)
+                        {
+                            <tr>
+                                <td class="ps-3 fw-bold">
+                                    @if (user.IsEmployee)
+                                    {
+                                        <code class="fs-6">@user.EmployeeNo</code>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">非員工</span>
+                                    }
+                                </td>
+                                <td>
+                                    <div class="fw-bold">@user.Name</div>
+                                    <div class="text-muted small">@user.Email</div>
+                                </td>
+                                <td>@user.JobTitle</td>
+                                <td>
+                                    @if (user.Roles != null && user.Roles.Any())
+                                    {
+                                        @foreach (var r in user.Roles)
+                                        {
+                                            <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle me-1">@r</span>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-warning-subtle text-warning-emphasis">未設定角色</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (user.Status == "Active")
+                                    {
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                            <i class="bi bi-check-circle me-1"></i>啟用中
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                            <i class="bi bi-x-circle me-1"></i>已停用
+                                        </span>
+                                    }
+                                </td>
+                                <td class="text-muted small">@user.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>
+                                <td class="text-end pe-3">
+                                    @if (user.IsEmployee)
+                                    {
+                                        <a asp-controller="Setting" asp-action="EditUser" asp-route-id="@user.UserId" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-pencil me-1"></i>編輯
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a asp-controller="Setting" asp-action="ConvertToEmployee" asp-route-id="@user.UserId" class="btn btn-sm btn-success">
+                                            <i class="bi bi-person-up me-1"></i>轉任員工
+                                        </a>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                    else
+                    {
+                        <tr>
+                            <td colspan="7" class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
+                                <span>查無符合條件的帳號資料</span>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

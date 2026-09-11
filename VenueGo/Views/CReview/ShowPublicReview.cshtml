@@ -1,0 +1,137 @@
+@model VenueGo.ViewModels.ReviewVM.ReviewCardVM
+
+@{
+      ViewData["Title"] = "ShowPublicReview";
+}
+<style>
+      /* ── 星等輸入控制項 ─────────────────────────────
+           HTML 裡星星寫成 5→1 倒序，再用 row-reverse 翻回正常視覺順序，
+           這樣 ~ 選擇器才能讓「滑過第3顆」同時點亮左邊的第1、2顆。 */
+      .star-input {
+            display: inline-flex;
+            flex-direction: row-reverse;
+            justify-content: flex-end;
+            gap: .25rem;
+            font-size: 1.9rem;
+      }
+
+            .star-input input {
+                  position: absolute;
+                  opacity: 0;
+                  width: 0;
+                  height: 0;
+            }
+
+            .star-input label {
+                  color: #d6d8db;
+                  cursor: pointer;
+                  line-height: 1;
+                  transition: color .12s;
+            }
+
+                  .star-input input:checked ~ label,
+                  .star-input label:hover,
+                  .star-input label:hover ~ label {
+                        color: #f5a524;
+                  }
+            /* 鍵盤操作時要看得見焦點 */
+            .star-input input:focus-visible + label {
+                  outline: 2px solid #0d6efd;
+                  outline-offset: 3px;
+                  border-radius: 3px;
+            }
+
+</style>
+
+<h1>做錯的ShowPublicReview</h1>
+
+@* <h4>ReviewCardViewModel</h4> *@
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="Create">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                  <div class="rounded p-3 mb-2 form-group">
+                        <div class="star-input">
+                              <input type="radio" id="s5" name="StarRating" value="5"><label for="s5"><i class="bi bi-star-fill"></i></label>
+                              <input type="radio" id="s4" name="StarRating" value="4"><label for="s4"><i class="bi bi-star-fill"></i></label>
+                              <input type="radio" id="s3" name="StarRating" value="3"><label for="s3"><i class="bi bi-star-fill"></i></label>
+                              <input type="radio" id="s2" name="StarRating" value="2"><label for="s2"><i class="bi bi-star-fill"></i></label>
+                              <input type="radio" id="s1" name="StarRating" value="1"><label for="s1"><i class="bi bi-star-fill"></i></label>
+                        </div>
+                  </div>
+            @* <div class="form-group">
+                <label asp-for="StarRating" class="control-label"></label>
+                        <div class="stars-container d-flex flex-row-reverse justify-content-end">
+                    @for(byte i = 5;i >= 1; i--)
+                    {
+                                    <input type="radio" asp-for="StarRating" value="@i" id="star(@i)" class="star-input" />
+                                    <label for="star(@i)" class="star-label">
+                                          <i class="bi bi-star"></i>
+                        </label>
+                    }
+                </div>
+            </div> *@
+            <div class="form-group">
+                <label asp-for="Content" class="control-label"></label>
+                <input asp-for="Content" class="form-control" />
+                <span asp-validation-for="Content" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="CreatedAt" class="control-label"></label>
+                <input asp-for="CreatedAt" class="form-control" />
+                <span asp-validation-for="CreatedAt" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="MentionsVenue" class="control-label"></label>
+                <input asp-for="MentionsVenue" class="form-check-input" />
+                <span asp-validation-for="MentionsVenue" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="MentionsStaff" class="control-label"></label>
+                <input asp-for="MentionsStaff" class="form-check-input" />
+                <span asp-validation-for="MentionsStaff" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="VenueName" class="control-label"></label>
+                <input asp-for="VenueName" class="form-control" />
+                <span asp-validation-for="VenueName" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="DisplayName" class="control-label"></label>
+                <input asp-for="DisplayName" class="form-control" />
+                <span asp-validation-for="DisplayName" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="ReplyContent" class="control-label"></label>
+                <input asp-for="ReplyContent" class="form-control" />
+                <span asp-validation-for="ReplyContent" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="RepliedAt" class="control-label"></label>
+                <input asp-for="RepliedAt" class="form-control" />
+                <span asp-validation-for="RepliedAt" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="HasReply" class="control-label"></label>
+                <input asp-for="HasReply" class="form-check-input" />
+                <span asp-validation-for="HasReply" class="text-danger"></span>
+            </div>
+            <div class="form-group">
+                <input type="submit" value="Create" class="btn btn-primary" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="Index">Back to List</a>
+</div>

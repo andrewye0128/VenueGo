@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,6 +23,8 @@ builder.Services.AddDbContext<dbVenueContext>(options =>
 
 // 註冊 Session
 builder.Services.AddSession();
+
+builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
 
 var app = builder.Build();
 

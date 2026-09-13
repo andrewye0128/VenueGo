@@ -1,0 +1,59 @@
+﻿@model VenueGo.ViewModels.VenueCreateViewModel
+
+@{
+    ViewData["Title"] = "Create";
+}
+
+<h1>新增運動類型</h1>
+
+<hr />
+<div class="row">
+    <div class="col-md-4">
+        <form asp-action="VenueCreate" method="POST" enctype="multipart/form-data">
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <div class="form-group">
+                <label asp-for="VenueName" class="control-label"></label>
+                <input asp-for="VenueName" class="form-control" />
+                <span asp-validation-for="VenueName" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Location" class="control-label"></label>
+                <input asp-for="Location" class="form-control" />
+                <span asp-validation-for="Location" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="Capacity" class="control-label"></label>
+                <input asp-for="Capacity" class="form-control" />
+                <span asp-validation-for="Capacity" class="text-danger"></span>
+            </div>
+
+  
+            <div class="form-group">
+                <label asp-for="SportTypeId" class="control-label">運動種類</label>
+                <select asp-for="SportTypeId"
+                        asp-items="Model.SportTypes">
+                    <option value="">請選擇運動種類</option>
+                </select>
+                <span asp-validation-for="SportTypeId" class="text-danger"></span>
+
+            </div>
+
+            <div class="form-group">
+                <label asp-for="PhotoFile"></label>
+                <input asp-for="PhotoFile" type="file" class="form-control" accept="image/*" />
+                <span asp-validation-for="PhotoFile" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <input type="submit" value="送出新增" class="btn btn-primary mt-2" />
+            </div>
+        </form>
+    </div>
+</div>
+
+<div>
+    <a asp-action="VenueIndex">取消新增</a>
+</div>

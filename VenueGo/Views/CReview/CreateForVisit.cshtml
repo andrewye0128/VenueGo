@@ -6,7 +6,7 @@
 <style>
     /* 修正：精準指定表單內的群組區塊，不影響外層佈局 */
     form .form-group {
-        margin-bottom: 15px; /* 只推上下間距，左右留空 */
+        margin-top: 15px; /* 只推上下間距，左右留空 */
     }
     
 </style>
@@ -18,7 +18,7 @@
 <div class="row justify-content-center">
     <div class="col-md-6">
             <!-- 推薦：識別碼走網址，不進表單本體 -->
-            <form asp-action="CreateForVisit" method="post" asp-route-token="@Model.QrToken" onsubmit="return confirm('確定要送出評論嗎？\n送出後無法修改呦')">
+            <form id="reviewForm" asp-action="CreateForVisit" method="post" asp-route-token="@Model.QrToken" onsubmit="return confirm('確定要送出評論嗎？\n送出後無法修改呦')">
                   <div asp-validation-summary="ModelOnly" class="text-danger"></div>
 
                   <input type="hidden" asp-for="ReviewPerVisitId" />
@@ -141,6 +141,10 @@
 
             <div class="form-group">
                 <input type="submit" value="送出" class="btn btn-primary" />
+                <button type="button" id="btnSaveDraft" class="btn btn-outline-secondary">
+                        <i class="bi bi-floppy"></i> 儲存草稿
+                </button>
+                <div class="mt-2"><small id="draftTimeHint" class="text-muted"></small></div>
             </div>
 <div>
       <a asp-action="Index" class="btn btn-outline-secondary">返回前頁</a>
@@ -155,4 +159,16 @@
       @{
             await Html.RenderPartialAsync("_ValidationScriptsPartial");
       }
+
+      <script src="~/js/draft-box.js" asp-append-version="true"></script>
+      <script>
+            DraftBox.init({
+                  key: 'review-draft:@Model.QrToken',
+                  form: '#reviewForm',
+                  fields: ['StarRating', 'ReviewContent',
+                        'MentionsVenue', 'MentionsStaff', 'IsPublic'],
+                  saveButton: '#btnSaveDraft',
+                  timeHint: '#draftTimeHint'
+            });
+      </script>
 }

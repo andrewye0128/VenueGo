@@ -239,10 +239,16 @@ window.DraftBox = (function () {
             });
         }
 
-        /* ── 表單送出 ──
-           ⚠️ 驗證失敗時 submit 事件仍可能被觸發，這時不能清草稿，
-              否則使用者只是評論太長被擋下來，草稿卻不見了。 */
-        form.addEventListener('submit', function () {
+          /* ── 表單送出 ──
+             ⚠️ 驗證失敗時 submit 事件仍可能被觸發，這時不能清草稿，
+                否則使用者只是評論太長被擋下來，草稿卻不見了。
+             ⚠️ 同理，表單若有 onsubmit="return confirm(...)"，使用者
+                按「取消」時 submit 事件一樣會發生，只是被攔下來。
+                defaultPrevented 就是用來分辨「真的要送出」與
+                「已經被別人攔掉了」。 */
+          form.addEventListener('submit', function (e) {
+                if (e.defaultPrevented) return;      // 已被其他處理器取消
+
             var valid = true;
             if (window.jQuery && window.jQuery.fn && window.jQuery.fn.validate) {
                 valid = window.jQuery(form).valid();

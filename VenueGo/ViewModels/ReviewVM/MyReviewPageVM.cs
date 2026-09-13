@@ -1,4 +1,7 @@
-﻿namespace VenueGo.ViewModels.ReviewVM
+﻿using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+
+namespace VenueGo.ViewModels.ReviewVM
 {
     public class MyReviewPageVM
     {
@@ -14,34 +17,35 @@
         //   ReplyContent / RepliedAt
         //   ReplyViewedAt     ← 決定要不要顯示「新回覆」標記
         //   ReplySatisfaction ← 已表態顯示結果，未表態顯示三顆按鈕
+        [Key]
         public int ReviewId { get; init; }
-
+        [DisplayName("QR 條碼")]
         public string Qrtoken { get; init; } = null!;
-
+        [DisplayName("評分")]
         public byte StarRating { get; init; }
-
+        [DisplayName("評論內容")]
         public string? ReviewContent { get; init; }
-
+        [DisplayName("是否要匿名")]
         public bool IsAnonymous { get; init; }
-
+        [DisplayName("是否公開")]
         public bool IsPublic { get; set; }
-
+        [DisplayName("提及場地")]
         public bool MentionsVenue { get; init; }
-
+        [DisplayName("提及服務")]
         public bool MentionsStaff { get; init; }
-
+        [DisplayName("評論時間")]
         public DateTime CreatedAt { get; init; }
-
-        public string DisplayName { get; init; }
-
+        [DisplayName("顯示名稱")]
+        public required string DisplayName { get; init; }
+        [DisplayName("館方回覆內容")]
         public string? ReplyContent { get; init; }
-
+        [DisplayName("館方回覆時間")]
         public DateTime? RepliedAt { get; init; }
-
+        [DisplayName("閱覽回覆時間")]
         public DateTime? ReplyViewedAt { get; set; }
-
+        [DisplayName("對本回覆滿意度")]
         public byte? ReplySatisfaction { get; set; }
-
+        [DisplayName("審核未通過，遭下架")]
         public bool IsSpamMarked { get; set; }
 
         // 建議加的計算屬性：

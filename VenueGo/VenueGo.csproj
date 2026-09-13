@@ -37,6 +37,7 @@
     <Folder Include="ViewModels\CheckinViewModels\" />
     <Folder Include="ViewModels\VenueViewModels\" />
     <Folder Include="ViewModels\ReservationViewModels\" />
+    <Folder Include="Views\MyReviewPageVM\" />
     <Folder Include="Views\Reservation\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />

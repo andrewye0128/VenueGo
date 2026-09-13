@@ -1,0 +1,204 @@
+@model VenueGo.ViewModels.ReviewVM.MyReviewPageVM
+
+@{
+      ViewData["Title"] = "ShowMyReviewPage";
+}
+
+<style>
+      div>dl .row {
+            margin-top: 10px; /* 只推上下間距，左右留空 */
+      }
+</style>
+
+<h1>評論查看頁面</h1>
+
+<div class="row">
+      @* <h4>MyReviewPageVM</h4> *@
+    <hr />
+    @* <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.Qrtoken)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.Qrtoken)
+        </dd>
+    </dl> *@
+      <dl class="row">
+            <dt class="col-sm-2">
+                  @Html.DisplayNameFor(model => model.DisplayName)
+            </dt>
+            <dd class="col-sm-10">
+                  @Html.DisplayFor(model => model.DisplayName)
+            </dd>
+      </dl>
+
+      <dl class="row align-items-center">
+            <!-- 💡 加上 align-items-center 讓文字與圖示垂直居中對齊 -->
+            <dt class="col-sm-2">
+                  @Html.DisplayNameFor(model => model.StarRating)
+            </dt>
+            <dd class="col-sm-10 mb-0">
+                  <!-- 💡 mb-0 移除下方預設間距，維持視覺平衡 -->
+                  <span class="star-view text-warning">
+                        <!-- 💡 加上 text-warning 可以直接讓星星變成亮眼的黃色 -->
+                        @for (int i = 1; i <= 5; i++)
+                        {
+                              <i class="@(i <= Model.StarRating ? "bi bi-star-fill" : "bi bi-star text-muted")"></i>
+                        }
+                  </span>
+            </dd>
+      </dl>
+    @* <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.StarRating)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.StarRating)
+        </dd>
+    </dl> *@
+
+      <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.ReviewContent)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.ReviewContent)
+        </dd>
+    </dl>
+      <div class="col-md-6 mb-3">
+            <label asp-for="IsAnonymous" class="form-label fw-bold"></label>
+            <div class="form-check form-switch mt-2">
+                  <!-- 💡 保持原本的 disabled 唯讀狀態 -->
+                  <input asp-for="IsAnonymous" class="form-check-input" type="checkbox" id="toggleAnonymous" disabled />
+                  <label class="form-check-label" for="toggleAnonymous">是否匿名</label>
+            </div>
+      </div>
+    @* <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.IsAnonymous)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.IsAnonymous)
+        </dd>
+    </dl> *@
+
+      @if (Model.CanToggleVisibility)
+      {
+            <div class="col-md-6 mb-3">
+                  <label asp-for="IsPublic" class="form-label fw-bold"></label>
+                  <div class="form-check form-switch mt-2">
+                        <input asp-for="IsPublic" class="form-check-input" type="checkbox" id="togglePublic" />
+                        <label class="form-check-label" for="togglePublic">公開此評論</label>
+                  </div>
+                  <span asp-validation-for="IsPublic" class="text-danger"></span>
+            </div>
+            @* <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.IsPublic)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.IsPublic)
+        </dd>
+    </dl> *@
+      }
+
+    <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.MentionsVenue)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.MentionsVenue)
+        </dd>
+    </dl>
+    <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.MentionsStaff)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.MentionsStaff)
+        </dd>
+    </dl>
+    <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.CreatedAt)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.CreatedAt)
+        </dd>
+    </dl>
+
+    @if (Model.HasReply){
+      <dl class="row">
+            <dt class="col-sm-2">
+                  @Html.DisplayNameFor(model => model.ReplyContent)
+            </dt>
+            <dd class="col-sm-10">
+                  @Html.DisplayFor(model => model.ReplyContent)
+            </dd>
+      </dl>
+      <dl class="row">
+            <dt class="col-sm-2">
+                  @Html.DisplayNameFor(model => model.RepliedAt)
+            </dt>
+            <dd class="col-sm-10">
+                  @Html.DisplayFor(model => model.RepliedAt)
+            </dd>
+      </dl>
+      @* <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.ReplyViewedAt)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.ReplyViewedAt)
+        </dd>
+    </dl> *@
+      <dl class="row">
+            <dt class="col-sm-2">
+                  @Html.DisplayNameFor(model => model.ReplySatisfaction)
+            </dt>
+            <dd class="col-sm-10">
+                  @Html.DisplayFor(model => model.ReplySatisfaction)
+            </dd>
+      </dl>
+    }
+
+    @* <dl class="row">
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.IsSpamMarked)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.IsSpamMarked)
+        </dd>
+    </dl> *@
+    @*     <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.HasReply)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.HasReply)
+        </dd>
+    </dl>
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.CanToggleVisibility)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.CanToggleVisibility)
+        </dd>
+    </dl>
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.HasUnviewedReply)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.HasUnviewedReply)
+        </dd>
+    </dl>
+        <dt class = "col-sm-2">
+            @Html.DisplayNameFor(model => model.CanRateSatisfaction)
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.CanRateSatisfaction)
+        </dd>
+    </dl> *@
+</div>
+<div>
+      <a asp-action="Index" class="btn btn-outline-secondary">返回首頁</a>
+</div>

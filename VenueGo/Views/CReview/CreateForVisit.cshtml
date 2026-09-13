@@ -1,4 +1,4 @@
-@model VenueGo.ViewModels.ReviewVM.ReviewCreateInputVM
+@model VenueGo.ViewModels.ReviewVM.ReviewCreateForVisitVM
 
 @{
       ViewData["Title"] = "CreateForVisit";
@@ -13,7 +13,7 @@
 
 <h1>顧客填寫評論頁</h1>
 
-@* <h4>ReviewCreateInputVM</h4> *@
+@* <h4>ReviewCreateForVisitVM</h4> *@
 <hr />
 <div class="row justify-content-center">
     <div class="col-md-6">
@@ -83,7 +83,26 @@
                         <span asp-validation-for="MentionsStaff" class="text-danger d-block"></span>
                   </div>
 
-            <div class="form-group">
+                  <div class="col-md-6 mb-3">
+                    <label asp-for="IsAnonymous" class="form-label fw-bold"></label>
+                    <div class="form-check form-switch mt-2">
+                        <!-- 💡 保持原本的 disabled 唯讀狀態 -->
+                        <input asp-for="IsAnonymous" class="form-check-input" type="checkbox" id="toggleAnonymous" disabled />
+                        <label class="form-check-label" for="toggleAnonymous">是否匿名</label>
+                    </div>
+                    <span asp-validation-for="IsAnonymous" class="text-danger"></span>
+                  </div>
+
+                <div class="col-md-6 mb-3">
+                    <label asp-for="IsPublic" class="form-label fw-bold"></label>
+                    <div class="form-check form-switch mt-2">
+                        <input asp-for="IsPublic" class="form-check-input" type="checkbox" id="togglePublic" />
+                        <label class="form-check-label" for="togglePublic">公開此評論</label>
+                    </div>
+                    <span asp-validation-for="IsPublic" class="text-danger"></span>
+                </div>
+
+            @* <div class="form-group">
                 <label asp-for="IsAnonymous" class="control-label"></label>
                         <input asp-for="IsAnonymous" class="form-check-input" disabled />
                 <span asp-validation-for="IsAnonymous" class="text-danger"></span>
@@ -93,9 +112,22 @@
                 <label asp-for="IsPublic" class="control-label"></label>
                 <input asp-for="IsPublic" class="form-check-input" />
                 <span asp-validation-for="IsPublic" class="text-danger"></span>
+            </div> *@
+
+            <div class="col-md-6 mb-3">
+                <label asp-for="VenueName" class="form-label fw-bold"></label>
+                <!-- 使用 form-control-plaintext 去除外框線，只留純文字外觀 -->
+                <input asp-for="VenueName" class="form-control-plaintext border-bottom ps-2" readonly />
+                <span asp-validation-for="VenueName" class="text-danger"></span>
             </div>
 
-            <div class="form-group">
+            <div class="col-md-6 mb-3">
+                <label asp-for="RentStartTime" class="form-label fw-bold"></label>
+                <input asp-for="RentStartTime" class="form-control-plaintext border-bottom ps-2" readonly />
+                <span asp-validation-for="RentStartTime" class="text-danger"></span>
+            </div>
+
+          @*   <div class="form-group">
                 <label asp-for="VenueName" class="control-label"></label>
                 <input asp-for="VenueName" class="form-control" readonly />
                 <span asp-validation-for="VenueName" class="text-danger"></span>
@@ -105,7 +137,7 @@
                 <label asp-for="RentStartTime" class="control-label"></label>
                 <input asp-for="RentStartTime" class="form-control" readonly />
                 <span asp-validation-for="RentStartTime" class="text-danger"></span>
-            </div>
+            </div> *@
 
             <div class="form-group">
                 <input type="submit" value="送出" class="btn btn-primary" />

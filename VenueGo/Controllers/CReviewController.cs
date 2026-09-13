@@ -23,6 +23,12 @@ namespace VenueGo.Controllers
         //}
 
         [HttpGet]
+        public IActionResult ShowMyReviewPage(int? reviewId) 
+        {
+            
+            return View();
+        }
+
         public IActionResult ShowPublicReview(int? reviewId) // 做成ReviewCardVM了
         {
             return View();
@@ -36,7 +42,7 @@ namespace VenueGo.Controllers
                 TempData[CDictionary.TK_MSG_Input錯誤] = "你忘記輸入囉～";
                 return RedirectToAction("Index");
             }
-            var pVisit = _db.ReviewPerVisits.FirstOrDefault(s => s.Qrtoken == token);
+            var pVisit = _db.ReviewPerVisits.FirstOrDefault(s => s.Qrtoken == token.Trim());
             if (pVisit == null) // 沒查到評論資格
             {
                 TempData[CDictionary.TK_MSG_找不到指定物件] = "找不到你要的東西耶";
@@ -56,9 +62,9 @@ namespace VenueGo.Controllers
                 return RedirectToAction("Index");
             }
 
-            ReviewCreateInputVM vm = new ReviewCreateInputVM();
+            ReviewCreateForVisitVM vm = new ReviewCreateForVisitVM();
             vm.ReviewPerVisitId = pvid;
-            vm.QrToken = token;
+            vm.QrToken = token.Trim();
             vm.ReservationId = null; // Visit評論 ReservationId必須為null
             vm.StarRating = null;
             vm.ReviewContent = null;
@@ -74,7 +80,7 @@ namespace VenueGo.Controllers
             return View(vm);
         }
         [HttpPost]
-        public IActionResult CreateForVisit(ReviewCreateInputVM vm, string? token) // 送出CreateForVisit
+        public IActionResult CreateForVisit(ReviewCreateForVisitVM vm, string? token) // 送出CreateForVisit
         {
             if (!ModelState.IsValid)
             {
@@ -84,6 +90,16 @@ namespace VenueGo.Controllers
             if (pv == null) // 雙重驗證不通過
             {
                 TempData[CDictionary.TK_MSG_Input錯誤] = "輸入異常，請重試";
+                return RedirectToAction("Index");
+            }
+            var review = _db.ReviewMains.FirstOrDefault(s => s.ReviewPerVisitId == vm.ReviewPerVisitId);
+            if (review != null) // 已寫過評論
+            {
+                return RedirectToAction("ShowPublicReview", new { reviewId = review.ReviewId }); // 顯示已提交的評論
+            }
+            if (DateTime.Now >= pv.ExpiredAt) // 評論資格逾時
+            {
+                TempData[CDictionary.TK_MSG_評論資格過期] = "超過可以評論的時間囉，下次請早";
                 return RedirectToAction("Index");
             }
 
@@ -96,7 +112,7 @@ namespace VenueGo.Controllers
                                  ? NicknameGenerator.Generate()
                                  : null;
 
-            var review = new ReviewMain
+            var newReview = new ReviewMain
             {
                 ReviewPerVisitId = vm.ReviewPerVisitId, // 已雙重驗證
                 ReviewPerBookingId = null,          // XOR：現場評論這欄必為 null
@@ -113,20 +129,20 @@ namespace VenueGo.Controllers
                 CreatedAt = DateTime.Now
             };
             /*
-                ReviewMain review = new ReviewMain();
-                review.ReviewPerBookingId = null;
-                review.ReviewPerVisitId = vm.ReviewPerVisitId;
-                review.UserId = null;
-                if (review.UserId == null)
+                ReviewMain newReview = new ReviewMain();
+                newReview.ReviewPerBookingId = null;
+                newReview.ReviewPerVisitId = vm.ReviewPerVisitId;
+                newReview.UserId = null;
+                if (newReview.UserId == null)
                     vm.IsAnonymous = true;
-                review.StarRating = (byte)vm.StarRating;
-                review.ReplyContent = vm.ReviewContent;
-                review.IsAnonymous = vm.IsAnonymous;
-                review.IsPublic = vm.IsPublic;
-                review.MentionsVenue = vm.MentionsVenue;
-                review.MentionsStaff = vm.MentionsStaff;
-                review.CreatedAt = DateTime.Now;
-                review.AnonymousNickname = NicknameGenerator.Generate();
+                newReview.StarRating = (byte)vm.StarRating;
+                newReview.ReplyContent = vm.ReviewContent;
+                newReview.IsAnonymous = vm.IsAnonymous;
+                newReview.IsPublic = vm.IsPublic;
+                newReview.MentionsVenue = vm.MentionsVenue;
+                newReview.MentionsStaff = vm.MentionsStaff;
+                newReview.CreatedAt = DateTime.Now;
+                newReview.AnonymousNickname = NicknameGenerator.Generate();
             */
 
             _db.ReviewMains.Add(review);

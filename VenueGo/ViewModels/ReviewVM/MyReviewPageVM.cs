@@ -47,6 +47,10 @@ namespace VenueGo.ViewModels.ReviewVM
         public byte? ReplySatisfaction { get; set; }
         [DisplayName("審核未通過，遭下架")]
         public bool IsSpamMarked { get; set; }
+        [DisplayName("場地名稱")]
+        public string? VenueName { get; init; }
+        [DisplayName("使用時段")]
+        public DateTime? RentStartTime { get; init; }
 
         // 建議加的計算屬性：
         //   HasReply            => RepliedAt != null

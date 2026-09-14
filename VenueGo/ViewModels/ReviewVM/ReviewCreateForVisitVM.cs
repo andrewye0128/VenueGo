@@ -13,7 +13,7 @@ namespace VenueGo.ViewModels.ReviewVM
 
         /// <summary>預約評論用；現場評論時為 null。</summary>
         [DisplayName("預約ID")]
-        public int? ReservationId { get; set; }
+        public int? UserId { get; set; }
 
         [DisplayName("評分")]
         [Required(ErrorMessage = "請選擇星等")]

@@ -2,14 +2,16 @@
 using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Entities;
+using VenueGo.Services;
 using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
-    public class CReviewController(dbVenueContext db) : Controller
+    public class CReviewController(dbVenueContext db, ICurrentUser currentUser) : Controller
     {
         // 將注入的 db 指派給私有唯讀欄位
         private readonly dbVenueContext _db = db;
+        private readonly ICurrentUser _currentUser = currentUser;
 
         [HttpGet]
         public IActionResult Index() // 評論專區
@@ -45,6 +47,12 @@ namespace VenueGo.Controllers
 
             string? displayName = review.IsAnonymous ? review.AnonymousNickname : review.UserId.ToString();
 
+            if (review.ReplyViewedAt == null)
+            {
+                review.ReplyViewedAt = DateTime.Now;
+                _db.SaveChanges();
+            }
+
             var vm = new MyReviewPageVM
             {
                 ReviewId = review.ReviewId,
@@ -59,11 +67,11 @@ namespace VenueGo.Controllers
                 DisplayName = displayName ?? "不知道是誰",
                 ReplyContent = review.ReplyContent,
                 RepliedAt = review.RepliedAt,
-                ReplyViewedAt = review.ReplyViewedAt ?? DateTime.Now,
+                ReplyViewedAt = review.ReplyViewedAt,
                 ReplySatisfaction = review.ReplySatisfaction,
-                IsSpamMarked = review.SpamMarkedAt == null ? true : false
+                IsSpamMarked = review.SpamMarkedAt != null
             };
-
+            
             return View(vm);
         }
 
@@ -98,12 +106,11 @@ namespace VenueGo.Controllers
             ReviewCreateForVisitVM vm = new ReviewCreateForVisitVM();
             vm.ReviewPerVisitId = pvid;
             vm.QrToken = token.Trim();
-            vm.ReservationId = null; // Visit評論 ReservationId必須為null
             vm.StarRating = null;
             vm.ReviewContent = null;
             vm.MentionsVenue = false;
             vm.MentionsStaff = false;
-            vm.IsAnonymous = true; // 先強制匿名
+            vm.IsAnonymous = false; 
             vm.IsPublic = true; // 預設公開
 
             var venue = _db.Venues.FirstOrDefault(s => s.VenueId == pVisit.VenueId);
@@ -136,7 +143,7 @@ namespace VenueGo.Controllers
                 return RedirectToAction("Index");
             }
 
-            int? userId = null; // _currentUser.MemberId
+            int? userId = _currentUser.MemberId;
             if (userId == null)
                 vm.IsAnonymous = true;
 

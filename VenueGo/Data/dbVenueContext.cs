@@ -288,7 +288,7 @@ public partial class dbVenueContext : DbContext
         {
             entity.ToTable("ReviewPerBooking");
 
-            entity.HasIndex(e => e.SourceId, "UQ_ReviewPerBooking_SourceId").IsUnique();
+            entity.HasIndex(e => e.OrderId, "UQ_ReviewPerBooking_OrderId").IsUnique();
 
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(0)

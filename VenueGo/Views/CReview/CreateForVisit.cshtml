@@ -23,12 +23,6 @@
 
                   <input type="hidden" asp-for="ReviewPerVisitId" />
 
-                  <div class="form-group d-none">
-                        <label asp-for="ReservationId" class="control-label"></label>
-                        <input asp-for="ReservationId" class="form-control" />
-                        <span asp-validation-for="ReservationId" class="text-danger"></span>
-                  </div>
-
                   <div class="form-group">
                         <!-- 使用 DisplayName 顯示標題 -->
                         <label asp-for="StarRating" class="control-label d-block">@Html.DisplayNameFor(model => model.StarRating)</label>
@@ -87,7 +81,7 @@
                     <label asp-for="IsAnonymous" class="form-label fw-bold"></label>
                     <div class="form-check form-switch mt-2">
                         <!-- 💡 保持原本的 disabled 唯讀狀態 -->
-                        <input asp-for="IsAnonymous" class="form-check-input" type="checkbox" id="toggleAnonymous" disabled />
+                        <input asp-for="IsAnonymous" class="form-check-input" type="checkbox" id="toggleAnonymous" disabled="@(Model.UserId == null)" />
                         <label class="form-check-label" for="toggleAnonymous">是否匿名</label>
                     </div>
                     <span asp-validation-for="IsAnonymous" class="text-danger"></span>

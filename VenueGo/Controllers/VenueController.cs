@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
+using System.Net.WebSockets;
 using VenueGo.Data;
 using VenueGo.Models.VenueModels;
 using VenueGo.ViewModels;
@@ -9,7 +10,7 @@ namespace VenueGo.Controllers
 {
     public class VenueController : Controller
     {
-        //取得wwwroot的實際路徑(Controller建構子注入)
+        //取得照片路徑 >> 取得wwwroot的實際路徑(Controller建構子注入)
         private readonly IWebHostEnvironment _env;
         public VenueController(IWebHostEnvironment env)
         {
@@ -107,7 +108,14 @@ namespace VenueGo.Controllers
         //列出所有場地
         public IActionResult VenueIndex()
         {
+            //撈出所有場地的資料
             List<CVenueWrap> datas = new CVenueFactory().QueryAll();
+
+            //撈出運動類型表,傳到前端提供顯示運動類型分類
+            var sportTypeNames = new CVenueFactory().GetSportTypes().ToDictionary(x => int.Parse(x.Value), x => x.Text);
+
+            ViewBag.SportTypeNames = sportTypeNames;
+
             return View(datas);
         }
 

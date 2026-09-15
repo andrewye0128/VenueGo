@@ -26,4 +26,14 @@ public partial class Reservation
     public DateTime TermsAcceptedAt { get; set; }
 
     public string TermsVersion { get; set; } = null!;
+
+    public int? CreatedBy { get; set; }
+
+    public byte Source { get; set; }
+
+    public int? CancelledBy { get; set; }
+
+    public DateTime? CancelledAt { get; set; }
+
+    public string? CancelReason { get; set; }
 }

@@ -13,25 +13,25 @@ namespace VenueGo.Controllers
         [HttpPost]
         public IActionResult MarkRead() // 標記已讀
         {
-            return View();
+            throw new NotImplementedException();
         }
 
         [HttpPost]
         public IActionResult TogglePin() // 置頂
         {
-            return View();
+            throw new NotImplementedException();
         }
 
         [HttpPost]
         public IActionResult Reply() // 送出回覆
         {
-            return View();
+            throw new NotImplementedException();
         }
 
         [HttpPost]
         public IActionResult MarkSpam() // 標記垃圾
         {
-            return View();
+            throw new NotImplementedException();
         }
 
     }

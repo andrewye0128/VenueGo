@@ -32,10 +32,17 @@ namespace VenueGo.ViewModels.ReviewVM
         [DisplayName("是否公開")]
         public bool IsPublic { get; set; } = true;
 
+        /// <summary>
+        /// 登入會員才能自己決定要不要匿名；未登入同行者沒有身分可顯示，
+        /// 只能匿名（對應約束 CHK_ReviewMain_Anonymous_Logic）。
+        /// 由 Controller 依 ICurrentUser.MemberId 是否為 null 填入。
+        /// </summary>
+        public bool CanChooseAnonymous { get; set; }
+
         // ── 表單最上方的確認區塊 ──────────────────────────
         //
         // 兩種憑證能提供的資訊不一樣（預約憑證根本沒有 VenueId），
-        // 所以這裡只宣告「要顯示兩行字」，實際是哪兩行由子類別決定。
+        // 所以父類別只宣告「要顯示兩行字」，實際是哪兩行由子類別決定。
         // 共用的 partial view 只認得這兩個屬性，不必知道自己在
         // 處理哪一種評論。
         //

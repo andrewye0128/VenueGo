@@ -13,6 +13,35 @@ namespace VenueGo.Controllers
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUser _currentUser = currentUser;
 
+        // 憑證的狀態。用 enum 而不是回傳 bool，因為「不能評論」有三種原因，呼叫端要分別處理。
+        private enum TicketState { Ok, NotFound, Expired, AlreadyReviewed }
+
+        // record 是「一次建好就不能改的小資料袋」，一行就等於一個有三個唯讀屬性的類別。
+        private sealed record VisitTicket(  // 包含評論資格、憑證、已撰寫的評論
+            TicketState State,
+            ReviewPerVisit? Ticket,
+            ReviewMain? ExistingReview);
+
+        // QRToken 驗證流程
+        private VisitTicket ResolveVisitTicket(string? token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+                return new(TicketState.NotFound, null, null); // 未輸入❌
+
+            var ticket = _db.ReviewPerVisits.FirstOrDefault(v => v.Qrtoken == token.Trim());
+            if (ticket == null)
+                return new(TicketState.NotFound, null, null); // 查無評論資格❌
+
+            var existing = _db.ReviewMains.FirstOrDefault(r => r.ReviewPerVisitId == ticket.ReviewPerVisitId);
+            if (existing != null)
+                return new(TicketState.AlreadyReviewed, ticket, existing); // 已有評論📋
+
+            if (DateTime.Now >= ticket.ExpiredAt)
+                return new(TicketState.Expired, ticket, null); // 已逾期❌
+
+            return new(TicketState.Ok, ticket, null); // 可以評論👌
+        }
+
         [HttpGet]
         public IActionResult Index() // 評論專區
         {            
@@ -30,24 +59,24 @@ namespace VenueGo.Controllers
             if (token == null) 
             {
                 TempData[CDictionary.TK_MSG_Input錯誤] = "載入時發生異常，請重試";
-                return RedirectToAction("Index");
+                return RedirectToAction(nameof(Index));
             }
             var pVisit = _db.ReviewPerVisits.FirstOrDefault(s => s.Qrtoken == token.Trim());
             if (pVisit == null) // 沒查到評論資格
             {
                 TempData[CDictionary.TK_MSG_找不到指定物件] = "查無指定評論";
-                return RedirectToAction("Index");
+                return RedirectToAction(nameof(Index));
             }
             var review = _db.ReviewMains.FirstOrDefault(s => s.ReviewPerVisitId == pVisit.ReviewPerVisitId);
             if (review == null)
             {
                 TempData[CDictionary.TK_MSG_找不到指定物件] = "查無指定評論";
-                return RedirectToAction("Index");
+                return RedirectToAction(nameof(Index));
             }
 
             string? displayName = review.IsAnonymous ? review.AnonymousNickname : review.UserId.ToString();
 
-            if (review.ReplyViewedAt == null)
+            if (review.ReplyViewedAt == null && review.RepliedAt <= DateTime.Now)
             {
                 review.ReplyViewedAt = DateTime.Now;
                 _db.SaveChanges();
@@ -78,47 +107,101 @@ namespace VenueGo.Controllers
         [HttpGet]
         public IActionResult CreateForVisit(string? token) // 填寫評論(現場)
         {
-            if (token == null) // 沒token
-            {
-                TempData[CDictionary.TK_MSG_Input錯誤] = "你忘記輸入囉～";
-                return RedirectToAction("Index");
-            }
-            var pVisit = _db.ReviewPerVisits.FirstOrDefault(s => s.Qrtoken == token.Trim());
-            if (pVisit == null) // 沒查到評論資格
-            {
-                TempData[CDictionary.TK_MSG_找不到指定物件] = "找不到你要的東西耶";
-                return RedirectToAction("Index");
-            }
+            var ticketResult = ResolveVisitTicket(token);
 
-            int pvid = pVisit.ReviewPerVisitId;
-            var review = _db.ReviewMains.FirstOrDefault(s => s.ReviewPerVisitId == pvid);
-            if (review != null) // 已寫過評論
+            switch (ticketResult.State)
             {
-                return RedirectToAction("ShowMyReviewPage", new { token = pVisit.Qrtoken }); // 顯示已提交的評論
+                case TicketState.NotFound:
+                    TempData[CDictionary.TK_MSG_找不到指定物件] = "找不到你要的東西耶";
+                    return RedirectToAction(nameof(Index));
+
+                case TicketState.AlreadyReviewed:
+                    return RedirectToAction(nameof(ShowMyReviewPage),
+                                            new { token = ticketResult.Ticket!.Qrtoken });
+
+                case TicketState.Expired:
+                    TempData[CDictionary.TK_MSG_評論資格過期] = "超過可以評論的時間囉，下次請早";
+                    return RedirectToAction(nameof(Index));
             }
 
-            if (DateTime.Now >= pVisit.ExpiredAt) // 評論資格逾時
-            {
-                TempData[CDictionary.TK_MSG_評論資格過期] = "超過可以評論的時間囉，下次請早";
-                return RedirectToAction("Index");
-            }
-
-            ReviewCreateForVisitVM vm = new ReviewCreateForVisitVM();
-            vm.ReviewPerVisitId = pvid;
-            vm.QrToken = token.Trim();
-            vm.StarRating = null;
-            vm.ReviewContent = null;
-            vm.MentionsVenue = false;
-            vm.MentionsStaff = false;
-            vm.IsAnonymous = false; 
-            vm.IsPublic = true; // 預設公開
-
-            var venue = _db.Venues.FirstOrDefault(s => s.VenueId == pVisit.VenueId);
-            vm.VenueName = venue?.VenueName; // venue 為null則回傳null
-            vm.RentStartTime = pVisit.RentStartTime;
+            // 到這裡 State 一定是 Ok，Ticket 一定不是 null
+            var vm = BuildCreateVm(ticketResult.Ticket!);
 
             return View(vm);
+
+            //if (token == null) // 沒token
+            //{
+            //    TempData[CDictionary.TK_MSG_Input錯誤] = "你忘記輸入囉～";
+            //    return RedirectToAction(nameof(Index));
+            //}
+            //var pVisit = _db.ReviewPerVisits.FirstOrDefault(s => s.Qrtoken == token.Trim());
+            //if (pVisit == null) // 沒查到評論資格
+            //{
+            //    TempData[CDictionary.TK_MSG_找不到指定物件] = "找不到你要的東西耶";
+            //    return RedirectToAction(nameof(Index));
+            //}
+
+            //int pvid = pVisit.ReviewPerVisitId;
+            //var review = _db.ReviewMains.FirstOrDefault(s => s.ReviewPerVisitId == pvid);
+            //if (review != null) // 已寫過評論
+            //{
+            //    return RedirectToAction(nameof(ShowMyReviewPage), new { token = pVisit.Qrtoken }); // 顯示已提交的評論
+            //}
+
+            //if (DateTime.Now >= pVisit.ExpiredAt) // 評論資格逾時
+            //{
+            //    TempData[CDictionary.TK_MSG_評論資格過期] = "超過可以評論的時間囉，下次請早";
+            //    return RedirectToAction(nameof(Index));
+            //}
+
+            //ReviewCreateForVisitVM vm = new ReviewCreateForVisitVM();
+            //vm.ReviewPerVisitId = pvid;
+            //vm.QrToken = token.Trim();
+            //vm.StarRating = null;
+            //vm.ReviewContent = null;
+            //vm.MentionsVenue = false;
+            //vm.MentionsStaff = false;
+            //vm.CanChooseAnonymous = _currentUser.MemberId != null;
+            //vm.IsAnonymous = !vm.CanChooseAnonymous;   // 未登入 → 鎖定匿名並顯示為開啟
+            ////vm.IsPublic = true; // 父類別已預設公開
+
+            //var venue = _db.Venues.FirstOrDefault(s => s.VenueId == pVisit.VenueId);
+            //vm.VenueName = venue?.VenueName; // venue 為null則回傳null
+            //vm.RentStartTime = pVisit.RentStartTime;
+
         }
+
+        private ReviewCreateForVisitVM BuildCreateVm(ReviewPerVisit perVisit)
+        {
+            //vm.StarRating = null;
+            //vm.ReviewContent = null;
+            //vm.MentionsVenue = false;
+            //vm.MentionsStaff = false;
+            //vm.CanChooseAnonymous = _currentUser.MemberId != null;
+            //vm.IsAnonymous = !vm.CanChooseAnonymous;   // 未登入 → 鎖定匿名並顯示為開啟
+            ////vm.IsPublic = true; // 父類別已預設公開
+
+            var venue = _db.Venues.FirstOrDefault(n => n.VenueId == perVisit.VenueId);
+
+            var vm = new ReviewCreateForVisitVM
+            {
+                ReviewPerVisitId = perVisit.ReviewPerVisitId,
+                QrToken = perVisit.Qrtoken,
+                VenueName = venue?.VenueName ?? "場地資料異常",
+                RentStartTime = perVisit.RentStartTime,
+
+                StarRating = null,
+                ReviewContent = null,
+                MentionsVenue = false,
+                MentionsStaff = false,
+                CanChooseAnonymous = _currentUser.MemberId != null,
+                IsAnonymous = _currentUser.MemberId == null,   // 未登入 → 鎖定匿名並顯示為開啟
+                IsPublic = true // 父類別已預設公開
+            };
+
+            return vm;
+        }
+
         [HttpPost]
         public IActionResult CreateForVisit(ReviewCreateForVisitVM vm, string? token) // 送出CreateForVisit
         {
@@ -130,22 +213,22 @@ namespace VenueGo.Controllers
             if (pVisit == null) // 雙重驗證不通過
             {
                 TempData[CDictionary.TK_MSG_Input錯誤] = "輸入異常，請重試";
-                return RedirectToAction("Index");
+                return RedirectToAction(nameof(Index));
             }
             var review = _db.ReviewMains.FirstOrDefault(s => s.ReviewPerVisitId == vm.ReviewPerVisitId);
             if (review != null) // 已寫過評論
             {
-                return RedirectToAction("ShowMyReviewPage", new { token = pVisit.Qrtoken }); // 顯示已提交的評論
+                return RedirectToAction(nameof(ShowMyReviewPage), new { token = pVisit.Qrtoken }); // 顯示已提交的評論
             }
             if (DateTime.Now >= pVisit.ExpiredAt) // 評論資格逾時
             {
                 TempData[CDictionary.TK_MSG_評論資格過期] = "超過可以評論的時間囉，下次請早";
-                return RedirectToAction("Index");
+                return RedirectToAction(nameof(Index));
             }
 
             int? userId = _currentUser.MemberId;
             if (userId == null)
-                vm.IsAnonymous = true;
+                vm.IsAnonymous = true; // 前端的 disabled 只是不讓人點，繞過表單直接送請求還是送得進來
 
             // 只有匿名才產生暱稱，實名留 null（= 用會員真名）
             string? nickname = vm.IsAnonymous
@@ -188,42 +271,49 @@ namespace VenueGo.Controllers
             _db.ReviewMains.Add(newReview);
             _db.SaveChanges(); // 別忘記儲存
 
-            return RedirectToAction("ShowMyReviewPage", new { token = pVisit.Qrtoken });
+            return RedirectToAction(nameof(ShowMyReviewPage), new { token = pVisit.Qrtoken });
         }
 
         [HttpGet]
         public IActionResult CreateForBooking(int? id) // 填寫評論(預約)
         {
-            return View();
+            throw new NotImplementedException();
         }
         [HttpPost]
         public IActionResult CreateForBooking() // 送出CreateForBooking
         {
-            return View();
+            throw new NotImplementedException();
         }
 
         [HttpGet]
         public IActionResult Mine() // 查看我的評論(會員)
         {
-            return View();
+            throw new NotImplementedException();
         }
 
         [HttpPost]
-        public IActionResult SetVisibility() // 更改評論公開狀態
+        public IActionResult SetVisibility(string? token) // 更改評論公開狀態
         {
-            return View();
+            var ticketResult = ResolveVisitTicket(token);
+            if (ticketResult.State == TicketState.AlreadyReviewed)
+            {
+                ticketResult.ExistingReview!.IsPublic = !ticketResult.ExistingReview.IsPublic;
+                _db.SaveChanges(); // 又忘了存
+            }
+
+            return RedirectToAction(nameof(ShowMyReviewPage), new { token = ticketResult.Ticket!.Qrtoken });
         }
 
         [HttpPost]
         public IActionResult MarkReplyViewed() // 紀錄查看回覆時間
         {
-            return View();
+            throw new NotImplementedException();
         }
 
         [HttpPost]
         public IActionResult SetSatisfaction() // 表態對回覆的滿意度
         {
-            return View();
+            throw new NotImplementedException();
         }
     }
 }

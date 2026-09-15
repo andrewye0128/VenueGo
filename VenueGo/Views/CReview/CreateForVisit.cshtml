@@ -21,6 +21,16 @@
             <form id="reviewForm" asp-action="CreateForVisit" method="post" asp-route-token="@Model.QrToken" onsubmit="return confirm('確定要送出評論嗎？\n送出後無法修改呦')">
                   <div asp-validation-summary="ModelOnly" class="text-danger"></div>
 
+                  @if (Model.ContextPrimary != null)
+                  {
+                        <div class="border rounded p-3 mb-3">
+                              <div class="fw-semibold">
+                                    <i class="bi bi-geo-alt me-1"></i>@Model.ContextPrimary
+                              </div>
+                              <div class="small text-muted">@Model.ContextSecondary</div>
+                        </div>
+                  }
+
                   <input type="hidden" asp-for="ReviewPerVisitId" />
 
                   <div class="form-group">
@@ -38,24 +48,21 @@
                         <span asp-validation-for="StarRating" class="text-danger"></span>
                   </div>
 
-                  @* <div class="form-group">
-                        <label asp-for="StarRating" class="control-label d-block"></label>
-                        <div class="star-input">
-                              @for (byte i = 5; i >= 1; i--)
-                              {
-                                    <input type="radio" asp-for="StarRating" value="@i" id="star@(i)" />
-                                    <label for="star@(i)"><i class="bi bi-star-fill"></i></label>
-                              }
+                  <div class="form-group">
+                        <label asp-for="ReviewContent" class="control-label"></label>
+                        <textarea asp-for="ReviewContent" class="form-control" rows="12"
+                                  maxlength="1000"></textarea>
+                        <div class="d-flex justify-content-end">
+                              <small id="charCount" class="text-muted">0 / 1000</small>
                         </div>
-                        <span asp-validation-for="StarRating" class="text-danger"></span>
-                  </div> *@
+                        <span asp-validation-for="ReviewContent" class="text-danger"></span>
+                  </div>
 
-            <div class="form-group">
+            @* <div class="form-group">
                 <label asp-for="ReviewContent" class="control-label"></label>
                 <textarea asp-for="ReviewContent" class="form-control" rows="12"></textarea>
-                @* <input asp-for="ReviewContent" class="form-control" /> *@
                 <span asp-validation-for="ReviewContent" class="text-danger"></span>
-            </div>
+            </div> *@
 
                   <!-- 欄位 1：場地設施 -->
                   <div class="form-group mb-3 d-inline-block me-2">
@@ -80,10 +87,14 @@
                   <div class="col-md-6 mb-3">
                     <label asp-for="IsAnonymous" class="form-label fw-bold"></label>
                     <div class="form-check form-switch mt-2">
-                        <!-- 💡 保持原本的 disabled 唯讀狀態 -->
-                        <input asp-for="IsAnonymous" class="form-check-input" type="checkbox" id="toggleAnonymous" disabled="@(Model.UserId == null)" />
+                        <input asp-for="IsAnonymous" class="form-check-input" type="checkbox"
+                                id="toggleAnonymous" disabled="@(!Model.CanChooseAnonymous)" />                        
                         <label class="form-check-label" for="toggleAnonymous">是否匿名</label>
                     </div>
+                        @if (!Model.CanChooseAnonymous)
+                        {
+                              <div class="form-text">未登入的評論一律匿名，系統會給你一個隨機暱稱。</div>
+                        }
                     <span asp-validation-for="IsAnonymous" class="text-danger"></span>
                   </div>
 
@@ -108,7 +119,7 @@
                 <span asp-validation-for="IsPublic" class="text-danger"></span>
             </div> *@
 
-            <div class="col-md-6 mb-3">
+            @* <div class="col-md-6 mb-3">
                 <label asp-for="VenueName" class="form-label fw-bold"></label>
                 <!-- 使用 form-control-plaintext 去除外框線，只留純文字外觀 -->
                 <input asp-for="VenueName" class="form-control-plaintext border-bottom ps-2" readonly />
@@ -118,18 +129,6 @@
             <div class="col-md-6 mb-3">
                 <label asp-for="RentStartTime" class="form-label fw-bold"></label>
                 <input asp-for="RentStartTime" class="form-control-plaintext border-bottom ps-2" readonly />
-                <span asp-validation-for="RentStartTime" class="text-danger"></span>
-            </div>
-
-          @*   <div class="form-group">
-                <label asp-for="VenueName" class="control-label"></label>
-                <input asp-for="VenueName" class="form-control" readonly />
-                <span asp-validation-for="VenueName" class="text-danger"></span>
-            </div>
-
-            <div class="form-group">
-                <label asp-for="RentStartTime" class="control-label"></label>
-                <input asp-for="RentStartTime" class="form-control" readonly />
                 <span asp-validation-for="RentStartTime" class="text-danger"></span>
             </div> *@
 
@@ -154,15 +153,35 @@
             await Html.RenderPartialAsync("_ValidationScriptsPartial");
       }
 
+      <script>
+            // ⚠️ 這段必須在 DraftBox.init 之前。
+            // 草稿還原時會補發 input 事件，計數器要先掛上去才收得到。
+            (function() {
+                var box = document.querySelector('textarea[name="ReviewContent"]');
+                var hint = document.getElementById('charCount');
+                if (!box || !hint) return;
+
+                function update() {
+                    var n = box.value.length;
+                    hint.textContent = n + ' / 1000';
+                    hint.classList.toggle('text-danger', n >= 900);
+                    hint.classList.toggle('text-muted', n < 900);
+                }
+                box.addEventListener('input', update);
+                update();
+            })();
+      </script>
+
       <script src="~/js/draft-box.js" asp-append-version="true"></script>
       <script>
             DraftBox.init({
-                  key: 'review-draft:@Model.QrToken',
-                  form: '#reviewForm',
-                  fields: ['StarRating', 'ReviewContent',
-                        'MentionsVenue', 'MentionsStaff', 'IsPublic'],
-                  saveButton: '#btnSaveDraft',
-                  timeHint: '#draftTimeHint'
+                key: 'review-draft:@Model.QrToken',
+                form: '#reviewForm',
+                fields: @Html.Raw(Model.CanChooseAnonymous
+                                  ? "['StarRating','ReviewContent','MentionsVenue','MentionsStaff','IsAnonymous','IsPublic']"
+                                  : "['StarRating','ReviewContent','MentionsVenue','MentionsStaff','IsPublic']"),
+                saveButton: '#btnSaveDraft',
+                timeHint: '#draftTimeHint'
             });
       </script>
 }

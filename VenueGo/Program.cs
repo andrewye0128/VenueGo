@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Services;
+using VenueGo.Services.Members;
+using VenueGo.Services.Reservations;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -22,7 +24,22 @@ builder.Services.AddDbContext<dbVenueContext>(options =>
     ));
 
 // 註冊 Session
-builder.Services.AddSession();
+//builder.Services.AddSession();
+builder.Services.AddSession(options =>
+{
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
+// Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
+builder.Services.AddHttpContextAccessor();
+
+// 註冊關於會員方法的服務：介面 → 實作
+builder.Services.AddScoped<IMemberQueryService, MemberQueryService>();
+
+// 註冊關於訂位方法的服務：介面 → 實作
+builder.Services.AddScoped<IReservationDraftStore, SessionReservationDraftStore>();
 
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
 

@@ -1,0 +1,66 @@
+@model IEnumerable<VenueGo.Models.VenueModels.CSportTypePriceRuleWrap>
+
+@{
+    ViewData["Title"] = "價格設定";
+}
+
+<h1>Index</h1>
+
+<p>
+    <a asp-action="SportTypePriceRuleCreate">新增價格規則</a>
+</p>
+<table class="table">
+    <thead>
+        <tr>
+            <th>序</th>
+
+            <th>
+                @Html.DisplayNameFor(model => model.PeakStartTime)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.PeakPrice)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.OffPeakPrice)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.IsActive)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.UpdatedAt)
+            </th>
+            <th>
+                @Html.DisplayNameFor(model => model.UpdatedBy)
+            </th>
+            <th></th>
+        </tr>
+    </thead>
+    <tbody>
+@foreach (var item in Model) {
+        <tr>
+            <td>
+                @Html.DisplayFor(model => item.PeakStartTime)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.PeakPrice)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.OffPeakPrice)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.IsActive)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.UpdatedAt)
+            </td>
+            <td>
+                @Html.DisplayFor(model => item.UpdatedBy)
+            </td>
+            <td>
+                <a asp-action="SportTypePriceRuleEdit" asp-route-id="@item.SportTypePriceRuleId">編輯</a>
+                <a asp-action="SportTypePriceRuleDelete" asp-route-id="@item.SportTypePriceRuleId">刪除</a>
+            </td>
+        </tr>
+}
+    </tbody>
+</table>

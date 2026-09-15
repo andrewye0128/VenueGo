@@ -18,4 +18,6 @@ public partial class SportTypePriceRule
     public DateTime? UpdatedAt { get; set; }
 
     public int? UpdatedBy { get; set; }
+
+    public bool IsActive { get; set; }
 }

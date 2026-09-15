@@ -274,5 +274,18 @@ namespace VenueGo.Controllers
 
             return RedirectToAction("VenueIndex");
         }
+
+
+        /*SporTypePriceRule*/
+
+        //列出所有價格規則
+        public IActionResult SportTypePriceRuleIndex()
+        {
+            CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+            List<CSportTypePriceRuleWrap> datas = SportTypePriceRuleFactory.QueryAll();
+
+            return View(datas);
+        }
+
     }
 }

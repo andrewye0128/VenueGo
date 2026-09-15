@@ -354,6 +354,7 @@ public partial class dbVenueContext : DbContext
         {
             entity.HasIndex(e => e.SportTypeId, "UQ_SportTypePriceRules_SportTypeId").IsUnique();
 
+            entity.Property(e => e.IsActive).HasDefaultValue(true);
             entity.Property(e => e.PeakStartTime).HasPrecision(0);
             entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });

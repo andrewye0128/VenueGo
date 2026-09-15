@@ -1,59 +1,82 @@
-﻿@model VenueGo.ViewModels.VenueCreateViewModel
+@model VenueGo.ViewModels.VenueCreateViewModel
 
 @{
-    ViewData["Title"] = "Create";
+    ViewData["Title"] = "場地管理";
 }
 
-<h1>新增運動類型</h1>
+<div class="mb-3">
+    <a asp-action="VenueIndex" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>返回列表
+    </a>
+</div>
 
-<hr />
-<div class="row">
-    <div class="col-md-4">
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-plus-circle-fill me-2 text-primary"></i>新增場地</h5>
+    </div>
+    <div class="card-body">
         <form asp-action="VenueCreate" method="POST" enctype="multipart/form-data">
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+            @Html.AntiForgeryToken()
 
-            <div class="form-group">
-                <label asp-for="VenueName" class="control-label"></label>
-                <input asp-for="VenueName" class="form-control" />
-                <span asp-validation-for="VenueName" class="text-danger"></span>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4" role="alert"></div>
+
+            <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-card-heading me-1"></i>基本資料</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label asp-for="VenueName" class="form-label fw-bold">場地名稱 <span class="text-danger">*</span></label>
+                    <input asp-for="VenueName" class="form-control" />
+                    <span asp-validation-for="VenueName" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Location" class="form-label fw-bold">地點 <span class="text-danger">*</span></label>
+                    <input asp-for="Location" class="form-control" />
+                    <span asp-validation-for="Location" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Capacity" class="form-label fw-bold">容納人數 <span class="text-danger">*</span></label>
+                    <input asp-for="Capacity" class="form-control" />
+                    <span asp-validation-for="Capacity" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="SportTypeId" class="form-label fw-bold">運動種類 <span class="text-danger">*</span></label>
+                    <select asp-for="SportTypeId" asp-items="Model.SportTypes" class="form-select">
+                        <option value="">請選擇運動種類</option>
+                    </select>
+                    <span asp-validation-for="SportTypeId" class="text-danger small"></span>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label asp-for="Location" class="control-label"></label>
-                <input asp-for="Location" class="form-control" />
-                <span asp-validation-for="Location" class="text-danger"></span>
+            <hr class="my-4" />
+
+            <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-image me-1"></i>照片</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label asp-for="PhotoFile" class="form-label fw-bold">上傳照片</label>
+                    <input asp-for="PhotoFile" type="file" class="form-control" accept="image/*"
+                           data-preview-target="photoPreview" />
+                    <span asp-validation-for="PhotoFile" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">照片預覽</label>
+                    <div>
+                        <img id="photoPreview" alt="照片預覽"
+                             class="rounded" style="width: 180px; height: 130px; object-fit: cover;" hidden />
+                        <p id="photoPreviewEmptyText" class="text-muted mb-0">尚未選擇照片</p>
+                    </div>
+                </div>
             </div>
 
-            <div class="form-group">
-                <label asp-for="Capacity" class="control-label"></label>
-                <input asp-for="Capacity" class="form-control" />
-                <span asp-validation-for="Capacity" class="text-danger"></span>
-            </div>
-
-  
-            <div class="form-group">
-                <label asp-for="SportTypeId" class="control-label">運動種類</label>
-                <select asp-for="SportTypeId"
-                        asp-items="Model.SportTypes">
-                    <option value="">請選擇運動種類</option>
-                </select>
-                <span asp-validation-for="SportTypeId" class="text-danger"></span>
-
-            </div>
-
-            <div class="form-group">
-                <label asp-for="PhotoFile"></label>
-                <input asp-for="PhotoFile" type="file" class="form-control" accept="image/*" />
-                <span asp-validation-for="PhotoFile" class="text-danger"></span>
-            </div>
-
-            <div class="form-group">
-                <input type="submit" value="送出新增" class="btn btn-primary mt-2" />
+            <div class="mt-4 pt-3 border-top text-end">
+                <a asp-action="VenueIndex" class="btn btn-light me-2">取消</a>
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-check-lg me-1"></i>送出新增
+                </button>
             </div>
         </form>
     </div>
 </div>
 
-<div>
-    <a asp-action="VenueIndex">取消新增</a>
-</div>
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/photo-preview.js" asp-append-version="true"></script>
+}

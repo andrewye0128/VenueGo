@@ -32,6 +32,12 @@
             <i class="bi bi-tags me-1"></i>運動類型管理
         </a>
     </li>
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "SportTypePriceRuleIndex" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypePriceRuleCreate" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypePriceRuleEdit" ? "active" : "")"
+           asp-controller="Venue" asp-action="SportTypePriceRuleIndex">
+            <i class="bi bi-cash-coin me-1"></i>價格規則管理
+        </a>
+    </li>
 </ul>
 
 <!-- 標題 + 新增按鈕同一行，左右分靠 -->

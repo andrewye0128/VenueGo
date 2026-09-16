@@ -1,0 +1,88 @@
+@model VenueGo.ViewModels.SportTypePriceRuleCreateViewModel
+
+@{
+    ViewData["Title"] = "價格規則管理";
+}
+
+<div class="mb-3">
+    <a asp-action="SportTypePriceRuleIndex" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-cash-coin me-2 text-primary"></i>新增價格規則</h5>
+    </div>
+    <div class="card-body">
+        <form asp-action="SportTypePriceRuleCreate" method="POST">
+            @Html.AntiForgeryToken()
+
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4" role="alert"></div>
+
+            <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-card-heading me-1"></i>基本資料</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label asp-for="SportTypeId" class="form-label fw-bold">運動類型 <span class="text-danger">*</span></label>
+                    <select asp-for="SportTypeId" asp-items="Model.SportTypes" class="form-select">
+                        <option value="">請選擇運動類型</option>
+                    </select>
+                    <span asp-validation-for="SportTypeId" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="PeakStartTime" class="form-label fw-bold">尖峰起始時間</label>
+                    @* 改用下拉選單而不是 <input type="time">,選項本身就只有合法的整點時間,
+                       讓使用者在 UI 上「填得出來的結果」就只會是整點,不需要再靠 step/min/max 這種
+                       只能防君子、防不了手動輸入或跳過前端的方式。
+                       ⚠️【暫時寫死,待接續開發】選項範圍來自 Controller 帶入的 CSportTypePriceRuleFactory
+                       寫死的營業時間常數,還沒有真正串接 WeekBusinessHour(場館營業時間管理)。
+                       等那個功能做完,要把這裡改成依照實際營業時間動態產生的選項。 *@
+                    @* 不用 asp-items 讓框架自動比對「目前值」去標記 selected,
+                       因為 TimeOnly? 的自動字串轉換格式跟我們產生選項用的 "HH:mm" 對不上,
+                       比對不到會導致驗證失敗重新顯示表單時,使用者原本選的值憑空消失。
+                       改成自己迴圈逐項比對 Model.PeakStartTime 手動標記 selected,結果才可靠。 *@
+                    <select asp-for="PeakStartTime" class="form-select">
+                        <option value="">不分尖峰/離峰（只使用離峰價格）</option>
+                        @foreach (var item in Model.PeakStartTimeOptions)
+                        {
+                            bool isSelected = Model.PeakStartTime.HasValue && item.Value == Model.PeakStartTime.Value.ToString("HH:mm");
+                            if (isSelected)
+                            {
+                                <option value="@item.Value" selected="selected">@item.Text</option>
+                            }
+                            else
+                            {
+                                <option value="@item.Value">@item.Text</option>
+                            }
+                        }
+                    </select>
+                    <span asp-validation-for="PeakStartTime" class="text-danger small"></span>
+                    <div class="form-text">
+                        不選代表這個運動類型不分尖峰/離峰，只使用離峰價格
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="PeakPrice" class="form-label fw-bold">尖峰價格 <span class="text-danger">*</span></label>
+                    <input asp-for="PeakPrice" type="number" min="0" class="form-control" />
+                    <span asp-validation-for="PeakPrice" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="OffPeakPrice" class="form-label fw-bold">離峰價格 <span class="text-danger">*</span></label>
+                    <input asp-for="OffPeakPrice" type="number" min="0" class="form-control" />
+                    <span asp-validation-for="OffPeakPrice" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-top text-end">
+                <a asp-action="SportTypePriceRuleIndex" class="btn btn-light me-2">取消</a>
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-check-lg me-1"></i>送出新增
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+}

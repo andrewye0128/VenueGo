@@ -90,12 +90,12 @@
 |---|---|---|
 | SportTypePriceRuleId | int (PK, IDENTITY) | |
 | SportTypeId | int，唯一索引 `UQ_SportTypePriceRules_SportTypeId` | **定價單位是運動種類、不是個別場地**；一個運動類型只能對應一筆價格規則 |
-| PeakStartTime | time(0)，可 null | 可為 null：代表這個運動類型不分尖峰離峰，只用 OffPeakPrice 當唯一價格 |
-| PeakPrice / OffPeakPrice | int | 整數金額，無小數 |
-| IsActive | bit | 軟刪除（開發此功能時新增，原始 DDL 沒有此欄位，已用 `ALTER TABLE` 補上並重新 Scaffold） |
+| PeakStartTime | time(0)，可 null，型別為 `TimeOnly?` | 可為 null：代表這個運動類型不分尖峰離峰，只用 OffPeakPrice 當唯一價格；**限制只能整點**（分秒皆須為 0），因預約時段以一小時為區塊設計，前端 `<input type="time" step="3600">` + 後端驗證雙重把關 |
+| PeakPrice / OffPeakPrice | int | 整數金額，無小數，皆加 `[Range(0, int.MaxValue)]` 驗證不可為負數 |
+| IsActive | bit，DEFAULT 1 | 軟刪除（已完成，原始 DDL 沒有此欄位，已用 `ALTER TABLE` 補上並重新 Scaffold） |
 | UpdatedAt / UpdatedBy | datetime2(0) / int，皆可 null | 稽核欄位（此表無 CreatedAt/By，只有 UpdatedAt/By） |
 
-> **尖峰/離峰規則（一天只切一刀，不分平日／周末）**：`PeakStartTime` 之前算離峰、`PeakStartTime` 開始一路到營業結束都算尖峰。
+> **尖峰/離峰規則（一天只切一刀，不分平日／周末）**：`PeakStartTime` 之前算離峰、`PeakStartTime` 開始一路到營業結束都算尖峰。**目前不支援依平日／假日設定不同規則**——這是已知的潛在擴充需求，非目前交付範圍。
 
 ### 4. WeekBusinessHours（場館每週固定營業時間）
 
@@ -157,81 +157,90 @@
 
 ## 六、場地價格規則功能（SportTypePriceRules）開發規格
 
-> 分支：`F2/HUNG-YU/venue-SportTypePriceRule`（已切自最新 dev；Scaffold 已完成）
+> 分支：`F2/HUNG-YU/venue-SportTypePriceRule`
 
 ### 前置事項（已完成）
 
-原始 DDL 沒有 `IsActive` 欄位，已執行：
-
-```sql
-ALTER TABLE [dbo].[SportTypePriceRules]
-ADD [IsActive] [bit] NOT NULL DEFAULT 1;
-```
-
-並重新 Scaffold 同步 Entity。**本專案 Scaffold 指令務必帶滿以下參數**（血淚教訓：漏帶會導致命名空間衝突、DbContext 被生到錯誤資料夾）：
+`IsActive` 欄位已用 `ALTER TABLE` 補上並重新 Scaffold 同步。**本專案 Scaffold 指令務必帶滿以下參數**（血淚教訓：漏帶會導致命名空間衝突、DbContext 被生到錯誤資料夾）：
 
 ```bash
 dotnet ef dbcontext scaffold "連線字串;Command Timeout=120" Microsoft.EntityFrameworkCore.SqlServer -o Models/Entities --context-dir Data --context dbVenueContext --namespace VenueGo.Models.Entities --context-namespace VenueGo.Data --no-onconfiguring --force
 ```
 
-（對應 Visual Studio Package Manager Console 版本：`Scaffold-DbContext ... -OutputDir Models/Entities -ContextDir Data -Context dbVenueContext -Namespace VenueGo.Models.Entities -ContextNamespace VenueGo.Data -NoOnConfiguring -Force`；團隊原本習慣用 Package Manager Console 執行，因為 Git Bash 不支援 `Scaffold-DbContext`。`dbVenueContext.Config.cs` 是手動維護、不會被 Scaffold 覆蓋的 partial class，不用擔心。）
+（對應 Package Manager Console：`Scaffold-DbContext ... -OutputDir Models/Entities -ContextDir Data -Context dbVenueContext -Namespace VenueGo.Models.Entities -ContextNamespace VenueGo.Data -NoOnConfiguring -Force`；團隊習慣用 Package Manager Console 執行，Git Bash 不支援 `Scaffold-DbContext`。`dbVenueContext.Config.cs` 是手動維護、不會被覆蓋的 partial class。）
 
 ### 核心設計原則
 
-- 定價單位是「運動類型」，不是個別場地；一個運動類型只能對應一筆價格規則（唯一索引限制）
-- 尖峰/離峰只切一刀，依「一天中的時間點」區分，不分平日／周末：`PeakStartTime` 之前離峰、之後到營業結束都算尖峰
-- `PeakStartTime` 為 `null` 時，代表不分尖峰離峰，統一用 `OffPeakPrice`
-- 價格欄位為整數，無小數
+- 定價單位是「運動類型」，一個運動類型只能對應一筆價格規則（唯一索引限制）
+- 尖峰/離峰依「一天中的時間點」切一刀，不分平日／周末
+- `PeakStartTime` 為 `null` 時代表不分尖峰離峰，統一用 `OffPeakPrice`
+- `PeakStartTime` 限制只能整點（分秒皆為 0），因預約時段以一小時為單位設計，避免同一區塊被切成一半尖峰一半離峰
+- 價格為整數，且不可為負數
 
 ### 功能入口與導覽
 
-- 入口放在 Venue 功能模組既有 nav 頁籤區塊，新增一個頁籤項目（風格比照「場地管理」「運動類型管理」頁籤，含 active 狀態判斷邏輯）
-- 頁籤導向 `PriceRuleIndex`，列出所有運動類型的價格設定狀態，分別導向：
-  - `PriceRuleCreate`：尚未設定價格規則的運動類型（下拉選單只列出尚未有價格規則的運動類型，避免違反唯一索引）
-  - `PriceRuleEdit`：已有價格規則的運動類型
-- **刪除功能暫緩實作**，已加上 `IsActive` 欄位為未來鋪路，查詢一律 `WHERE IsActive == true`
+- 入口放在 Venue 模組既有 nav 頁籤，新增一個頁籤項目，導向 `SportTypePriceRuleIndex`
+- Index 列出所有運動類型的價格設定狀態，導向 `SportTypePriceRuleCreate`（尚未設定）或 `SportTypePriceRuleEdit`（已設定）
+- **刪除功能已開發完成**：`IsActive` 開關（在 Edit 頁面）作為軟刪除／停用用途；另外提供真正的硬刪除 `SportTypePriceRuleDelete` Action，刪除前必須用 `HasLinkedVenues(sportTypeId)` 檢查該運動類型底下是否還有場地在用，有連動就擋下（`TempData["ErrorMessage"]` 顯示原因），沒有才真正 `Remove` 該筆資料
 
 ### Action 一覽（併入既有 VenueController）
 
-- `PriceRuleIndex`（GET）
-- `PriceRuleCreate`（GET/POST，POST 需防呆檢查該 `SportTypeId` 是否已存在價格規則）
-- `PriceRuleEdit`（GET/POST）
+`SportTypePriceRuleIndex`（GET）／`SportTypePriceRuleCreate`（GET/POST，POST 需防呆檢查該 `SportTypeId` 是否已存在規則）／`SportTypePriceRuleEdit`（GET/POST）／`SportTypePriceRuleDelete`（GET，硬刪除，刪除前檢查場地連動）
 
-### 對外方法：`GetPrice()`（供 Zong-Hao 預約模組呼叫）
-
-**需求背景**：預約模組目前僅需在 UI 顯示價格，不涉及時段合法性檢查（那是獨立的 `IsAvailable()`，尚未開發，非本次範圍）。
+### 對外方法一：`GetPrice()` — 計算預約總價（已開發完成）
 
 ```csharp
 /// <summary>
-/// 依場地與預約時間，計算該次預約的價格。
-/// 呼叫方僅需提供場地 ID 與時間，內部自行處理場地→運動類型→價格規則的轉換與尖峰離峰判斷。
+/// 依場地與預約的多個時段區塊，計算總價格。每個時段代表一小時，
+/// 呼叫方傳入該場地所有預約區塊的起始時間清單（時段不重複，前端已保證）。
+/// 場地不存在（含已軟刪除）或查無價格規則時拋出 KeyNotFoundException，呼叫方須自行 try-catch。
 /// </summary>
-/// <param name="venueId">場地 ID</param>
-/// <param name="reservationTime">預約時間，僅時分秒，不含日期（呼叫方可用 DateTime.TimeOfDay 取得）</param>
-/// <returns>該時段對應價格（整數金額）</returns>
-public int GetPrice(int venueId, TimeSpan reservationTime)
+public int GetPrice(int venueId, List<TimeSpan> reservationTimes)
 ```
 
-內部邏輯：
-1. 依 `venueId` 查出 `SportTypeId`（可複用既有 `CVenueFactory.QueryById()`）
-2. 依 `SportTypeId` 查出對應的 `SportTypePriceRule`（`IsActive == true`）
-3. `PeakStartTime` 為 `null` → 回傳 `OffPeakPrice`
-4. 否則：`reservationTime >= PeakStartTime` → 回傳 `PeakPrice`；反之回傳 `OffPeakPrice`
+邏輯：查一次價格規則（共用私有方法 `GetPriceRuleForVenue()`）→ `foreach` 每個時段依 `PeakStartTime` 判斷尖峰/離峰（`>=` 含起始點算尖峰）→ 加總回傳；空清單或 `null` 回傳 0。
 
-呼叫方範例：
+### 對外方法二：`GetPriceRule()` — 查詢價格（顯示用途，例如場地卡片）（已開發完成）
+
 ```csharp
-int price = new CVenueFactory().GetPrice(venueId, reservationDateTime.TimeOfDay);
+/// <summary>
+/// 依場地查出尖峰/離峰價格，供顯示用途，不做時段判斷或加總。
+/// 若該運動類型不分尖峰離峰，PeakPrice 回傳 null（即使資料庫有存數值）。
+/// 場地不存在（含已軟刪除）或查無價格規則時拋出 KeyNotFoundException，呼叫方須自行 try-catch。
+/// </summary>
+public VenuePriceInfo GetPriceRule(int venueId)
+
+public class VenuePriceInfo
+{
+    public int? PeakPrice { get; set; }
+    public int OffPeakPrice { get; set; }
+}
 ```
 
-**明確的職責邊界**：此方法不檢查場地是否存在、時段是否合法可預約，呼叫方應自行確保傳入時間為合法的可預約時段。
+### 共用私有方法（已開發完成）
 
-### 本次開發範圍界定
+```csharp
+/// <summary>
+/// 查場地（過濾 IsActive）→ 查價格規則（過濾 IsActive）→ 回傳；查不到任一者皆拋出 KeyNotFoundException。
+/// GetPrice() 與 GetPriceRule() 皆呼叫此方法，避免查詢邏輯重複。
+/// </summary>
+private CSportTypePriceRuleWrap GetPriceRuleForVenue(int venueId)
+```
 
-**包含**：`IsActive` 欄位、`CSportTypePriceRuleWrap`、`CSportTypePriceRuleFactory`、`PriceRuleIndex`/`Create`/`Edit`、對應 View（含 nav 頁籤新增項目）、`GetPrice()`
+**測試狀況**：已對照真實資料庫實測過以下情境，皆符合預期——有尖峰規則的場地（含尖峰起始時間邊界值 `>=` 判斷）、空清單／`null`清單、場地已軟刪除、場地不存在、場地存在但該運動類型尚未設定價格規則。測試方式是另建一個丟棄式 console 專案呼叫 Factory 方法打真實 DB，測完即刪除，未寫入正式測試專案。**尚未做的是跨模組整合測試**——預約模組（Zong-Hao）還沒有實際呼叫過這兩個方法。
 
-**不包含**：刪除功能（Action 暫緩）、`IsAvailable()` 時段合法性檢查（排在 `unavailable-slots` 分支）
+### 明確的職責邊界
 
----
+- 兩個方法皆不檢查時段是否合法可預約（那是 `IsAvailable()` 的職責，尚未開發，排在 `unavailable-slots` 分支）
+- `GetPrice()` 不檢查時段重複；`GetPriceRule()` 回傳的 `PeakPrice` 是 `int?`，跟 Wrap 本身的 `int PeakPrice` 型別語意不同，不要混用
+
+### 開發範圍界定
+
+**包含**：`CSportTypePriceRuleWrap`、`CSportTypePriceRuleFactory`、四個 Action（含 `SportTypePriceRuleDelete` 硬刪除）、對應 View（含 nav 頁籤）、`GetPrice()`／`GetPriceRule()`／`GetPriceRuleForVenue()`、`VenuePriceInfo`、`PeakStartTime` 整點限制（前後端）
+
+**已開發完成**：`CSportTypePriceRuleWrap`、`CSportTypePriceRuleFactory`（含 `HasLinkedVenues()`、`Delete()`、`GetPrice()`、`GetPriceRule()`、`GetPriceRuleForVenue()`）、`VenuePriceInfo`、Index/Create/Edit/Delete 四個 Action 與對應 View、nav 頁籤、`PeakStartTime` 整點限制（前後端）。`GetPrice()`／`GetPriceRule()` 已對照真實 DB 單元驗證過，跨模組整合測試待預約模組實際呼叫後才算完整驗證。
+
+**不包含**：`IsAvailable()`、依平日／假日區分尖峰離峰規則（已知潛在需求，非本次交付）
 
 ## 七、本週（接下來 4 天）工作項目
 

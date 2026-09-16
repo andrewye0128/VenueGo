@@ -290,9 +290,191 @@ namespace VenueGo.Controllers
         public IActionResult SportTypePriceRuleIndex()
         {
             CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
-            List<CSportTypePriceRuleWrap> datas = SportTypePriceRuleFactory.QueryAll();
+            List<SportTypePriceRuleIndexViewModel> vm = SportTypePriceRuleFactory.QueryAll();
 
-            return View(datas);
+            return View(vm);
+        }
+
+
+        //價格規則新增 >> 頁面產生
+        public IActionResult SportTypePriceRuleCreate()
+        {
+            //傳運動類型名稱到前端
+            SportTypePriceRuleCreateViewModel vm = new SportTypePriceRuleCreateViewModel();
+            //撈出尚未設定價格規則的啟用中運動類型
+            vm.SportTypes = new CSportTypePriceRuleFactory().GetAvailableSportTypes();
+            //尖峰起始時間下拉選單選項(只列出合法的整點時間,UI 上就不會選得出不合法的值)
+            vm.PeakStartTimeOptions = new CSportTypePriceRuleFactory().GetPeakStartTimeOptions();
+            return View(vm);
+        }
+
+        //價格規則新增 >> 資料回傳存入DB
+        [HttpPost]
+        public IActionResult SportTypePriceRuleCreate(SportTypePriceRuleCreateViewModel vm)
+        {
+            CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+
+            //整點檢查 >> PeakStartTime 有值時,分鐘/秒數必須是0
+            //前端已經改成下拉選單、選項本身就只有整點,這裡是防止有人跳過前端直接送 POST(例如用 Postman)
+            if (!IsWholeHour(vm.PeakStartTime))
+            {
+                ModelState.AddModelError(nameof(vm.PeakStartTime), "尖峰起始時間只能設定整點");
+            }
+
+            //營業時間範圍檢查 >> PeakStartTime 有值時,必須落在營業時間內,且不能晚於打烊前一小時
+            //⚠️【暫時寫死,待接續開發】範圍目前來自 CSportTypePriceRuleFactory 裡寫死的營業時間常數,
+            //還沒有真正查詢 WeekBusinessHour,等那個功能做完要回來把這段檢查改成查表
+            if (!IsWithinBusinessHours(vm.PeakStartTime))
+            {
+                ModelState.AddModelError(nameof(vm.PeakStartTime),
+                    $"尖峰起始時間需介於 {CSportTypePriceRuleFactory.BusinessOpenTime:HH:mm} ~ {CSportTypePriceRuleFactory.LatestPeakStartTime:HH:mm} 之間");
+            }
+
+            //防呆 >> 避免同一個運動類型設定兩筆價格規則,違反唯一索引
+            if (SportTypePriceRuleFactory.HasPriceRule(vm.SportTypeId))
+            {
+                ModelState.AddModelError(nameof(vm.SportTypeId), "此運動類型已經設定過價格規則");
+            }
+
+            //先檢查填寫是否通過
+            if (!ModelState.IsValid)
+            {
+                vm.SportTypes = SportTypePriceRuleFactory.GetAvailableSportTypes();
+                //驗證沒過要重新顯示表單,下拉選單選項也要重新帶回去,不然畫面上的選單會是空的
+                vm.PeakStartTimeOptions = SportTypePriceRuleFactory.GetPeakStartTimeOptions();
+                return View(vm);
+            }
+
+            //回傳的資料存入Wrap
+            CSportTypePriceRuleWrap Wrap = new CSportTypePriceRuleWrap();
+            Wrap.SportTypeId = vm.SportTypeId;
+            Wrap.PeakStartTime = vm.PeakStartTime;
+            Wrap.PeakPrice = vm.PeakPrice;
+            Wrap.OffPeakPrice = vm.OffPeakPrice;
+            Wrap.IsActive = true;
+
+            //存入DB >> 呼叫 Factory 進行 CRUD
+            SportTypePriceRuleFactory.Create(Wrap);
+
+            return RedirectToAction("SportTypePriceRuleIndex");
+        }
+
+        //價格規則編輯 >> 頁面產生
+        public IActionResult SportTypePriceRuleEdit(int? id)
+        {
+            //驗證id非null
+            if (id == null)
+                return RedirectToAction("SportTypePriceRuleIndex");
+
+            CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+
+            //用id取出對應資料送到前端
+            SportTypePriceRuleEditViewModel vm = SportTypePriceRuleFactory.QueryById((int)id);
+            if (vm == null)
+                return RedirectToAction("SportTypePriceRuleIndex");
+
+            //尖峰起始時間下拉選單選項
+            vm.PeakStartTimeOptions = SportTypePriceRuleFactory.GetPeakStartTimeOptions();
+
+            return View(vm);
+        }
+
+        //價格規則編輯 >> 參數送回
+        [HttpPost]
+        public IActionResult SportTypePriceRuleEdit(SportTypePriceRuleEditViewModel vm)
+        {
+            CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+
+            //整點檢查 >> PeakStartTime 有值時,分鐘/秒數必須是0
+            if (!IsWholeHour(vm.PeakStartTime))
+            {
+                ModelState.AddModelError(nameof(vm.PeakStartTime), "尖峰起始時間只能設定整點");
+            }
+
+            //營業時間範圍檢查 >> PeakStartTime 有值時,必須落在營業時間內,且不能晚於打烊前一小時
+            //⚠️【暫時寫死,待接續開發】範圍目前來自 CSportTypePriceRuleFactory 裡寫死的營業時間常數,
+            //還沒有真正查詢 WeekBusinessHour,等那個功能做完要回來把這段檢查改成查表
+            if (!IsWithinBusinessHours(vm.PeakStartTime))
+            {
+                ModelState.AddModelError(nameof(vm.PeakStartTime),
+                    $"尖峰起始時間需介於 {CSportTypePriceRuleFactory.BusinessOpenTime:HH:mm} ~ {CSportTypePriceRuleFactory.LatestPeakStartTime:HH:mm} 之間");
+            }
+
+            //驗證送回的資料非null
+            if (!ModelState.IsValid)
+            {
+                //驗證沒過要重新顯示表單,下拉選單選項跟運動類型名稱都要重新帶回去
+                vm.PeakStartTimeOptions = SportTypePriceRuleFactory.GetPeakStartTimeOptions();
+                var data = SportTypePriceRuleFactory.QueryById(vm.SportTypePriceRuleId);
+                if (data != null)
+                    vm.SportTypeName = data.SportTypeName;
+                return View(vm);
+            }
+
+            //回傳的資料存入Wrap
+            CSportTypePriceRuleWrap EditWrap = new CSportTypePriceRuleWrap();
+            EditWrap.SportTypePriceRuleId = vm.SportTypePriceRuleId;
+            EditWrap.PeakStartTime = vm.PeakStartTime;
+            EditWrap.PeakPrice = vm.PeakPrice;
+            EditWrap.OffPeakPrice = vm.OffPeakPrice;
+            EditWrap.IsActive = vm.IsActive;
+
+            //將前端填寫資料送入 Factory 進行 Edit CRUD
+            SportTypePriceRuleFactory.Edit(EditWrap);
+
+            return RedirectToAction("SportTypePriceRuleIndex");
+        }
+
+        //價格規則刪除 >> 真正的硬刪除,刪除前必須確認該運動類型底下沒有場地正在連動
+        public IActionResult SportTypePriceRuleDelete(int? id)
+        {
+            //驗證id非null
+            if (id == null)
+                return RedirectToAction("SportTypePriceRuleIndex");
+
+            CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+
+            //先查出這筆價格規則對應的運動類型,才能檢查是否有場地連動,順便確認資料存在
+            var data = SportTypePriceRuleFactory.QueryById((int)id);
+            if (data == null)
+                return RedirectToAction("SportTypePriceRuleIndex");
+
+            //硬刪除前檢查 >> 該運動類型底下若還有場地在用,刪除規則會導致那些場地找不到對應價格,故擋下來
+            if (SportTypePriceRuleFactory.HasLinkedVenues(data.SportTypeId))
+            {
+                TempData["ErrorMessage"] = $"「{data.SportTypeName}」目前仍有場地使用中，無法刪除價格規則";
+                return RedirectToAction("SportTypePriceRuleIndex");
+            }
+
+            //檢查通過,執行硬刪除
+            SportTypePriceRuleFactory.Delete((int)id);
+            TempData["SuccessMessage"] = $"已成功刪除「{data.SportTypeName}」的價格規則";
+
+            return RedirectToAction("SportTypePriceRuleIndex");
+        }
+
+        //整點檢查 >> null 視為合法(代表不分尖峰/離峰),非null時 分鐘/秒數必須是0
+        //Create/Edit 兩個 Action 共用同一份檢查邏輯
+        private bool IsWholeHour(TimeOnly? time)
+        {
+            if (!time.HasValue)
+                return true;
+
+            return time.Value.Minute == 0 && time.Value.Second == 0;
+        }
+
+        //營業時間範圍檢查 >> null 視為合法(代表不分尖峰/離峰),
+        //非null時必須落在 [開始營業時間, 打烊前一小時] 這個範圍內(含頭含尾)
+        //Create/Edit 兩個 Action 共用同一份檢查邏輯
+        //⚠️【暫時寫死,待接續開發】範圍依據 CSportTypePriceRuleFactory 裡寫死的營業時間常數,
+        //還沒有真正串接 WeekBusinessHour(場館營業時間管理),等那個功能做完要回來改成查表
+        private bool IsWithinBusinessHours(TimeOnly? time)
+        {
+            if (!time.HasValue)
+                return true;
+
+            return time.Value >= CSportTypePriceRuleFactory.BusinessOpenTime
+                && time.Value <= CSportTypePriceRuleFactory.LatestPeakStartTime;
         }
 
     }

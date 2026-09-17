@@ -1,8 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Models.Options;
 using VenueGo.Services;
 using VenueGo.Services.Members;
 using VenueGo.Services.Reservations;
+using VenueGo.Services.TimeSlots;
+using VenueGo.Services.Venues;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +35,9 @@ builder.Services.AddSession(options =>
     options.Cookie.IsEssential = true;
 });
 
+
+builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
+
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
 
@@ -40,6 +46,16 @@ builder.Services.AddScoped<IMemberQueryService, MemberQueryService>();
 
 // 註冊關於訂位方法的服務：介面 → 實作
 builder.Services.AddScoped<IReservationDraftStore, SessionReservationDraftStore>();
+
+// 註冊關於場地方法的服務：介面 → 實作
+builder.Services.AddScoped<IVenueQueryService, VenueQueryService>();
+
+// 註冊關於時段方法的服務：介面 → 實作
+builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
+
+// 註冊關於球館預約的業務邏輯的服務：介面 → 實作
+builder.Services.Configure<ReservationRulesOptions>(
+    builder.Configuration.GetSection(ReservationRulesOptions.SectionName));
 
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
 

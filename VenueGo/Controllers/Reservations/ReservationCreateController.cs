@@ -4,6 +4,10 @@ using Microsoft.AspNetCore.Mvc;
 using VenueGo.ViewModels.ReservationViewModels;
 using VenueGo.Services.Members;
 using VenueGo.Services.Reservations;
+using VenueGo.Services.Venues;
+using Microsoft.Extensions.Options;
+using VenueGo.Models.Options;
+using VenueGo.Services.TimeSlots;
 
 namespace VenueGo.Controllers.Reservations
 {
@@ -16,14 +20,23 @@ namespace VenueGo.Controllers.Reservations
         //}
 
         private readonly IMemberQueryService _memberQueryService;
+        private readonly IVenueQueryService _venueQueryService;
+        private readonly ITimeSlotService _timeSlotService;
         private readonly IReservationDraftStore _draftStore;
+        private readonly ReservationRulesOptions _rules;
 
         public ReservationCreateController(
             IMemberQueryService memberQueryService,
-            IReservationDraftStore draftStore)
+            IVenueQueryService venueQueryService,
+            ITimeSlotService timeSlotService,
+            IReservationDraftStore draftStore,
+            IOptionsSnapshot<ReservationRulesOptions> rules)
         {
             _memberQueryService = memberQueryService;
+            _venueQueryService = venueQueryService;
+            _timeSlotService = timeSlotService;
             _draftStore = draftStore;
+            _rules = rules.Value;
         }
 
         /// <summary>
@@ -105,18 +118,7 @@ namespace VenueGo.Controllers.Reservations
             _draftStore.Save(draft);
 
             // TODO 步驟 2：由負責場地選擇的人實作 SelectVenue 後，改為導向該 Action，要改成 (RedirectToAction(nameof(SelectVenue)))。
-            return RedirectToAction(nameof(SelectMember));
-        }
-
-        /// <summary>
-        /// 取消整個新增流程，清除暫存並回到預約列表。
-        /// </summary>
-        [HttpPost("Cancel")]
-        [ValidateAntiForgeryToken]
-        public IActionResult Cancel()
-        {
-            _draftStore.Clear();
-            return RedirectToAction("Index", "Reservation");
+            return RedirectToAction(nameof(SelectVenue));
         }
 
         /// <summary>
@@ -138,6 +140,283 @@ namespace VenueGo.Controllers.Reservations
 
             ViewData["CurrentStep"] = 1;
             return View(nameof(SelectMember), viewModel);
+        }
+
+
+        /// <summary>
+        /// 步驟 2：顯示場地清單。
+        /// </summary>
+        /// <param name="criteria">搜尋條件，由查詢字串繫結。</param>
+        [HttpGet("SelectVenue")]
+        public async Task<IActionResult> SelectVenue(
+            [FromQuery] VenueSearchCriteria criteria, CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            // 防止有人直接打網址跳過步驟 1。
+            // 沒有這道檢查，未選會員就能進到步驟 2，
+            // 一路走到最後才發現 UserId 是 null。
+            if (draft.MaxAllowedStep < 2)
+            {
+                return RedirectToAction(nameof(SelectMember));
+            }
+
+            return View(await BuildSelectVenueViewModel(criteria, draft.VenueId, cancellationToken));
+        }
+
+        /// <summary>
+        /// 步驟 2：確認選擇的場地並前往步驟 3。
+        /// </summary>
+        /// <param name="venueId">選擇的場地 Id。</param>
+        /// <param name="criteria">目前的搜尋條件，驗證失敗時要能重繪同一頁清單。</param>
+        [HttpPost("SelectVenue")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SelectVenue(
+            int? venueId,
+            [FromQuery] VenueSearchCriteria criteria,
+            CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            if (draft.MaxAllowedStep < 2)
+            {
+                return RedirectToAction(nameof(SelectMember));
+            }
+
+            if (venueId is null)
+            {
+                ModelState.AddModelError(string.Empty, "請先選擇一個場地，再進行下一步。");
+                return View(await BuildSelectVenueViewModel(criteria, null, cancellationToken));
+            }
+
+            // 與步驟 1 相同：畫面已把停用場地設為不可選，但仍必須在伺服器端再驗一次。
+            var venue = await _venueQueryService.GetSelectableVenueAsync(venueId.Value, cancellationToken);
+
+            if (venue is null)
+            {
+                ModelState.AddModelError(string.Empty,
+                    "選擇的場地不存在或目前停用，請重新選擇。");
+                return View(await BuildSelectVenueViewModel(criteria, venueId, cancellationToken));
+            }
+
+            // 換了場地就必須清掉已選的時段與金額。
+            // 原因：時段的可用性是「場地 + 日期 + 時段」綁在一起的，
+            // 舊場地可預約的時段在新場地可能已被別人訂走；
+            // 價格也可能因運動類型不同而改變。
+            // 日期本身與場地無關，可以保留。
+            if (draft.VenueId != venue.VenueId)
+            {
+                draft.SlotTimes.Clear();
+                draft.EstimatedAmount = 0;
+            }
+
+            draft.VenueId = venue.VenueId;
+            draft.VenueName = venue.VenueName;
+            draft.VenueCapacity = venue.Capacity;
+
+            _draftStore.Save(draft);
+
+            // TODO 步驟 3：SelectDate 實作後改為 RedirectToAction(nameof(SelectDate))
+            return RedirectToAction(nameof(SelectDate)); ;
+        }
+
+        /// <summary>
+        /// 組裝步驟 2 的 ViewModel。
+        /// <para>
+        /// GET 與 POST 的兩個錯誤分支共三處都需要同一份資料，
+        /// 抽成方法避免「一處改了、另兩處忘了改」。
+        /// </para>
+        /// </summary>
+        private async Task<SelectVenueViewModel> BuildSelectVenueViewModel(
+            VenueSearchCriteria criteria, int? selectedVenueId, CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            ViewData["CurrentStep"] = 2;
+
+            return new SelectVenueViewModel
+            {
+                Criteria = criteria,
+                Venues = await _venueQueryService.SearchAsync(criteria, cancellationToken),
+                SportTypes = await _venueQueryService.GetSportTypeOptionsAsync(cancellationToken),
+                SelectedVenueId = selectedVenueId,
+                MemberName = draft.MemberName,
+                MemberPhone = draft.MemberPhone
+            };
+        }
+
+
+
+        /// <summary>
+        /// 步驟 3：顯示日曆。
+        /// </summary>
+        /// <param name="year">要顯示的年。未指定時以已選日期或今天所在的月份為準。</param>
+        /// <param name="month">要顯示的月。</param>
+        [HttpGet("SelectDate")]
+        public async Task<IActionResult> SelectDate(
+            int? year, int? month, CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            if (draft.MaxAllowedStep < 3)
+            {
+                // 缺會員就回步驟 1，缺場地就回步驟 2，不要一律丟回第一步
+                return RedirectToAction(
+                    draft.IsMemberSelected ? nameof(SelectVenue) : nameof(SelectMember));
+            }
+
+            return View(await BuildSelectDateViewModel(
+                year, month, draft.BookingDate, cancellationToken));
+        }
+
+        /// <summary>
+        /// 步驟 3：確認選擇的日期並前往步驟 4。
+        /// </summary>
+        /// <param name="date">選擇的日期。</param>
+        [HttpPost("SelectDate")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SelectDate(
+            DateOnly? date, CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            if (draft.MaxAllowedStep < 3)
+            {
+                return RedirectToAction(
+                    draft.IsMemberSelected ? nameof(SelectVenue) : nameof(SelectMember));
+            }
+
+            if (date is null)
+            {
+                ModelState.AddModelError(string.Empty, "請先選擇使用日期，再進行下一步。");
+                return View(await BuildSelectDateViewModel(null, null, null, cancellationToken));
+            }
+
+            var today = DateOnly.FromDateTime(DateTime.Now);
+
+            // 驗證一：日期必須落在允許範圍內。
+            // 畫面上超出範圍的日期已無法點選，但仍必須在伺服器端再驗一次，
+            // 因為手改表單就能送出任意日期。
+            if (!_rules.IsWithinAdminRange(date.Value, today))
+            {
+                ModelState.AddModelError(string.Empty,
+                    $"可預約日期為 {_rules.GetAdminMinDate(today):yyyy/MM/dd} ～ " +
+                    $"{_rules.GetAdminMaxDate(today):yyyy/MM/dd}，請重新選擇。");
+                return View(await BuildSelectDateViewModel(
+                    date.Value.Year, date.Value.Month, null, cancellationToken));
+            }
+
+            // 驗證二：當天必須真的還有可預約的時段。
+            // 這裡直接問 TimeSlotService，與日曆使用同一份計算邏輯，
+            // 因此不可能出現「日曆說可預約、送出卻被擋下」的矛盾。
+            var slots = await _timeSlotService.GetDaySlotsAsync(
+                draft.VenueId!.Value, date.Value, cancellationToken);
+
+            if (slots.Count == 0)
+            {
+                ModelState.AddModelError(string.Empty, "該日期為公休日，無法建立預約。");
+                return View(await BuildSelectDateViewModel(
+                    date.Value.Year, date.Value.Month, null, cancellationToken));
+            }
+
+            if (!slots.Any(s => s.IsSelectable))
+            {
+                ModelState.AddModelError(string.Empty,
+                    "該日期已無可預約時段，請改選其他日期或其他場地。");
+                return View(await BuildSelectDateViewModel(
+                    date.Value.Year, date.Value.Month, null, cancellationToken));
+            }
+
+            // 換了日期就必須清掉已選的時段與金額，理由與換場地相同：
+            // 時段的可用性是「場地 + 日期 + 時段」綁在一起的，
+            // 9/18 可訂的 19:00 在 9/19 可能已被別人訂走。
+            if (draft.BookingDate != date.Value)
+            {
+                draft.SlotTimes.Clear();
+                draft.EstimatedAmount = 0;
+            }
+
+            draft.BookingDate = date.Value;
+            _draftStore.Save(draft);
+
+            // TODO 步驟 4：SelectSlots 實作後改為 RedirectToAction(nameof(SelectSlots))
+            return RedirectToAction(nameof(SelectDate));
+        }
+
+        /// <summary>
+        /// 組裝步驟 3 的 ViewModel。
+        /// <para>
+        /// GET 與 POST 的四個錯誤分支都需要同一份資料，抽成方法避免重複。
+        /// </para>
+        /// </summary>
+        /// <param name="year">要顯示的年，null 表示自動決定。</param>
+        /// <param name="month">要顯示的月，null 表示自動決定。</param>
+        /// <param name="selectedDate">已選的日期，用於保持選取狀態。</param>
+        private async Task<SelectDateViewModel> BuildSelectDateViewModel(
+            int? year, int? month, DateOnly? selectedDate, CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+            var today = DateOnly.FromDateTime(DateTime.Now);
+
+            var minDate = _rules.GetAdminMinDate(today);
+            var maxDate = _rules.GetAdminMaxDate(today);
+
+            // 決定要顯示哪個月：網址指定的優先，其次是已選日期所在的月，最後是今天。
+            var displayMonth = ResolveDisplayMonth(year, month, selectedDate ?? draft.BookingDate, today);
+
+            // 日曆格線會包含鄰月補格，因此查詢範圍要往前後各放寬一週，
+            // 否則月初月末那幾格補格日期會拿不到時段統計而顯示空白。
+            var firstOfMonth = new DateOnly(displayMonth.Year, displayMonth.Month, 1);
+            var queryFrom = firstOfMonth.AddDays(-7);
+            var queryTo = firstOfMonth.AddMonths(1).AddDays(6);
+
+            var availability = await _timeSlotService.GetRangeAvailabilityAsync(
+                draft.VenueId!.Value, queryFrom, queryTo, cancellationToken);
+
+            ViewData["CurrentStep"] = 3;
+
+            return new SelectDateViewModel
+            {
+                DisplayMonth = firstOfMonth,
+                Calendar = CalendarViewModel.Build(firstOfMonth, availability, minDate, maxDate, today),
+                SelectedDate = selectedDate,
+                MinDate = minDate,
+                MaxDate = maxDate,
+                MemberName = draft.MemberName,
+                MemberPhone = draft.MemberPhone,
+                VenueName = draft.VenueName
+            };
+        }
+
+        /// <summary>
+        /// 決定日曆要顯示哪個月份，並過濾掉不合法的年月參數。
+        /// </summary>
+        private static DateOnly ResolveDisplayMonth(
+            int? year, int? month, DateOnly? fallbackDate, DateOnly today)
+        {
+            // 手改網址送出 month=13 或 year=0 時不要讓程式拋例外，
+            // 直接忽略參數改用預設月份。
+            if (year is >= 1 and <= 9999 && month is >= 1 and <= 12)
+            {
+                return new DateOnly(year.Value, month.Value, 1);
+            }
+
+            var basis = fallbackDate ?? today;
+            return new DateOnly(basis.Year, basis.Month, 1);
+        }
+
+
+
+
+        /// <summary>
+        /// 取消整個新增流程，清除暫存並回到預約列表。
+        /// </summary>
+        [HttpPost("Cancel")]
+        [ValidateAntiForgeryToken]
+        public IActionResult Cancel()
+        {
+            _draftStore.Clear();
+            return RedirectToAction("Index", "Reservation");
         }
     }
 }

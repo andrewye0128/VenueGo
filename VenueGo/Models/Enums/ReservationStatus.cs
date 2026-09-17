@@ -2,24 +2,24 @@
 
 namespace VenueGo.Models.Enums
 {
+
+    /// <summary>
+    /// 預約狀態（Reservations.ReservationStatus）。
+    /// <para>
+    /// 【主狀態】回答「這格場地還算不算被有效佔用」。
+    /// 查詢預約狀態一律看這個欄位，不要改看 <see cref="OrderStatus"/>。
+    /// </para>
+    /// <para>
+    /// 【佔位規則】只有 <see cref="Pending"/> 與 <see cref="Confirmed"/> 時，
+    /// ReservationSlots 才會有對應資料列；其餘狀態代表佔位已釋放，
+    /// 轉入這些狀態時必須同時刪除該筆預約的 ReservationSlots 列，
+    /// 否則該時段會永久卡住無法再被預約。
+    /// </para>
+    /// </summary>
+
+
     public enum ReservationStatus : byte
     {
-        /// <summary>
-        /// 預約狀態（Reservations.ReservationStatus）。
-        /// <para>
-        /// 【主狀態】回答「這格場地還算不算被有效佔用」。
-        /// 查詢預約狀態一律看這個欄位，不要改看 <see cref="OrderStatus"/>。
-        /// </para>
-        /// <para>
-        /// 【佔位規則】只有 <see cref="Pending"/> 與 <see cref="Confirmed"/> 時，
-        /// ReservationSlots 才會有對應資料列；其餘狀態代表佔位已釋放，
-        /// 轉入這些狀態時必須同時刪除該筆預約的 ReservationSlots 列，
-        /// 否則該時段會永久卡住無法再被預約。
-        /// </para>
-        /// </summary>
-
-
-
         /// <summary>
         /// 待確認：預約已建立但尚未收到款項，時段先行保留。
         /// <para>終止欄位：CancelledBy / CancelledAt / CancelReason 皆為 NULL。</para>

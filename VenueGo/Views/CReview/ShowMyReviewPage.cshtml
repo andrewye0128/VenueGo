@@ -46,19 +46,6 @@
                   color: #d6d8db;
             }
 
-      /* 顧客寫的內容要保留換行。
-             HTML 預設把連續空白與換行都壓成一個空格，
-             pre-wrap 保留換行、同時仍然自動斷行。 */
-      .review-body {
-            white-space: pre-wrap;
-            word-break: break-word;
-      }
-
-      /* 館方回覆縮排，視覺上從屬於上面的評論 */
-      .reply-block {
-            border-left: 3px solid #dee2e6;
-            background: #f8f9fa;
-      }
 </style>
 
 <div class="row justify-content-center">
@@ -153,6 +140,17 @@
                                     }
                               </div>
                         }
+                        @if (Model.OrderNo != null)
+                        {
+                              <hr class="my-2" />
+                              <div class="text-muted small">
+                                    <i class="bi bi-geo-alt"></i> @Model.OrderNo
+                                    @if (Model.RentStartTime != null)
+                                    {
+                                          <span class="ms-2">@Model.RentStartTime.Value.ToString("M/d HH:mm") 使用</span>
+                                    }
+                              </div>
+                        }
                   </div>
 
                   @* ── 館方回覆 ────────────────────────────────── *@
@@ -177,7 +175,8 @@
                                           <div class="small text-muted mb-2">這則回覆對你有幫助嗎？</div>
                                           <form asp-action="SetSatisfaction" method="post"
                                                 asp-route-token="@Model.Qrtoken" class="d-flex gap-2">
-                                                <input type="hidden" asp-for="ReviewId" />
+                                                <input type="hidden" asp-for="Qrtoken" />
+                                                <input type="hidden" asp-for="ReviewPerBookingId" />
                                                 <button type="submit" name="satisfaction" value="2"
                                                         class="btn btn-sm btn-outline-success">
                                                       <i class="bi bi-emoji-smile"></i> 滿意
@@ -217,7 +216,7 @@
             {
                   <form asp-action="SetVisibility" method="post"
                         asp-route-token="@Model.Qrtoken" class="mt-3">
-                        <input type="hidden" asp-for="ReviewId" />
+                        <input type="hidden" asp-for="Qrtoken" />
                         <div class="form-check form-switch">
                               @* onchange 直接送出：單一開關不需要再按一次儲存 *@
                               <input asp-for="IsPublic" class="form-check-input" type="checkbox"

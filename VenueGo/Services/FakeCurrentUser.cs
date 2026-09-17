@@ -3,7 +3,7 @@
     // 開發用假會員
     public class FakeCurrentUser : ICurrentUser
     {
-        public int? MemberId => 9001;
+        public int? MemberId => 9003;
         public int? EmployeeId => 9002;
     }
 

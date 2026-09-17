@@ -19,9 +19,18 @@
             <form asp-action="CreateForVisit" method="get">
                 <div class="form-group">
                   <label name="token" class="control-label">
-                              請輸入評論用QRToken ( TESTVISIT01 )
+                              請輸入評論用QRToken ( TESTVISIT01 - 03 )
                   </label>
                   <input type="text" name="token" id="tokenInput" class="form-control" />
+                  <button class="btn btn-primary">開始評論</button>
+                </div>
+            </form>
+            <form asp-action="CreateForBooking" method="get">
+                <div class="form-group">
+                  <label name="id" class="control-label">
+                              請輸入評論用ReviewPerBookingId ( 9002 / 9004 )
+                  </label>
+                  <input type="text" name="id" id="idInput" class="form-control" />
                   <button class="btn btn-primary">開始評論</button>
                 </div>
             </form>

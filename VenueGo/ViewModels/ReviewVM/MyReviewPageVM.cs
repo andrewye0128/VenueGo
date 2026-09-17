@@ -20,7 +20,9 @@ namespace VenueGo.ViewModels.ReviewVM
         [Key]
         public int ReviewId { get; init; }
         [DisplayName("QR 條碼")]
-        public string Qrtoken { get; init; } = null!;
+        public string? Qrtoken { get; init; }
+        public int? ReviewPerBookingId { get; init; }
+        public string? OrderNo { get; init; }
         [DisplayName("評分")]
         public byte StarRating { get; init; }
         [DisplayName("評論內容")]
@@ -61,8 +63,9 @@ namespace VenueGo.ViewModels.ReviewVM
         // ⚠️ 進入本頁就代表「顧客看到回覆了」，MarkReplyViewed 要在
         //    這裡記錄 ReplyViewedAt——但只在 HasReply 且尚未記錄時，
         //    否則每次重新整理都會蓋掉原本的時間。
+        public bool IsBookingReview => ReviewPerBookingId != null;
         public bool HasReply => RepliedAt != null;
-        public bool CanToggleVisibility => !IsSpamMarked;
+        public bool CanToggleVisibility => !IsSpamMarked && !IsBookingReview;
         public bool HasUnviewedReply => RepliedAt != null && ReplyViewedAt == null;
         public bool CanRateSatisfaction => HasReply && ReplySatisfaction == null;
 

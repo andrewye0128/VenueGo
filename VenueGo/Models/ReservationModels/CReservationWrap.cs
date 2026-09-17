@@ -61,11 +61,11 @@ namespace VenueGo.Models.ReservationModels
             set { _reservation.ReservationStatus = value; }
         }
 
-        [DisplayName("付款截止時間")]
-        public DateTime PaymentDueAt { 
-            get { return _reservation.PaymentDueAt; }
-            set { _reservation.PaymentDueAt = value; }
-        }
+        //[DisplayName("付款截止時間")]
+        //public DateTime PaymentDueAt { 
+        //    get { return _reservation.PaymentDueAt; }
+        //    set { _reservation.PaymentDueAt = value; }
+        //}
 
         [DisplayName("同意預約須知時間")]
         public DateTime TermsAcceptedAt { 

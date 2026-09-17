@@ -9,7 +9,7 @@ public partial class ReviewPerBooking
 
     public int UserId { get; set; }
 
-    public int SourceId { get; set; }
+    public int OrderId { get; set; }
 
     public byte PaymentMethod { get; set; }
 

@@ -22,4 +22,6 @@ public partial class Order
     public byte OrderStatus { get; set; }
 
     public int PersonMount { get; set; }
+
+    public int TotalAmount { get; set; }
 }

@@ -453,6 +453,158 @@ namespace VenueGo.Controllers
             return RedirectToAction("SportTypePriceRuleIndex");
         }
 
+
+        /*WeekBusinessHour*/
+
+        //場館營業時間管理 >> 頁面產生,一次顯示7天,星期一排最前面、星期日排最後面
+        public IActionResult WeekBusinessHourIndex()
+        {
+            CWeekBusinessHourFactory WeekBusinessHourFactory = new CWeekBusinessHourFactory();
+            List<CWeekBusinessHourWrap> datas = WeekBusinessHourFactory.QueryAll();
+
+            //把星期一排最前面、星期日排最後面
+            //QueryAll()回傳的是DayOfWeek 0~6的原始順序,星期日(0)會排最前面,所以這裡另外排序一次
+            var orderedDatas = datas.OrderBy(data =>
+            {
+                int sortKey;
+                if (data.DayOfWeek == DayOfWeek.Sunday)
+                {
+                    sortKey = 7;
+                }
+                else
+                {
+                    sortKey = (int)data.DayOfWeek;
+                }
+                return sortKey;
+            });
+
+            WeekBusinessHourEditViewModel vm = new WeekBusinessHourEditViewModel();
+            vm.TimeOptions = WeekBusinessHourFactory.GetWholeHourOptions();
+
+            foreach (var data in orderedDatas)
+            {
+                WeekBusinessHourRowViewModel row = new WeekBusinessHourRowViewModel();
+                row.BusinessHoursId = data.BusinessHoursId;
+                row.DayOfWeek = data.DayOfWeek;
+                row.DayName = GetDayName(data.DayOfWeek);
+                row.IsOpen = data.IsOpen;
+                row.OpenTime = data.OpenTime;
+                row.CloseTime = data.CloseTime;
+                vm.Days.Add(row);
+            }
+
+            return View(vm);
+        }
+
+        //場館營業時間管理 >> 參數送回,一次驗證/儲存7天
+        [HttpPost]
+        public IActionResult WeekBusinessHourIndex(WeekBusinessHourEditViewModel vm)
+        {
+            CWeekBusinessHourFactory WeekBusinessHourFactory = new CWeekBusinessHourFactory();
+
+            //逐列驗證:IsOpen=true時,OpenTime/CloseTime必填,且OpenTime必須早於CloseTime
+            for (int i = 0; i < vm.Days.Count; i++)
+            {
+                WeekBusinessHourRowViewModel row = vm.Days[i];
+
+                if (row.IsOpen)
+                {
+                    if (!row.OpenTime.HasValue || !row.CloseTime.HasValue)
+                    {
+                        ModelState.AddModelError($"Days[{i}].OpenTime", "有營業的當天必須填開始與結束營業時間");
+                    }
+                    else if (row.OpenTime.Value >= row.CloseTime.Value)
+                    {
+                        ModelState.AddModelError($"Days[{i}].OpenTime", "開始營業時間必須早於結束營業時間");
+                    }
+                }
+            }
+
+            //驗證沒過要重新顯示表單
+            if (!ModelState.IsValid)
+            {
+                //下拉選單選項要重新帶回去,不然畫面上的選單會是空的
+                vm.TimeOptions = WeekBusinessHourFactory.GetWholeHourOptions();
+
+                //DayName是[ValidateNever],表單送回來時不會帶值,要用DayOfWeek(隱藏欄位)重新算一次,不然畫面上星期名稱會不見
+                for (int i = 0; i < vm.Days.Count; i++)
+                {
+                    vm.Days[i].DayName = GetDayName(vm.Days[i].DayOfWeek);
+                }
+
+                return View(vm);
+            }
+
+            //驗證通過,轉成Wrap存回去
+            List<CWeekBusinessHourWrap> wraps = new List<CWeekBusinessHourWrap>();
+
+            foreach (WeekBusinessHourRowViewModel row in vm.Days)
+            {
+                CWeekBusinessHourWrap wrap = new CWeekBusinessHourWrap();
+                wrap.BusinessHoursId = row.BusinessHoursId;
+                wrap.DayOfWeek = row.DayOfWeek;
+                wrap.IsOpen = row.IsOpen;
+
+                //IsOpen=false時,不管前端有沒有正確disable掉選單、送回來的值是什麼,後端一律強制清成null,
+                //避免「已關閉」的當天還存著開始/結束時間造成之後查詢邏輯混亂
+                if (row.IsOpen)
+                {
+                    wrap.OpenTime = row.OpenTime;
+                    wrap.CloseTime = row.CloseTime;
+                }
+                else
+                {
+                    wrap.OpenTime = null;
+                    wrap.CloseTime = null;
+                }
+
+                wraps.Add(wrap);
+            }
+
+            WeekBusinessHourFactory.EditAll(wraps);
+            TempData["SuccessMessage"] = "營業時間設定已儲存";
+
+            return RedirectToAction("WeekBusinessHourIndex");
+        }
+
+        //依DayOfWeek轉成中文星期名稱,顯示用
+        private string GetDayName(DayOfWeek day)
+        {
+            string name;
+
+            if (day == DayOfWeek.Monday)
+            {
+                name = "星期一";
+            }
+            else if (day == DayOfWeek.Tuesday)
+            {
+                name = "星期二";
+            }
+            else if (day == DayOfWeek.Wednesday)
+            {
+                name = "星期三";
+            }
+            else if (day == DayOfWeek.Thursday)
+            {
+                name = "星期四";
+            }
+            else if (day == DayOfWeek.Friday)
+            {
+                name = "星期五";
+            }
+            else if (day == DayOfWeek.Saturday)
+            {
+                name = "星期六";
+            }
+            else
+            {
+                name = "星期日";
+            }
+
+            return name;
+        }
+
+
         //整點檢查 >> null 視為合法(代表不分尖峰/離峰),非null時 分鐘/秒數必須是0
         //Create/Edit 兩個 Action 共用同一份檢查邏輯
         private bool IsWholeHour(TimeOnly? time)

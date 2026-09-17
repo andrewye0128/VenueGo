@@ -163,9 +163,13 @@ public partial class dbVenueContext : DbContext
         {
             entity.HasKey(e => e.OrderDetailId);
 
-            entity.HasIndex(e => e.ReservationId, "UQ_OrdersDetails_ReservationId")
+            entity.HasIndex(e => e.ReservationId, "IX_OrdersDetails_ReservationId").HasFilter("([ReservationId] IS NOT NULL)");
+
+            entity.HasIndex(e => new { e.OrderId, e.SlotTime }, "UQ_OrdersDetails_OrderId_SlotTime")
                 .IsUnique()
-                .HasFilter("([ReservationId] IS NOT NULL)");
+                .HasFilter("([SlotTime] IS NOT NULL)");
+
+            entity.Property(e => e.SlotTime).HasPrecision(0);
         });
 
         modelBuilder.Entity<PasswordResetToken>(entity =>
@@ -226,8 +230,9 @@ public partial class dbVenueContext : DbContext
         {
             entity.HasIndex(e => new { e.VenueId, e.BookingDate }, "IX_Reservations_Venue_Date");
 
+            entity.Property(e => e.CancelReason).HasMaxLength(200);
+            entity.Property(e => e.CancelledAt).HasPrecision(0);
             entity.Property(e => e.EndTime).HasPrecision(0);
-            entity.Property(e => e.PaymentDueAt).HasPrecision(0);
             entity.Property(e => e.ReservedAt)
                 .HasPrecision(0)
                 .HasDefaultValueSql("(sysdatetime())", "DF_Reservations_ReservedAt");
@@ -288,7 +293,7 @@ public partial class dbVenueContext : DbContext
         {
             entity.ToTable("ReviewPerBooking");
 
-            entity.HasIndex(e => e.SourceId, "UQ_ReviewPerBooking_SourceId").IsUnique();
+            entity.HasIndex(e => e.OrderId, "UQ_ReviewPerBooking_OrderId").IsUnique();
 
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(0)

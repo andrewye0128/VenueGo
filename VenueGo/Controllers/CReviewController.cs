@@ -475,7 +475,7 @@ namespace VenueGo.Controllers
         /// token 從表單的 hidden 欄位帶上來（模型繫結會從表單本體找）。
         /// </summary>
         [HttpPost]
-        public IActionResult SetVisibility(string? token)
+        public IActionResult SetVisibility(string? token, bool isPublic)
         {
             var r = ResolveVisitTicket(token);
             if (r.State != EligState.AlreadyReviewed)
@@ -491,7 +491,7 @@ namespace VenueGo.Controllers
                 return RedirectToAction(nameof(ShowMyReviewPage),
                                         new { token = r.Ticket!.Qrtoken });
 
-            review.IsPublic = !review.IsPublic;
+            review.IsPublic = isPublic;
             _db.SaveChanges();
 
             return RedirectToAction(nameof(ShowMyReviewPage),

@@ -171,11 +171,12 @@
             // 再來寫預約評論，會把上一份草稿代進來。
             key: 'review-draft:booking:@Model.ReviewPerBookingId',
             form: '#reviewForm',
-            fields: @Html.Raw(Model.CanChooseAnonymous
-                ? "['StarRating','ReviewContent','MentionsVenue','MentionsStaff','IsAnonymous','IsPublic']"
-                : "['StarRating','ReviewContent','MentionsVenue','MentionsStaff','IsPublic']"),
+            fields: ['StarRating', 'ReviewContent'], // 簡化為只保留這兩個欄位
             saveButton: '#btnSaveDraft',
             timeHint: '#draftTimeHint'
         });
+        /* fields: @Html.Raw(Model.CanChooseAnonymous
+                ? "['StarRating','ReviewContent','MentionsVenue','MentionsStaff','IsAnonymous','IsPublic']"
+                : "['StarRating','ReviewContent','MentionsVenue','MentionsStaff','IsPublic']") */
     </script>
 }

@@ -43,7 +43,9 @@ namespace VenueGo.Controllers
         // ── 查詢字串的值不可信任，不認得的一律改回預設 ──
         private static string NormalizeTab(string? tab) => tab switch
         {
+            QueueTab.All => QueueTab.All,
             QueueTab.Pending => QueueTab.Pending,
+            QueueTab.Completed => QueueTab.Completed,
             QueueTab.Spam    => QueueTab.Spam,
             _                => QueueTab.Unread
         };
@@ -103,9 +105,13 @@ namespace VenueGo.Controllers
         /// </summary>
         private static IQueryable<ReviewMain> ApplyTab(IQueryable<ReviewMain> q, string tab) => tab switch
         {
+            QueueTab.All     => q.OrderByDescending(r => r.IsPinned)
+                                 .ThenBy(r => r.CreatedAt),
             QueueTab.Pending => q.Where(PendingRule)
                                  .OrderByDescending(r => r.IsPinned)
                                  .ThenBy(r => r.CreatedAt),
+            QueueTab.Completed => q.Where(r => r.RepliedAt != null)
+                                 .OrderBy(r => r.CreatedAt),
             QueueTab.Spam    => q.Where(SpamRule)
                                  .OrderByDescending(r => r.SpamMarkedAt),
             _                => q.Where(UnreadRule)

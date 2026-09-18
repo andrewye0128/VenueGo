@@ -4,17 +4,6 @@
       ViewData["Title"] = "我的評論";
 }
 
-@*
-    ⚠️ 這個版面用到兩個你 VM 還沒有的屬性，要先補上：
-         public string?   VenueName     { get; init; }
-         public DateTime? RentStartTime { get; init; }
-       預約評論時兩者皆為 null，版面已處理（整行不顯示）。
-
-    ⚠️ ReplySatisfaction 的 0 / 1 / 2 分別代表什麼，我沒有查證，
-       下面的 SatisfactionText 是照「0 不滿意、1 普通、2 滿意」假設寫的。
-       請對照你自己的定義確認，錯了就改那個函式。
-*@
-
 @functions {
       // 把滿意度的數字換成看得懂的字。放在 View 裡是因為它純粹是顯示用的翻譯，
       // 不影響任何資料。若之後館方端也要顯示，再搬到 VM 的計算屬性。
@@ -34,19 +23,6 @@
             _ => "bi-dash-circle"
       };
 }
-
-<style>
-      /* 唯讀星等顯示 */
-      .star-view {
-            color: #f5a524;
-            letter-spacing: .05em;
-      }
-
-            .star-view .empty {
-                  color: #d6d8db;
-            }
-
-</style>
 
 <div class="row justify-content-center">
       <div class="col-12 col-lg-8">
@@ -175,8 +151,8 @@
                                           <div class="small text-muted mb-2">這則回覆對你有幫助嗎？</div>
                                           <form asp-action="SetSatisfaction" method="post"
                                                 class="d-flex gap-2">
-                                                <input type="hidden" asp-for="Qrtoken" />
-                                                <input type="hidden" asp-for="ReviewPerBookingId" />
+                                                <input type="hidden" name="token" value="@Model.Qrtoken" />
+                                                <input type="hidden" name="bookingId" value="@Model.ReviewPerBookingId" />
                                                 <button type="submit" name="satisfaction" value="2"
                                                         class="btn btn-sm btn-outline-success">
                                                       <i class="bi bi-emoji-smile"></i> 滿意
@@ -216,7 +192,7 @@
             {
                   <form asp-action="SetVisibility" method="post"
                         class="mt-3">
-                        <input type="hidden" asp-for="Qrtoken" />
+                        <input type="hidden" name="token" value="@Model.Qrtoken" />
                         <div class="form-check form-switch">
                               @* onchange 直接送出：單一開關不需要再按一次儲存 *@
                               <input asp-for="IsPublic" class="form-check-input" type="checkbox"

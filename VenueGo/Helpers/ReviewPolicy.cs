@@ -8,7 +8,7 @@ namespace VenueGo.Helpers
     public static class ReviewPolicy
     {
         /// <summary>評論建立後幾天，沒回覆也會自動公開。</summary>
-        public const int PublicBufferDays = 7;
+        public const int PublicBufferDays = 5;
 
         /// <summary>建立後幾天開始顯示橘色「快到期」提醒。</summary>
         public const int OverdueWarnDays = 3;

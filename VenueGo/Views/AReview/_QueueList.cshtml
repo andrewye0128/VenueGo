@@ -34,17 +34,35 @@
 
     <ul class="nav nav-tabs flex-grow-1">
         <li class="nav-item">
+            <a class="nav-link js-queue-link @(Model.Tab == QueueTab.All ? "active" : "")"
+               asp-action="Index" asp-route-tab="@QueueTab.All" asp-route-source="@Model.Source">
+                全部
+            </a>
+        </li>
+        <li class="nav-item">
             <a class="nav-link js-queue-link @(Model.Tab == QueueTab.Unread ? "active" : "")"
                asp-action="Index" asp-route-tab="@QueueTab.Unread" asp-route-source="@Model.Source">
                 未讀
-                <span class="badge rounded-pill text-bg-danger ms-1" data-count-for="unread">@Model.UnreadCount</span>
+                @if (Model.UnreadCount != 0)
+                {
+                    <span class="badge rounded-pill text-bg-danger ms-1" data-count-for="unread">@Model.UnreadCount</span>  
+                }
             </a>
         </li>
         <li class="nav-item">
             <a class="nav-link js-queue-link @(Model.Tab == QueueTab.Pending ? "active" : "")"
                asp-action="Index" asp-route-tab="@QueueTab.Pending" asp-route-source="@Model.Source">
                 待回覆
-                <span class="badge rounded-pill text-bg-primary ms-1" data-count-for="pending">@Model.PendingCount</span>
+                @if (Model.PendingCount != 0)
+                {
+                    <span class="badge rounded-pill text-bg-primary ms-1" data-count-for="pending">@Model.PendingCount</span>
+                }
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link js-queue-link @(Model.Tab == QueueTab.Completed ? "active" : "")"
+               asp-action="Index" asp-route-tab="@QueueTab.Completed" asp-route-source="@Model.Source">
+                已完成
             </a>
         </li>
         <li class="nav-item">

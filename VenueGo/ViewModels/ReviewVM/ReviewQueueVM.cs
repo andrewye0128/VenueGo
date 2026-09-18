@@ -5,8 +5,10 @@ namespace VenueGo.ViewModels.ReviewVM
     /// <summary>三個清單的名字。查詢字串、連結、比對都用這裡的常數，不要手打字串。</summary>
     public static class QueueTab
     {
+        public const string All = "all";
         public const string Unread  = "unread";
         public const string Pending = "pending";
+        public const string Completed = "completed";
         public const string Spam    = "spam";
     }
 

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Services;
 using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
 
 var builder = WebApplication.CreateBuilder(args);
@@ -37,6 +38,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 // 註冊 Session
 builder.Services.AddSession();
 
+builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -64,6 +67,7 @@ app.MapStaticAssets();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")
+    //pattern: "{controller=CReview}/{action=Index}/{id?}")
     .WithStaticAssets();
 
 

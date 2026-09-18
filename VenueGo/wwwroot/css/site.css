@@ -29,3 +29,116 @@ body {
 .form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
   text-align: start;
 }
+
+/* 新增 by 昱伶 */
+
+/* ── 星等輸入控制項 ─────────────────────────────
+     HTML 裡星星寫成 5→1 倒序，再用 row-reverse 翻回正常視覺順序，
+     這樣 ~ 選擇器才能讓「滑過第3顆」同時點亮左邊的第1、2顆。 */
+.star-input {
+    display: inline-flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: .25rem;
+    font-size: 1.9rem;
+}
+
+    .star-input input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .star-input label {
+        color: #d6d8db;
+        cursor: pointer;
+        line-height: 1;
+        transition: color .12s;
+    }
+
+        .star-input input:checked ~ label,
+        .star-input label:hover,
+        .star-input label:hover ~ label {
+            color: #f5a524;
+        }
+    /* 鍵盤操作時要看得見焦點 */
+    .star-input input:focus-visible + label {
+        outline: 2px solid #0d6efd;
+        outline-offset: 3px;
+        border-radius: 3px;
+    }
+
+/* ── 唯讀星等顯示 ───────────────────────────── */
+.star-view {
+    color: #f5a524;
+    font-size: 1rem;
+    letter-spacing: .05em;
+}
+
+    .star-view .empty {
+        color: #d6d8db;
+    }
+
+/* ── 置頂按鈕 ───────────────────────────────── */
+.pin-btn {
+    border: 1px solid #dee2e6;
+    background: #fff;
+    color: #adb5bd;
+    width: 34px;
+    height: 34px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: .12s;
+}
+
+    .pin-btn:hover {
+        color: #6c757d;
+        border-color: #adb5bd;
+    }
+
+    .pin-btn.pinned {
+        color: #fff;
+        background: #dc3545;
+        border-color: #dc3545;
+    }
+        /* 已置頂的圖釘轉個角度，狀態差異不只靠顏色，色覺障礙者也分得出 */
+        .pin-btn.pinned i {
+            transform: rotate(-35deg);
+        }
+
+.queue-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .7rem .9rem;
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    margin-bottom: .5rem;
+}
+
+    .queue-row.is-pinned {
+        border-left: 4px solid #dc3545;
+        background: #fffafa;
+    }
+
+    .queue-row .body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .queue-row .txt {
+        font-size: .9rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .queue-row .meta {
+        font-size: .75rem;
+        color: #868e96;
+    }

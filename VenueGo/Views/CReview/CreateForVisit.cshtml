@@ -1,0 +1,126 @@
+@model VenueGo.ViewModels.ReviewVM.ReviewCreateInputVM
+
+@{
+      ViewData["Title"] = "CreateForVisit";
+}
+<style>
+    /* 修正：精準指定表單內的群組區塊，不影響外層佈局 */
+    form .form-group {
+        margin-bottom: 15px; /* 只推上下間距，左右留空 */
+    }
+    
+</style>
+
+<h1>顧客填寫評論頁</h1>
+
+@* <h4>ReviewCreateInputVM</h4> *@
+<hr />
+<div class="row justify-content-center">
+    <div class="col-md-6">
+            <!-- 推薦：識別碼走網址，不進表單本體 -->
+            <form asp-action="CreateForVisit" method="post" asp-route-token="@Model.QrToken" onsubmit="return confirm('確定要送出評論嗎？\n送出後無法修改呦')">
+                  <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+                  <input type="hidden" asp-for="ReviewPerVisitId" />
+
+                  <div class="form-group d-none">
+                        <label asp-for="ReservationId" class="control-label"></label>
+                        <input asp-for="ReservationId" class="form-control" />
+                        <span asp-validation-for="ReservationId" class="text-danger"></span>
+                  </div>
+
+                  <div class="form-group">
+                        <!-- 使用 DisplayName 顯示標題 -->
+                        <label asp-for="StarRating" class="control-label d-block">@Html.DisplayNameFor(model => model.StarRating)</label>
+
+                        <div class="star-input">
+                              @for (byte i = 5; i >= 1; i--)
+                              {
+                                    <input type="radio" asp-for="StarRating" value="@i" id="star@(i)"
+                                           checked="@(Model.StarRating == i)" />
+                                    <label for="star@(i)"><i class="bi bi-star-fill"></i></label>
+                              }
+                        </div>
+                        <span asp-validation-for="StarRating" class="text-danger"></span>
+                  </div>
+
+                  @* <div class="form-group">
+                        <label asp-for="StarRating" class="control-label d-block"></label>
+                        <div class="star-input">
+                              @for (byte i = 5; i >= 1; i--)
+                              {
+                                    <input type="radio" asp-for="StarRating" value="@i" id="star@(i)" />
+                                    <label for="star@(i)"><i class="bi bi-star-fill"></i></label>
+                              }
+                        </div>
+                        <span asp-validation-for="StarRating" class="text-danger"></span>
+                  </div> *@
+
+            <div class="form-group">
+                <label asp-for="ReviewContent" class="control-label"></label>
+                <textarea asp-for="ReviewContent" class="form-control" rows="12"></textarea>
+                @* <input asp-for="ReviewContent" class="form-control" /> *@
+                <span asp-validation-for="ReviewContent" class="text-danger"></span>
+            </div>
+
+                  <!-- 欄位 1：場地設施 -->
+                  <div class="form-group mb-3 d-inline-block me-2">
+                        <input type="checkbox" class="btn-check" id="mv" asp-for="MentionsVenue" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-success rounded-pill px-3" for="mv">
+                              <!-- 🌟 自動讀取 [DisplayName("提及場地")] -->
+                              <i class="bi bi-hash"></i> @Html.DisplayNameFor(model => model.MentionsVenue)
+                        </label>
+                        <span asp-validation-for="MentionsVenue" class="text-danger d-block"></span>
+                  </div>
+
+                  <!-- 欄位 2：服務人員 -->
+                  <div class="form-group mb-3 d-inline-block">
+                        <input type="checkbox" class="btn-check" id="ms" asp-for="MentionsStaff" autocomplete="off">
+                        <label class="btn btn-sm btn-outline-success rounded-pill px-3" for="ms">
+                              <!-- 🌟 自動讀取 [DisplayName("提及服務")] -->
+                              <i class="bi bi-hash"></i> @Html.DisplayNameFor(model => model.MentionsStaff)
+                        </label>
+                        <span asp-validation-for="MentionsStaff" class="text-danger d-block"></span>
+                  </div>
+
+            <div class="form-group">
+                <label asp-for="IsAnonymous" class="control-label"></label>
+                        <input asp-for="IsAnonymous" class="form-check-input" disabled />
+                <span asp-validation-for="IsAnonymous" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="IsPublic" class="control-label"></label>
+                <input asp-for="IsPublic" class="form-check-input" />
+                <span asp-validation-for="IsPublic" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="VenueName" class="control-label"></label>
+                <input asp-for="VenueName" class="form-control" readonly />
+                <span asp-validation-for="VenueName" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <label asp-for="RentStartTime" class="control-label"></label>
+                <input asp-for="RentStartTime" class="form-control" readonly />
+                <span asp-validation-for="RentStartTime" class="text-danger"></span>
+            </div>
+
+            <div class="form-group">
+                <input type="submit" value="送出" class="btn btn-primary" />
+            </div>
+<div>
+      <a asp-action="Index" class="btn btn-outline-secondary">返回前頁</a>
+</div>
+        </form>
+    </div>
+</div>
+
+
+            
+@section Scripts {
+      @{
+            await Html.RenderPartialAsync("_ValidationScriptsPartial");
+      }
+}

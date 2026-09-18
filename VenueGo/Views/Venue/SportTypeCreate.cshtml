@@ -1,10 +1,10 @@
 @model VenueGo.Models.VenueModels.CSportTypeWrap
 
 @{
-    ViewData["Title"] = "Create";
+    ViewData["Title"] = "運動類型管理";
 }
 
-<h1>新增運動類型</h1>
+<h1>運動類型新增</h1>
 
 <hr />
 <div class="row">
@@ -18,13 +18,14 @@
                 <span asp-validation-for="SportName" class="text-danger"></span>
             </div>
            
-            <div class="form-group">
+                        <div class="form-group">
                 <input type="submit" value="送出新增" class="btn btn-primary mt-2" />
+                    <a asp-action="SportTypeIndex" class="btn btn-light me-2 mt-2"">取消</a>
             </div>
+
+
         </form>
     </div>
 </div>
 
-<div>
-    <a asp-action="SportTypeIndex">取消新增</a>
-</div>
+

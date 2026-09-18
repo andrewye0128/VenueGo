@@ -1,7 +1,7 @@
-@model IEnumerable<VenueGo.Models.VenueModels.CSportTypeWrap>
+@model IEnumerable<VenueGo.ViewModels.VenueViewModels.SportTypePriceRuleIndexViewModel>
 
 @{
-    ViewData["Title"] = "運動類型管理";
+    ViewData["Title"] = "價格規則管理";
 }
 
 <!-- 功能頁籤 -->
@@ -32,11 +32,26 @@
     </li>
 </ul>
 
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
 <div class="card shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-        <h5 class="mb-0 fw-bold">運動類型列表</h5>
-        <a asp-action="SportTypeCreate" class="btn btn-primary btn-sm">
-            <i class="bi bi-plus-lg me-1"></i>新增運動類型
+        <h5 class="mb-0 fw-bold">價格規則列表</h5>
+        <a asp-action="SportTypePriceRuleCreate" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>新增價格規則
         </a>
     </div>
     <div class="card-body p-0">
@@ -44,8 +59,12 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-4" style="width: 10%;">序</th>
+                        <th class="ps-4" style="width: 8%;">序</th>
                         <th>@Html.DisplayNameFor(model => model.SportName)</th>
+                        <th>@Html.DisplayNameFor(model => model.PeakStartTime)</th>
+                        <th>@Html.DisplayNameFor(model => model.PeakPrice)</th>
+                        <th>@Html.DisplayNameFor(model => model.OffPeakPrice)</th>
+                        <th style="width: 12%;">狀態</th>
                         <th class="text-center" style="width: 20%;">操作</th>
                     </tr>
                 </thead>
@@ -53,7 +72,7 @@
                     @if (!Model.Any())
                     {
                         <tr>
-                            <td colspan="3" class="text-center py-4 text-muted">目前尚無運動類型資料</td>
+                            <td colspan="7" class="text-center py-4 text-muted">目前尚無價格規則資料</td>
                         </tr>
                     }
                     else
@@ -64,15 +83,37 @@
                             count++;
                             <tr>
                                 <td class="ps-4">@count</td>
-                                <td>@Html.DisplayFor(model => item.SportName)</td>
+                                <td>@item.SportName</td>
+                                <td>
+                                    @if (item.PeakStartTime.HasValue)
+                                    {
+                                        @item.PeakStartTime.Value.ToString("HH:mm")
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">不分尖/離峰</span>
+                                    }
+                                </td>
+                                <td>@item.PeakPrice 元</td>
+                                <td>@item.OffPeakPrice 元</td>
+                                <td>
+                                    @if (item.IsActive)
+                                    {
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">啟用中</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">已停用</span>
+                                    }
+                                </td>
                                 <td class="text-center">
-                                    <a asp-action="SportTypeEdit" asp-route-id="@item.SportTypeId"
+                                    <a asp-action="SportTypePriceRuleEdit" asp-route-id="@item.SportTypePriceRuleId"
                                        class="btn btn-sm btn-outline-primary">
                                         <i class="bi bi-pencil-square me-1"></i>編輯
                                     </a>
-                                    <a asp-action="SportTypeDelete" asp-route-id="@item.SportTypeId"
+                                    <a asp-action="SportTypePriceRuleDelete" asp-route-id="@item.SportTypePriceRuleId"
                                        class="btn btn-sm btn-outline-danger"
-                                       onclick="return confirm('確定要刪除該運動類型嗎?')">
+                                       onclick="return confirm('確定要刪除「@item.SportName」的價格規則嗎?此動作無法復原')">
                                         <i class="bi bi-trash me-1"></i>刪除
                                     </a>
                                 </td>

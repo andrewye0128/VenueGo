@@ -1,33 +1,49 @@
-﻿namespace VenueGo.ViewModels.ReviewVM
+using VenueGo.Helpers;
+
+namespace VenueGo.ViewModels.ReviewVM
 {
-    /// <summary>
-    /// 館方佇列頁（AReview/Index，三個 tab 共用）
-    /// </summary>
+    /// <summary>三個清單的名字。查詢字串、連結、比對都用這裡的常數，不要手打字串。</summary>
+    public static class QueueTab
+    {
+        public const string All = "all";
+        public const string Unread  = "unread";
+        public const string Pending = "pending";
+        public const string Completed = "completed";
+        public const string Spam    = "spam";
+    }
+
+    /// <summary>評論來源篩選。</summary>
+    public static class QueueSource
+    {
+        public const string All     = "all";
+        public const string Visit   = "visit";
+        public const string Booking = "booking";
+    }
+
+    /// <summary>未回覆的時間警示。</summary>
+    public enum OverdueLevel
+    {
+        None,       // 不用提醒
+        Soon,       // 橘：快滿 3 天
+        Overdue     // 紅：已滿 3 天
+    }
+
+    /// <summary>館方評論清單的整頁資料。Index 與 QueueList 共用同一份。</summary>
     public class ReviewQueueVM
     {
-        /// <summary>unread / pending / spam。決定哪個 tab active、查詢用哪組條件。</summary>
-        public string Tab { get; init; } = "unread";
-
-        public string? Keyword { get; init; }
-        public int? Star { get; init; }
-        public bool RatingOnly { get; init; }   // 「僅評分」篩選
+        public string Tab    { get; init; } = QueueTab.Unread;
+        public string Source { get; init; } = QueueSource.All;
 
         public List<ReviewQueueItemVM> Items { get; init; } = new();
 
-        // ── 各 tab 的未處理數量，顯示在 tab 上的紅色 badge ──
-        public int UnreadCount { get; init; }
-        public int PendingReplyCount { get; init; }
+        // 分頁標籤上的數字（會跟著來源篩選變）
+        public int UnreadCount  { get; init; }
+        public int PendingCount { get; init; }
+        public int SpamCount    { get; init; }
 
-        public int Page { get; init; } = 1;
-        public int TotalPages { get; init; }
+        /// <summary>已經打亂順序的罐頭回覆，整頁共用一組。</summary>
+        public List<CannedReply> CannedReplies { get; init; } = new();
 
         public bool IsEmpty => Items.Count == 0;
-
-        /// <summary>
-        /// 罐頭回覆選項。期中先寫死在 C# 常數，畢業再考慮做成資料表。
-        /// 一星與五星的目的完全不同：五星是道謝，一星是問出原因。
-        /// 每次載入隨機排序，避免員工因慣性總是選同一句。
-        /// </summary>
-        public List<string> QuickReplies { get; init; } = new();
     }
 }

@@ -1,0 +1,217 @@
+@model VenueGo.ViewModels.ReviewVM.MyReviewPageVM
+
+@{
+      ViewData["Title"] = "我的評論";
+}
+
+@functions {
+      // 把滿意度的數字換成看得懂的字。放在 View 裡是因為它純粹是顯示用的翻譯，
+      // 不影響任何資料。若之後館方端也要顯示，再搬到 VM 的計算屬性。
+      static string SatisfactionText(byte? value) => value switch
+      {
+            0 => "不滿意",
+            1 => "普通",
+            2 => "滿意",
+            _ => "尚未表態"
+      };
+
+      static string SatisfactionIcon(byte? value) => value switch
+      {
+            0 => "bi-emoji-frown",
+            1 => "bi-emoji-neutral",
+            2 => "bi-emoji-smile",
+            _ => "bi-dash-circle"
+      };
+}
+
+<div class="row justify-content-center">
+      <div class="col-12 col-lg-8">
+
+            <h1 class="h4 mb-3">我的評論</h1>
+
+            @* ── 狀態提示：被下架、有新回覆 ──────────────────── *@
+            @if (Model.IsSpamMarked)
+            {
+                  <div class="alert alert-secondary d-flex align-items-start gap-2">
+                        <i class="bi bi-exclamation-octagon mt-1"></i>
+                        <div>
+                              <div class="fw-semibold">這則評論未通過審核，已下架</div>
+                              <div class="small">目前不會顯示在公開評論區，也無法切換公開狀態。</div>
+                        </div>
+                  </div>
+            }
+            else if (Model.HasUnviewedReply)
+            {
+                  <div class="alert alert-primary d-flex align-items-center gap-2">
+                        <i class="bi bi-chat-left-dots"></i>
+                        <div>館方回覆了你的評論</div>
+                  </div>
+            }
+
+            @* ── 評論卡片 ────────────────────────────────────── *@
+            <div class="card shadow-sm">
+                  <div class="card-body">
+
+                        @* 頁首：星等、身分、時間 *@
+                        <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                              <div>
+                                    <span class="star-view fs-5">
+                                          @for (int i = 1; i <= 5; i++)
+                                          {
+                                                <i class="@(i <= Model.StarRating ? "bi bi-star-fill" : "bi bi-star empty")"></i>
+                                          }
+                                    </span>
+                                    <span class="ms-2 fw-semibold">@Model.DisplayName</span>
+                                    @if (Model.IsAnonymous)
+                                    {
+                                          <span class="badge rounded-pill text-bg-light border ms-1">
+                                                <i class="bi bi-incognito"></i> 匿名
+                                          </span>
+                                    }
+                              </div>
+                              <div class="text-muted small">
+                                    @Model.CreatedAt.ToString("yyyy/M/d HH:mm")
+                              </div>
+                        </div>
+
+                        @* 內文 *@
+                        @if (string.IsNullOrWhiteSpace(Model.ReviewContent))
+                        {
+                              <p class="text-muted fst-italic mb-3">（只給了星等，沒有留下文字）</p>
+                        }
+                        else
+                        {
+                              <p class="review-body mb-3">@Model.ReviewContent</p>
+                        }
+
+                        @* 顧客勾選的提及標籤，沒勾的不顯示 *@
+                        @if (Model.MentionsVenue || Model.MentionsStaff)
+                        {
+                              <div class="mb-3">
+                                    @if (Model.MentionsVenue)
+                                    {
+                                          <span class="badge rounded-pill text-bg-light border me-1">
+                                                <i class="bi bi-hash"></i> 場地設施
+                                          </span>
+                                    }
+                                    @if (Model.MentionsStaff)
+                                    {
+                                          <span class="badge rounded-pill text-bg-light border">
+                                                <i class="bi bi-hash"></i> 人員服務
+                                          </span>
+                                    }
+                              </div>
+                        }
+
+                        @* 頁尾：系統補的資訊。
+                   預約評論沒有場地，整行消失時版面不會塌，因為它是最後一行。 *@
+                        @if (Model.VenueName != null)
+                        {
+                              <hr class="my-2" />
+                              <div class="text-muted small">
+                                    <i class="bi bi-geo-alt"></i> @Model.VenueName
+                                    @if (Model.RentStartTime != null)
+                                    {
+                                          <span class="ms-2">@Model.RentStartTime.Value.ToString("M/d HH:mm") 使用</span>
+                                    }
+                              </div>
+                        }
+                        @if (Model.OrderNo != null)
+                        {
+                              <hr class="my-2" />
+                              <div class="text-muted small">
+                                    <i class="bi bi-geo-alt"></i> @Model.OrderNo
+                                    @if (Model.RentStartTime != null)
+                                    {
+                                          <span class="ms-2">@Model.RentStartTime.Value.ToString("M/d HH:mm") 使用</span>
+                                    }
+                              </div>
+                        }
+                  </div>
+
+                  @* ── 館方回覆 ────────────────────────────────── *@
+                  @if (Model.HasReply)
+                  {
+                        <div class="card-body reply-block border-top">
+                              <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="fw-semibold">
+                                          <i class="bi bi-reply-fill"></i> 館方回覆
+                                    </span>
+                                    <span class="text-muted small">
+                                          @Model.RepliedAt!.Value.ToString("yyyy/M/d HH:mm")
+                                    </span>
+                              </div>
+
+                              <p class="review-body mb-3">@Model.ReplyContent</p>
+
+                              @* 未表態顯示三顆按鈕，已表態顯示結果 *@
+                              @if (Model.CanRateSatisfaction)
+                              {
+                                    <div class="border-top pt-3">
+                                          <div class="small text-muted mb-2">這則回覆對你有幫助嗎？</div>
+                                          <form asp-action="SetSatisfaction" method="post"
+                                                class="d-flex gap-2">
+                                                <input type="hidden" name="token" value="@Model.Qrtoken" />
+                                                <input type="hidden" name="bookingId" value="@Model.ReviewPerBookingId" />
+                                                <button type="submit" name="satisfaction" value="2"
+                                                        class="btn btn-sm btn-outline-success">
+                                                      <i class="bi bi-emoji-smile"></i> 滿意
+                                                </button>
+                                                <button type="submit" name="satisfaction" value="1"
+                                                        class="btn btn-sm btn-outline-secondary">
+                                                      <i class="bi bi-emoji-neutral"></i> 普通
+                                                </button>
+                                                <button type="submit" name="satisfaction" value="0"
+                                                        class="btn btn-sm btn-outline-danger">
+                                                      <i class="bi bi-emoji-frown"></i> 不滿意
+                                                </button>
+                                          </form>
+                                    </div>
+                              }
+                              else if (Model.ReplySatisfaction != null)
+                              {
+                                    <div class="border-top pt-3 small text-muted">
+                                          <i class="bi @SatisfactionIcon(Model.ReplySatisfaction)"></i>
+                                          你覺得這則回覆：@SatisfactionText(Model.ReplySatisfaction)
+                                    </div>
+                              }
+                        </div>
+                  }
+                  else if (!Model.IsSpamMarked)
+                  {
+                        <div class="card-body border-top text-muted small">
+                              <i class="bi bi-hourglass-split"></i> 館方尚未回覆
+                        </div>
+                  }
+            </div>
+
+            @* ── 公開狀態切換 ────────────────────────────────
+           放在卡片外面，因為它是「對這則評論的操作」，
+           不是評論內容的一部分。 *@
+            @if (Model.CanToggleVisibility)
+            {
+                  <form asp-action="SetVisibility" method="post"
+                        class="mt-3">
+                        <input type="hidden" name="token" value="@Model.Qrtoken" />
+                        <div class="form-check form-switch">
+                              @* onchange 直接送出：單一開關不需要再按一次儲存 *@
+                              <input asp-for="IsPublic" class="form-check-input" type="checkbox"
+                                     id="togglePublic" onchange="this.form.submit()" />
+                              <label class="form-check-label" for="togglePublic">
+                                    公開這則評論
+                                    <span class="text-muted small d-block">
+                                          關閉後其他顧客就看不到，你隨時可以再打開。
+                                    </span>
+                              </label>
+                        </div>
+                  </form>
+            }
+
+            <div class="mt-4">
+                  <a asp-action="Index" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> 返回評論專區
+                  </a>
+            </div>
+
+      </div>
+</div>

@@ -25,6 +25,7 @@ builder.Services.AddDbContext<dbVenueContext>(options =>
 builder.Services.AddSession();
 
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
+builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
 
 var app = builder.Build();
 

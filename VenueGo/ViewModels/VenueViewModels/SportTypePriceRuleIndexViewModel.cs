@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.ViewModels
+namespace VenueGo.ViewModels.VenueViewModels
 {
     //價格規則清單列表項目 >> 專供 SportTypePriceRuleIndex 頁面使用,純顯示用,不綁定 Entity,不參與表單驗證
     //SportName 是從 SportTypes 表 join 過來的欄位,不屬於 SportTypePriceRule 本身

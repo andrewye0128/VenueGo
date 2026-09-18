@@ -4,10 +4,14 @@ using System.ComponentModel.DataAnnotations;
 using VenueGo.Models.Entities;
 using VenueGo.Models.VenueModels;
 
-namespace VenueGo.ViewModels
+namespace VenueGo.ViewModels.VenueViewModels
 {
-    public class VenueCreateViewModel
+    public class VenueEditViewModel
     {
+
+        public int VenueId { get; set; }
+
+
         [Required(ErrorMessage = "場地名稱不可空白")]
         [Display(Name = "場地名稱")]
         public string VenueName { get; set; }
@@ -16,7 +20,7 @@ namespace VenueGo.ViewModels
         [Display(Name = "地點")]
         public string Location { get; set; }
 
-        [Required(ErrorMessage = "場地容納人數不可空白")]
+        [Required(ErrorMessage = "容納人數不可空白")]
         [Display(Name = "容納人數")]
         public int? Capacity { get; set; }
 

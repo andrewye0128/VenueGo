@@ -38,10 +38,10 @@
 1. 運動類型管理（SportType CRUD）— **已完成**
 2. 場地管理（Venue CRUD，含照片上傳）— **已完成**，剛合併進 dev
 3. 場地與運動類型前端介面統一美化（進行中）
-4. 場館每週固定開放時間管理（WeekBusinessHours）— 待開發
-5. 場地不開放時段管理（VenueUnavailableSlots）— 待開發
-6. 場地價格規則管理（SportTypePriceRules CRUD + 對外 `GetPrice()` 方法）— 開發中，詳見第六節
-7. **核心產出**：計算「某場地在某時間是否可預約」的可用時段運算邏輯（給預約模組 Zong-Hao 呼叫）— 待開發，是本子系統對外最關鍵的輸出
+4. 場館每週固定開放時間管理（WeekBusinessHours）— **已完成**，詳見第七節
+5. 場地不開放時段管理（VenueUnavailableSlots）— **已完成**，詳見第八節
+6. 場地價格規則管理（SportTypePriceRules CRUD + 對外 `GetPrice()` 方法）— **已完成**，詳見第六節
+7. **核心產出**：計算「某場地在某時間是否可預約」的可用時段運算邏輯（`IsAvailable()`，給預約模組 Zong-Hao 呼叫）— 待開發，是本子系統對外最關鍵的輸出；`WeekBusinessHours`/`VenueUnavailableSlots` 的底層查詢方法都已就緒（`GetByDayOfWeek()`、`FindByKey()`），可以直接組合實作
 
 ### 現況（已完成部分）
 
@@ -49,11 +49,12 @@
   - 表單驗證（`ModelState.IsValid`，攤平式 ViewModel + 各欄位獨立 `[Required]`）
   - 照片上傳（`IFormFile` → 存入 `wwwroot/images/venues/`，DB 只存相對路徑字串）
   - 下拉選單（運動類型）的資料綁定與編輯時預選
-- 目前正在以下分支上進行：
+- 已完成的子分支（**分支命名跟原計畫不同**：巢狀路徑分支會與既有分支名衝突，所以都改用 `venue-` 開頭 + 連字號）：
+  - `F2/HUNG-YU/venue-SportTypePriceRule`：場地價格規則管理（詳見第六節），已 merge 進 `F2/HUNG-YU/venue`
+  - `F2/HUNG-YU/venue-WeekHourBusiness`：場館開放時間管理（詳見第七節，原計畫叫 `business-hours`），已 merge 進 `F2/HUNG-YU/venue`
+  - `F2/HUNG-YU/venue-UnavailableSlot`：場地不開放時段管理（詳見第八節，原計畫叫 `unavailable-slots`），功能開發完成，**尚未 commit/merge**
+- 進行中的子分支：
   - `F2/HUNG-YU/venue-frontend`：場地與運動類型前端美化、風格統一（頁籤導覽 + 卡片式列表）
-  - `F2/HUNG-YU/business-hours`：場館開放時間管理
-  - `F2/HUNG-YU/unavailable-slots`：場地不開放時段管理
-  - `F2/HUNG-YU/venue-SportTypePriceRule`：場地價格規則管理（Scaffold 已完成，正在開發 CRUD 與 `GetPrice()`）
 - 所有子分支開發完成後，會依序 `git merge` 進個人總分支 `F2/HUNG-YU/venue`，最後統一 push 給 Git 負責人整合
 
 ---
@@ -102,12 +103,13 @@
 | 欄位 | 型別 | 說明 |
 |---|---|---|
 | BusinessHoursId | int (PK, IDENTITY) | |
-| DayOfWeek | int，對應 C# 內建 `System.DayOfWeek` enum（0=Sunday ~ 6=Saturday） | 採用 .NET 內建列舉編碼，可直接用 `DateTime.DayOfWeek` 比對，不需額外轉換邏輯 |
+| DayOfWeek | tinyint（Entity 型別是 `byte`），對應 C# 內建 `System.DayOfWeek` enum（0=Sunday ~ 6=Saturday） | 讀寫時用 `(byte)someDayOfWeek` / `(DayOfWeek)someByte` 互轉即可，不需要另外寫列舉去對應 |
 | IsOpen | bit | |
-| OpenTime / CloseTime | time(0) | |
+| OpenTime / CloseTime | time(0)，可 null | `IsOpen=false` 時強制清成 `null`（後端強制執行，不管前端有沒有正確 disable） |
 
 > 這張表管的是**整個場館共用**的規則，不分場地。例：週一到週五 9:00–21:00 開放。
-> `DayOfWeek` 欄位存的數字直接對應 C# 的 `System.DayOfWeek` enum（星期日 = 0，星期六 = 6），查詢時可直接用 `(int)someDateTime.DayOfWeek` 取得對應值比對，不需自訂轉換規則。
+> `DayOfWeek` 欄位存的數字直接對應 C# 的 `System.DayOfWeek` enum（星期日 = 0，星期六 = 6），查詢時可直接轉型比對，不需自訂轉換規則。
+> **目前沒有唯一索引**：「一天只能一筆設定」完全靠程式邏輯保證，DB 層級沒有擋；7 筆種子資料是**手動寫入 DB**，程式沒有自動補建的邏輯（詳見第七節）。
 
 
 ### 5. VenueUnavailableSlots（場地不開放例外時段）
@@ -121,6 +123,7 @@
 | 複合唯一索引 | `UQ_VenueUnavailableSlots_VenueDateTime`（VenueId + UnavailableDate + UnavailableTime） | |
 
 > 這張表**只存「不開放」的例外格**，不存整天狀態；時段切割為一小時一格。
+> **沒有 `IsActive`**：一筆記錄存不存在本身就是狀態（存在＝不開放），不需要軟刪除，恢復開放就是直接刪除那一筆（詳見第八節）。
 
 ### 資料表設計通則
 
@@ -140,10 +143,10 @@
    - Zong-Hao 只需傳「場地 ID」+「預約時間（用 `DateTime.TimeOfDay` 取得）」，內部自行處理場地→運動類型→價格規則的轉換與尖峰離峰判斷，直接回傳整數金額
    - **此方法不檢查時段是否合法可預約**，呼叫方需自行確保傳入的時間是合法的可預約時段（銜接第 3 點）
 
-3. **對預約模組（Zong-Hao）最關鍵的介接點二**：可用時段運算邏輯（尚未開發，即 `IsAvailable()`）。這個邏輯需要綜合三張表才能算出「某場地在某天某時段是否可約」：
-   - `WeekBusinessHours`（場館當天是否開放、開放時段）
-   - `VenueUnavailableSlots`（該場地當天是否有被標記不開放的例外格）
-   - 這是「送出預約、寫入資料前」的最後把關，不是 `GetPrice()` 的職責；目前尚未設計好對外的方法簽名，排在 `unavailable-slots` 分支開發
+3. **對預約模組（Zong-Hao）最關鍵的介接點二**：可用時段運算邏輯（`IsAvailable()`，尚未開發，但底層資料已就緒）。這個邏輯需要綜合兩張表才能算出「某場地在某天某時段是否可約」：
+   - `WeekBusinessHours`（場館當天是否開放、開放時段）→ 可透過 `CWeekBusinessHourFactory.GetByDayOfWeek(DayOfWeek day)` 取得
+   - `VenueUnavailableSlots`（該場地當天是否有被標記不開放的例外格）→ 可透過 `CVenueUnavailableSlotFactory.FindByKey(venueId, date, time)` 取得
+   - 這是「送出預約、寫入資料前」的最後把關，不是 `GetPrice()` 的職責；目前尚未設計好對外的方法簽名，但兩個底層查詢方法都已開發完成並實測過，`IsAvailable()` 可以直接組合這兩個方法實作，不需要重新設計查詢邏輯
 
 4. **軟刪除的影響**：任何模組查詢 `Venues`、`SportTypes`、`SportTypePriceRules` 時，都必須加上 `IsActive == true` 的過濾條件，否則會撈到已「刪除」的資料
 
@@ -242,11 +245,87 @@ private CSportTypePriceRuleWrap GetPriceRuleForVenue(int venueId)
 
 **不包含**：`IsAvailable()`、依平日／假日區分尖峰離峰規則（已知潛在需求，非本次交付）
 
-## 七、本週（接下來 4 天）工作項目
+## 七、場館營業時間管理（WeekBusinessHours）開發規格
 
-1. 統一並完善場地管理功能的前端介面，以及前端表單輸入管控（分支：`F2/HUNG-YU/venue-frontend`）
-2. 修飾運動類型管理的前端介面（同上分支）
-3. 統一兩者的前端風格（頁籤導覽 + 卡片式列表，同上分支）
-4. 開發場館開放時間管理（分支：`F2/HUNG-YU/business-hours`）
-5. 開發場地開放時段管理（分支：`F2/HUNG-YU/unavailable-slots`）
-6. 開發場地價格規則管理，含對外 `GetPrice()` 方法（分支：`F2/HUNG-YU/venue-SportTypePriceRule`，進行中）
+> 分支：`F2/HUNG-YU/venue-WeekHourBusiness`（已完成，已合併進 `F2/HUNG-YU/venue`）
+
+### 前置事項
+
+這張表固定只會有 7 筆（週日到週六各一筆）。資料是**手動寫入 DB**（不是程式自動 seed），`DayOfWeek` 沒有唯一索引，「一天一筆」完全靠人工與程式邏輯保證，不是資料庫層級的約束。
+
+### 核心設計原則
+
+- **沒有獨立的 Create/Edit/Delete**：`WeekBusinessHourIndex` 這一個 Action 兼職「查詢」跟「編輯」——GET 顯示表單、POST 一次送出全部 7 筆。因為這張表的「筆數」由星期幾決定，使用者只會編輯，不會新增第 8 天或刪除某一天
+- 畫面顯示順序是「星期一排最前面、星期日排最後面」，跟 `QueryAll()` 查出來的原始順序（依 `DayOfWeek` 0~6，星期日最前面）不同，排序邏輯另外寫在 Controller 層，不動 `QueryAll()` 本身
+- `OpenTime`/`CloseTime` 做成整點下拉選單（`GetWholeHourOptions()`，00:00~23:00），跟 `SportTypePriceRule` 的尖峰時間下拉選單同一套「選項本身就只有合法整點」的做法
+- `IsOpen=false` 時：前端用 JS 把該列的時間下拉選單 `disabled`；**後端也強制把 `OpenTime`/`CloseTime` 清成 `null`**，不管前端有沒有正確 disable 掉，避免「已關閉」卻存著時間值
+
+### Action 一覽（併入既有 VenueController）
+
+`WeekBusinessHourIndex`（GET：查詢並組表單／POST：逐列驗證後批次存回，驗證含「`IsOpen=true` 時 `OpenTime`/`CloseTime` 必填且 `OpenTime` 必須早於 `CloseTime`」）
+
+### Factory 方法（`CWeekBusinessHourFactory`）
+
+- `QueryAll()` — 查全部 7 筆，依 `DayOfWeek` 排序
+- `EditAll(List<CWeekBusinessHourWrap> wraps)` — 批次更新，7 筆在同一個 `DbContext` 處理完才 `SaveChanges()` 一次
+- `GetWholeHourOptions()` — 整點下拉選單選項（00:00~23:00）
+- `GetByDayOfWeek(DayOfWeek day)` — 依星期幾查單筆，**這是專門給 `VenueUnavailableSlot`（第八節）跟未來 `IsAvailable()` 用的對外查詢方法**
+
+### 已知的踩坑記錄
+
+`GetWholeHourOptions()` 第一版用 `TimeOnly` 本身遞增比較（`for (TimeOnly time = ...; time <= 23:00; time = time.AddHours(1))`），結果 `23:00` 加 1 小時會**繞回 `00:00`**（`TimeOnly` 沒有 24:00 這個值），造成無窮迴圈——已改成用 `int(0~23)` 控制迴圈迴避這個問題。
+
+### 測試狀況
+
+已對照真實 DB 測過：7 天資料查詢/顯示、`IsOpen=true` 缺時間或時間顛倒會被擋、送出後 DB 真的有更新、`GetWholeHourOptions()` 修正後正確回傳 24 個選項且不會卡住。
+
+---
+
+## 八、場地不開放時段管理（VenueUnavailableSlots）開發規格
+
+> 分支：`F2/HUNG-YU/venue-UnavailableSlot`（功能開發完成，**尚未 commit/merge**）
+
+### 核心設計原則
+
+- **沒有獨立的 Index/Create/Edit 頁面**：入口整合在 `VenueIndex` 每張場地卡片上的「開放時間設定」連結，點進去直接進 `VenueUnavailableSlotManage(venueId)`（一開始規劃過另外做一個場地卡片牆當入口，後來決定直接掛在既有的 `VenueIndex` 上，比較符合直覺）
+- 管理頁一次顯示「某場地、某一天」的所有整點時段，每個時段是一個可點擊的按鈕，**用 Toggle（切換）取代傳統的 Create/Edit/Delete**：
+  - 開放 → 不開放：新增一筆（必須填 `Reason`，用 Bootstrap Modal 收集，不用瀏覽器內建的 `prompt()`）
+  - 不開放 → 開放：刪除那一筆（不需要填任何東西，`confirm()` 做二次確認）
+- 這張表沒有 `IsActive`，一筆記錄存在與否本身就是狀態，不需要軟刪除設計
+- 時段按鈕的範圍**跟 `WeekBusinessHour` 連動**：呼叫 `CWeekBusinessHourFactory.GetByDayOfWeek()` 拿到當天的 `OpenTime`~`CloseTime`，該天沒營業（`IsOpen=false`）就不顯示任何按鈕
+- 日期限制：只能選今天或未來；若是今天，已經過去的時段按鈕會 disable（前端）+ Controller 也重新檢查一次（不信任前端）
+- 全程維持傳統 MVC：表單送出＋整頁刷新，**沒有用 AJAX**；Modal 只是前端收集 `Reason` 用的介面，真正送出時還是走一般 `<form method="post">`
+
+### Action 一覽（併入既有 VenueController）
+
+- `VenueUnavailableSlotManage(int venueId, DateOnly? date)`（GET）：顯示某場地某天的時段按鈕；`date` 沒帶或早於今天都會拉回今天
+- `VenueUnavailableSlotToggle(int venueId, DateOnly date, TimeOnly time, string? reason)`（POST）：切換開放/不開放。**完全不信任前端傳來的「目前狀態」**，每次都用 `FindByKey()` 重新查 DB 決定要新增還是刪除，避免前端跟 DB 不同步時誤判
+
+### Factory 方法（`CVenueUnavailableSlotFactory`）
+
+- `QueryByVenueAndDate(venueId, date)` — 一次查出某場地某天所有已標記不開放的時段（給 Manage 頁一次撈，不會每個時段各查一次 DB）
+- `FindByKey(venueId, date, time)` — 查單筆，查不到代表目前是開放狀態，`Toggle` 用它判斷要新增還是刪除
+- `Create(wrap)` / `Delete(id)` — 新增／硬刪除
+
+### 明確排除在這次開發範圍外
+
+- **`IsAvailable()`**：結合 `WeekBusinessHour` + `VenueUnavailableSlot` 判斷可預約性，尚未開發，是下一步（見第四節第 3 點，兩個底層查詢方法都已就緒可以直接組合）
+- **標記不開放時檢查現有預約並取消訂單、寄信通知會員**：HungYu 提出的未來規劃，明確表示這階段不開發，要等預約模組（`F3/TSUNG-HAO/reservation`）上線後再回來加這一層邏輯
+
+### 測試狀況
+
+已對照真實 DB 測過：日期切換（`null`預設今天／未來日期／過去日期防呆拉回今天）、過去時段無法編輯（過去日期跟今天已過去的時段都會被擋，DB 無變化）、開放↔不開放來回切換成功、切換後**用獨立的 SQL 查詢**（不透過 App 自己的方法）交叉驗證資料真的寫進/刪出 `VenueUnavailableSlots` 表。
+
+> **開發過程中的一個插曲**：ViewModel 檔案後來搬到 `ViewModels/VenueViewModels/` 資料夾（namespace 改成 `VenueGo.ViewModels.VenueViewModels`），但 `.cshtml` 的 `@model` 指令是寫死完整命名空間（此專案慣例，不靠 `_ViewImports.cshtml`），搬家後忘記同步更新這些路徑導致編譯錯誤，事後已修正 7 個受影響的 View。**之後如果再調整 ViewModel 的資料夾/命名空間，記得同步檢查所有引用它的 `.cshtml` 的 `@model` 指令。**
+
+---
+
+## 九、本週工作項目（更新狀態）
+
+1. ~~統一並完善場地管理功能的前端介面，以及前端表單輸入管控~~（分支：`F2/HUNG-YU/venue-frontend`，進行中）
+2. ~~修飾運動類型管理的前端介面~~（同上分支，進行中）
+3. ~~統一兩者的前端風格（頁籤導覽 + 卡片式列表）~~（同上分支，進行中）
+4. ~~開發場館開放時間管理~~ — **已完成**（分支：`F2/HUNG-YU/venue-WeekHourBusiness`，詳見第七節）
+5. ~~開發場地不開放時段管理~~ — **已完成**（分支：`F2/HUNG-YU/venue-UnavailableSlot`，詳見第八節，尚未 commit/merge）
+6. ~~開發場地價格規則管理，含對外 `GetPrice()` 方法~~ — **已完成**（分支：`F2/HUNG-YU/venue-SportTypePriceRule`，詳見第六節）
+7. **下一步**：開發 `IsAvailable()` 可用時段運算邏輯（結合第六、七、八節的成果，是對預約模組最關鍵的交付）

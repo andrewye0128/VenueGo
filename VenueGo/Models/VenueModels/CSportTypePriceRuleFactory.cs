@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using VenueGo.Data;
 using VenueGo.Models.Entities;
-using VenueGo.ViewModels;
+using VenueGo.ViewModels.VenueViewModels;
 
 
 

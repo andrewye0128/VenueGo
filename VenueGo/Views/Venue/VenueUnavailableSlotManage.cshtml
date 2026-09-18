@@ -1,0 +1,164 @@
+@model VenueGo.ViewModels.VenueViewModels.VenueUnavailableSlotManageViewModel
+
+@{
+    ViewData["Title"] = "場地開放時間設定";
+    DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+}
+
+<div class="mb-3">
+    <a asp-action="VenueIndex" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>返回場地列表
+    </a>
+</div>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="card shadow-sm mb-3">
+    <div class="card-body d-flex align-items-center gap-3">
+        <img src="@Model.PhotoPath" alt="@Model.VenueName"
+             class="rounded" style="width: 80px; height: 80px; object-fit: cover;" />
+        <h5 class="mb-0 fw-bold">@Model.VenueName － 不開放時段設定</h5>
+    </div>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-body">
+        <!-- 日期切換 -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            @if (Model.Date > today)
+            {
+                <a asp-action="VenueUnavailableSlotManage" asp-route-venueId="@Model.VenueId" asp-route-date="@Model.Date.AddDays(-1).ToString("yyyy-MM-dd")"
+                   class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-chevron-left"></i> 前一天
+                </a>
+            }
+            else
+            {
+                <span class="text-muted small">
+                    <i class="bi bi-chevron-left"></i> 前一天
+                </span>
+            }
+
+            <h6 class="mb-0 fw-bold">@Model.Date.ToString("yyyy年MM月dd日")</h6>
+
+            <a asp-action="VenueUnavailableSlotManage" asp-route-venueId="@Model.VenueId" asp-route-date="@Model.Date.AddDays(1).ToString("yyyy-MM-dd")"
+               class="btn btn-outline-secondary btn-sm">
+                後一天 <i class="bi bi-chevron-right"></i>
+            </a>
+        </div>
+
+        <!-- 跳到指定日期 -->
+        <form asp-action="VenueUnavailableSlotManage" method="get" class="d-flex align-items-center gap-2 mb-4">
+            <input type="hidden" name="venueId" value="@Model.VenueId" />
+            <i class="bi bi-calendar3"></i>
+            <input type="date" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" min="@today.ToString("yyyy-MM-dd")"
+                   class="form-control form-control-sm" style="max-width: 180px;" />
+            <button type="submit" class="btn btn-outline-primary btn-sm">前往</button>
+        </form>
+
+        @if (!Model.IsBusinessDay)
+        {
+            <div class="alert alert-secondary mb-0">
+                <i class="bi bi-info-circle me-1"></i>此日期未營業，無需設定不開放時段
+            </div>
+        }
+        else
+        {
+            <div class="d-flex flex-wrap gap-2">
+                @foreach (var hour in Model.Hours)
+                {
+                    if (hour.IsPast)
+                    {
+                        <button type="button" class="btn btn-outline-secondary" style="min-width: 90px;" disabled title="已經過去">
+                            @hour.Time.ToString("HH:mm")
+                        </button>
+                    }
+                    else if (hour.IsUnavailable)
+                    {
+                        //目前不開放,點下去直接切換回開放,不需要填任何東西,用confirm()做二次確認就好
+                        <form asp-action="VenueUnavailableSlotToggle" method="post" class="d-inline">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="venueId" value="@Model.VenueId" />
+                            <input type="hidden" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" />
+                            <input type="hidden" name="time" value="@hour.Time.ToString("HH:mm")" />
+                            <button type="submit" class="btn btn-danger" style="min-width: 90px;" title="@hour.Reason"
+                                    onclick="return confirm('確定要恢復開放這個時段嗎?')">
+                                @hour.Time.ToString("HH:mm")
+                            </button>
+                        </form>
+                    }
+                    else
+                    {
+                        //目前開放,點下去要先跳Modal填不開放原因,不直接送出表單
+                        <button type="button" class="btn btn-outline-success" style="min-width: 90px;"
+                                data-bs-toggle="modal" data-bs-target="#unavailableReasonModal"
+                                data-time="@hour.Time.ToString("HH:mm")">
+                            @hour.Time.ToString("HH:mm")
+                        </button>
+                    }
+                }
+            </div>
+            <div class="form-text mt-3">
+                <span class="badge bg-success-subtle text-success border border-success-subtle me-1">綠色</span>開放中
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1">紅色</span>不開放（滑鼠移過去看原因）
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle me-1">灰色</span>已經過去
+            </div>
+
+            <!-- 標記不開放用的共用Modal,所有"開放"按鈕共用同一個,點擊時用JS把venueId/date/time塞進去 -->
+            <div class="modal fade" id="unavailableReasonModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form asp-action="VenueUnavailableSlotToggle" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="venueId" value="@Model.VenueId" />
+                            <input type="hidden" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" />
+                            <input type="hidden" name="time" id="unavailableReasonTime" />
+
+                            <div class="modal-header">
+                                <h5 class="modal-title">標記時段不開放</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="mb-2">時段：<strong id="unavailableReasonTimeText"></strong></p>
+                                <label for="unavailableReasonInput" class="form-label">不開放原因</label>
+                                <textarea name="reason" id="unavailableReasonInput" class="form-control" rows="3" required></textarea>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
+                                <button type="submit" class="btn btn-danger">確認標記不開放</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        //Modal開啟時,把觸發它的按鈕(event.relatedTarget)身上的data-time讀出來,塞進Modal裡的隱藏欄位跟顯示文字
+        var unavailableReasonModal = document.getElementById('unavailableReasonModal');
+        if (unavailableReasonModal) {
+            unavailableReasonModal.addEventListener('show.bs.modal', function (event) {
+                var button = event.relatedTarget;
+                var time = button.getAttribute('data-time');
+                document.getElementById('unavailableReasonTime').value = time;
+                document.getElementById('unavailableReasonTimeText').textContent = time;
+            });
+        }
+    </script>
+}

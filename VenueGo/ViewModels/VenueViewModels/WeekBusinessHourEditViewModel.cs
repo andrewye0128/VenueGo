@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
-namespace VenueGo.ViewModels
+namespace VenueGo.ViewModels.VenueViewModels
 {
     //場館營業時間整頁表單 >> 專供 WeekBusinessHourIndex 頁面使用,一次顯示/送出7天
     public class WeekBusinessHourEditViewModel

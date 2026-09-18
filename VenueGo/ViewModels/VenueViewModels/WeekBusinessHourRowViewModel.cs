@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.ViewModels
+namespace VenueGo.ViewModels.VenueViewModels
 {
     //場館營業時間表單的其中一列(一天) >> 專供 WeekBusinessHourIndex 頁面使用
     public class WeekBusinessHourRowViewModel

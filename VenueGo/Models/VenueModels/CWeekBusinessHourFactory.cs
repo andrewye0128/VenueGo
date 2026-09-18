@@ -6,16 +6,18 @@ namespace VenueGo.Models.VenueModels
 {
     public class CWeekBusinessHourFactory
     {
-        //開始/結束營業時間下拉選單選項(整點,00:00~23:00),Index頁面OpenTime跟CloseTime共用同一份選項
-        //改用下拉選單而不是<input type="time">,理由跟SportTypePriceRule的尖峰時間一樣:
-        //選項本身就只有合法的整點,UI上不會選得出不合法值
-        //用int(0~23)控制迴圈,不能直接用TimeOnly本身遞增比較:
-        //TimeOnly沒有24:00這個值,23:00.AddHours(1)會繞回00:00(跨過午夜),
-        //如果迴圈條件寫成time <= 23:00,遇到繞回的00:00還是會小於23:00,造成無窮迴圈
+        //開始/結束營業時間下拉選單選項(整點,00:00~23:00)
+        //Index頁面OpenTime跟CloseTime共用同一份選項
+        //改用下拉選單不用input
+        //選項只放整點,UI上不會選到非整點值
+
         public List<SelectListItem> GetWholeHourOptions()
         {
             List<SelectListItem> list = new List<SelectListItem>();
 
+            //用int(0~23)控制迴圈,不能直接用TimeOnly本身遞增比較:
+            //TimeOnly沒有24:00這個值,23:00.AddHours(1)會繞回00:00(跨過午夜),
+            //如果迴圈條件寫成time <= 23:00,遇到繞回的00:00還是會小於23:00,造成無窮迴圈
             for (int hour = 0; hour <= 23; hour++)
             {
                 TimeOnly time = new TimeOnly(hour, 0);
@@ -48,6 +50,28 @@ namespace VenueGo.Models.VenueModels
             }
 
             return list;
+        }
+
+
+        //依星期幾查詢單筆營業時間設定 >> 給VenueUnavailableSlot功能查詢該天的實際營業時間範圍用
+        //理論上7天資料都已經存在,查不到才回傳null(異常情況,呼叫方自行判斷)
+        public CWeekBusinessHourWrap GetByDayOfWeek(DayOfWeek day)
+        {
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                byte dayValue = (byte)day;
+
+                var data = db.WeekBusinessHours.FirstOrDefault(w => w.DayOfWeek == dayValue);
+
+                if (data == null)
+                {
+                    return null;
+                }
+
+                CWeekBusinessHourWrap wrap = new CWeekBusinessHourWrap();
+                wrap.weekBusinessHour = data;
+                return wrap;
+            }
         }
 
 

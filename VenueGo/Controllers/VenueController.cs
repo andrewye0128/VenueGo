@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Net.WebSockets;
 using VenueGo.Data;
 using VenueGo.Models.VenueModels;
-using VenueGo.ViewModels;
+using VenueGo.ViewModels.VenueViewModels;
 
 namespace VenueGo.Controllers
 {
@@ -602,6 +602,153 @@ namespace VenueGo.Controllers
             }
 
             return name;
+        }
+
+
+        /*VenueUnavailableSlot*/
+
+        //場地不開放時段管理 >> 頁面產生,顯示某場地某天的所有時段按鈕
+        public IActionResult VenueUnavailableSlotManage(int venueId, DateOnly? date)
+        {
+            DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+
+            //date防呆 >> 沒帶就設為今天,早於今天就拉回今天,不管網址是不是被手動改過
+            DateOnly targetDate;
+            if (!date.HasValue || date.Value < today)
+            {
+                targetDate = today;
+            }
+            else
+            {
+                targetDate = date.Value;
+            }
+
+            //查場地資訊,查不到代表venueId無效
+            CVenueFactory VenueFactory = new CVenueFactory();
+            CVenueWrap venue = VenueFactory.QueryById(venueId);
+            if (venue == null)
+            {
+                return RedirectToAction("VenueIndex");
+            }
+
+            //查那天的營業時間
+            CWeekBusinessHourFactory WeekBusinessHourFactory = new CWeekBusinessHourFactory();
+            CWeekBusinessHourWrap businessHour = WeekBusinessHourFactory.GetByDayOfWeek(targetDate.DayOfWeek);
+
+            VenueUnavailableSlotManageViewModel vm = new VenueUnavailableSlotManageViewModel();
+            vm.VenueId = venue.VenueId;
+            vm.VenueName = venue.VenueName;
+            vm.PhotoPath = venue.PhotoPath;
+            vm.Date = targetDate;
+
+            //理論上7天資料都已經存在,查不到就當作沒營業處理(異常情況防呆)
+            if (businessHour == null || !businessHour.IsOpen)
+            {
+                vm.IsBusinessDay = false;
+                return View(vm);
+            }
+
+            vm.IsBusinessDay = true;
+
+            //產生這天的整點時段清單,從OpenTime到CloseTime前一小時
+            //用int控制迴圈,理由跟GetWholeHourOptions()一樣:TimeOnly在23:00加1小時會繞回00:00,不能直接拿TimeOnly本身遞增比較
+            List<TimeOnly> hourSlots = new List<TimeOnly>();
+            for (int hour = businessHour.OpenTime!.Value.Hour; hour < businessHour.CloseTime!.Value.Hour; hour++)
+            {
+                hourSlots.Add(new TimeOnly(hour, 0));
+            }
+
+            //一次查出這天已經被標記不開放的時段,轉成Dictionary方便逐一比對,避免每個時段各查一次DB
+            CVenueUnavailableSlotFactory VenueUnavailableSlotFactory = new CVenueUnavailableSlotFactory();
+            List<CVenueUnavailableSlotWrap> unavailableSlots = VenueUnavailableSlotFactory.QueryByVenueAndDate(venueId, targetDate);
+
+            Dictionary<TimeOnly, string> reasonByTime = new Dictionary<TimeOnly, string>();
+            foreach (var slot in unavailableSlots)
+            {
+                reasonByTime[slot.UnavailableTime] = slot.Reason;
+            }
+
+            //現在的時間,只有targetDate是今天時才會用來判斷IsPast
+            TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
+
+            foreach (TimeOnly time in hourSlots)
+            {
+                VenueUnavailableSlotHourViewModel row = new VenueUnavailableSlotHourViewModel();
+                row.Time = time;
+
+                if (reasonByTime.ContainsKey(time))
+                {
+                    row.IsUnavailable = true;
+                    row.Reason = reasonByTime[time];
+                }
+                else
+                {
+                    row.IsUnavailable = false;
+                    row.Reason = null;
+                }
+
+                if (targetDate == today && time <= now)
+                {
+                    row.IsPast = true;
+                }
+                else
+                {
+                    row.IsPast = false;
+                }
+
+                vm.Hours.Add(row);
+            }
+
+            return View(vm);
+        }
+
+
+        //場地不開放時段切換 >> 開放變不開放就新增一筆,不開放變開放就刪除那一筆
+        //完全不信任前端傳來的「目前是開放還是不開放」,每次都自己用FindByKey重新查一次DB決定
+        [HttpPost]
+        public IActionResult VenueUnavailableSlotToggle(int venueId, DateOnly date, TimeOnly time, string? reason)
+        {
+            DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+            TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
+
+            //防呆 >> 不能對過去的日期時間做切換,不管前端有沒有正確把按鈕disable掉
+            if (date < today || (date == today && time <= now))
+            {
+                TempData["ErrorMessage"] = "已經過去的時段無法設定";
+                return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
+            }
+
+            CVenueUnavailableSlotFactory VenueUnavailableSlotFactory = new CVenueUnavailableSlotFactory();
+
+            //查詢目前這個時段的真實狀態
+            CVenueUnavailableSlotWrap existing = VenueUnavailableSlotFactory.FindByKey(venueId, date, time);
+
+            if (existing != null)
+            {
+                //目前是不開放,切換回開放 >> 刪除這一筆
+                VenueUnavailableSlotFactory.Delete(existing.VenueUnavailableSlotId);
+            }
+            else
+            {
+                //目前是開放,切換成不開放 >> 新增一筆,必須要有原因
+                if (string.IsNullOrWhiteSpace(reason))
+                {
+                    TempData["ErrorMessage"] = "請填寫不開放原因";
+                    return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
+                }
+
+                CVenueUnavailableSlotWrap wrap = new CVenueUnavailableSlotWrap();
+                wrap.VenueId = venueId;
+                wrap.UnavailableDate = date;
+                wrap.UnavailableTime = time;
+                wrap.Reason = reason;
+                wrap.CreatedAt = DateTime.Now;
+                wrap.CreatedBy = 1; //尚未整合會員權限,先設為1
+
+                VenueUnavailableSlotFactory.Create(wrap);
+            }
+
+            return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
         }
 
 

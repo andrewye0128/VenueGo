@@ -77,6 +77,8 @@
                     <div class="d-flex align-items-center gap-4">
                         <span class="text-nowrap">容納 @item.Capacity 人</span>
                         <div class="d-flex gap-2">
+                            <a asp-action="VenueUnavailableSlotManage" asp-route-venueId="@item.VenueId"
+                               class="btn btn-outline-primary btn-sm">開放時間設定</a>
                             <a asp-action="VenueEdit" asp-route-id="@item.VenueId"
                                class="btn btn-outline-secondary btn-sm">編輯</a>
                             <a asp-action="VenueDelete" asp-route-id="@item.VenueId"

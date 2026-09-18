@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.ViewModels
+namespace VenueGo.ViewModels.VenueViewModels
 {
     //價格規則新增表單 >> 專供 SportTypePriceRuleCreate 頁面使用
     public class SportTypePriceRuleCreateViewModel

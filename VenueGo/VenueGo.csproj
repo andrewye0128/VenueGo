@@ -18,6 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Remove="Controllers\CReview1Controller.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11">
@@ -28,20 +32,21 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Models\CheckinModels\" />
     <Folder Include="Models\MemberModels\" />
     <Folder Include="Models\OperationModels\" />
     <Folder Include="Models\ReservationModels\" />
-    <Folder Include="Models\VenueModels\" />
     <Folder Include="ViewModels\MemberViewModels\" />
     <Folder Include="ViewModels\CheckinViewModels\" />
     <Folder Include="ViewModels\VenueViewModels\" />
     <Folder Include="ViewModels\ReservationViewModels\" />
+    <Folder Include="Views\MyReviewPageVM\" />
     <Folder Include="Views\Reservation\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />
     <Folder Include="wwwroot\images\venues\" />
     <Folder Include="wwwroot\uploads\" />
   </ItemGroup>
+
+  <ProjectExtensions><VisualStudio><UserProperties wwwroot_4lib_4bootstrap_4dist_4css_4bootstrap-grid_1css_1map__JsonSchema="" /></VisualStudio></ProjectExtensions>
 
 </Project>

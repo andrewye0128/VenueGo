@@ -71,7 +71,7 @@ namespace VenueGo.Controllers
 
             if (!isPasswordValid)
             {
-                user.FailedLoginCount = user.FailedLoginCount + 1;
+                user.FailedLoginCount = user.FailedLoginCount+ 1;
                 string reason;
 
                 if (user.FailedLoginCount >= 5)

@@ -1,5 +1,4 @@
 ﻿@using VenueGo.Helpers
-@model VenueGo.ViewModels.ReviewVM.ReviewCreateInputVM
 @{
       ViewData["Title"] = "Index";
 }
@@ -18,7 +17,7 @@
             @* <a asp-action="CreateForVisit" asp-route-id="@item.FId" onclick="return confirm('確定要刪除嗎？')">刪除</a> *@
             <form asp-action="CreateForVisit" method="get">
                 <div class="form-group">
-                  <label name="token" class="control-label">
+                        <label for="tokenInput" class="control-label">
                               請輸入評論用QRToken ( TESTVISIT01 - 03 )
                   </label>
                   <input type="text" name="token" id="tokenInput" class="form-control" />
@@ -27,7 +26,7 @@
             </form>
             <form asp-action="CreateForBooking" method="get">
                 <div class="form-group">
-                  <label name="id" class="control-label">
+                  <label for="idInput" class="control-label">
                               請輸入評論用ReviewPerBookingId ( 9002 / 9004 )
                   </label>
                   <input type="text" name="id" id="idInput" class="form-control" />

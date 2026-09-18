@@ -174,7 +174,7 @@
                                     <div class="border-top pt-3">
                                           <div class="small text-muted mb-2">這則回覆對你有幫助嗎？</div>
                                           <form asp-action="SetSatisfaction" method="post"
-                                                asp-route-token="@Model.Qrtoken" class="d-flex gap-2">
+                                                class="d-flex gap-2">
                                                 <input type="hidden" asp-for="Qrtoken" />
                                                 <input type="hidden" asp-for="ReviewPerBookingId" />
                                                 <button type="submit" name="satisfaction" value="2"
@@ -215,7 +215,7 @@
             @if (Model.CanToggleVisibility)
             {
                   <form asp-action="SetVisibility" method="post"
-                        asp-route-token="@Model.Qrtoken" class="mt-3">
+                        class="mt-3">
                         <input type="hidden" asp-for="Qrtoken" />
                         <div class="form-check form-switch">
                               @* onchange 直接送出：單一開關不需要再按一次儲存 *@

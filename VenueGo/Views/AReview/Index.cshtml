@@ -1,0 +1,76 @@
+﻿@model VenueGo.ViewModels.ReviewVM.ReviewQueueVM
+@using VenueGo.Helpers
+
+@*
+    放置路徑：Views/AReview/Index.cshtml
+    使用預設的後台版型 _Layout.cshtml。
+
+    這一頁只放「不會跟著清單變的東西」：
+      標題、訊息區、標記垃圾的 modal、腳本。
+    會變的部分（篩選列、清單）全部在 _QueueList.cshtml。
+*@
+
+@{
+      ViewData["Title"] = "評論管理";
+}
+
+@section Styles {
+      <style>
+            /* 未回覆警示：左側色條。之後可以搬到 site.css */
+            .queue-overdue { border-left: 4px solid var(--bs-danger)  !important; }
+            .queue-soon    { border-left: 4px solid var(--bs-warning) !important; }
+      </style>
+}
+
+@* 給置頂按鈕用的防偽 token（回覆表單自己會帶，不用這個） *@
+@Html.AntiForgeryToken()
+
+<h1 class="h4 mb-3">評論管理</h1>
+
+@* 操作結果提示，由 JS 放進來 *@
+<div id="queueFlash" aria-live="polite"></div>
+
+@* 清單容器。data-list-url 讓 JS 知道要去哪裡拿新清單，
+   網址由 Url.Action 產生，路由改了這裡會自動跟著改。 *@
+<div id="queueRoot" data-list-url="@Url.Action("QueueList")">
+      <partial name="_QueueList" model="Model" />
+</div>
+
+@* ── 標記垃圾確認 ─────────────────────────────────────
+   整頁共用一個，放在 queueRoot 外面，重新載入清單時才不會被換掉。 *@
+<div class="modal fade" id="spamModal" tabindex="-1" aria-labelledby="spamModalTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                  <div class="modal-header">
+                        <h5 class="modal-title" id="spamModalTitle">
+                              <i class="bi bi-trash me-2"></i>標記為垃圾評論
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+                  </div>
+                  <div class="modal-body">
+                        <label for="spamReason" class="form-label">理由</label>
+                        <select id="spamReason" class="form-select">
+                              <option value="" selected disabled>請選擇理由</option>
+                              @for (int i = 0; i < ReviewPolicy.SpamReasons.Length; i++)
+                              {
+                                    <option value="@i">@ReviewPolicy.SpamReasons[i]</option>
+                              }
+                        </select>
+                        <div class="form-text">
+                              標記後這則評論會強制不公開，也不能再回覆。<strong>此操作無法復原。</strong>
+                        </div>
+                        <div id="spamError" class="text-danger small mt-2"></div>
+                  </div>
+                  <div class="modal-footer">
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
+                        <button type="button" class="btn btn-danger" id="spamConfirm">確定標記</button>
+                  </div>
+            </div>
+      </div>
+</div>
+
+@section Scripts {
+      @* axios 版本請改成課堂上用的版本，並寫死，不要用 latest *@
+      <script src="https://cdn.jsdelivr.net/npm/axios@1.20.0/dist/axios.min.js"></script>
+      <script src="~/js/areview-queue.js" asp-append-version="true"></script>
+}

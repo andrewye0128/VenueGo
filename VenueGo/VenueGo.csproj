@@ -28,13 +28,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Models\CheckinModels\" />
     <Folder Include="Models\MemberModels\" />
     <Folder Include="Models\OperationModels\" />
     <Folder Include="Models\ReservationModels\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="ViewModels\MemberViewModels\" />
-    <Folder Include="ViewModels\CheckinViewModels\" />
     <Folder Include="ViewModels\VenueViewModels\" />
     <Folder Include="ViewModels\ReservationViewModels\" />
     <Folder Include="Views\Reservation\" />

@@ -21,8 +21,6 @@ public partial class Reservation
 
     public byte ReservationStatus { get; set; }
 
-    public DateTime PaymentDueAt { get; set; }
-
     public DateTime TermsAcceptedAt { get; set; }
 
     public string TermsVersion { get; set; } = null!;

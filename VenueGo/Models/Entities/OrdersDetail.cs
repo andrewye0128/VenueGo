@@ -16,4 +16,6 @@ public partial class OrdersDetail
     public int DurationHours { get; set; }
 
     public int Subtotal { get; set; }
+
+    public TimeOnly? SlotTime { get; set; }
 }

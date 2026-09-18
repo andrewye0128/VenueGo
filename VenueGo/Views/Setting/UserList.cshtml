@@ -1,5 +1,4 @@
-﻿
-@model VenueGo.ViewModels.UserListViewModel
+﻿@model VenueGo.ViewModels.UserListViewModel
 
 @{
     ViewData["Title"] = "帳號權限管理";
@@ -61,8 +60,10 @@
                 <label class="form-label small fw-bold text-muted">依狀態篩選</label>
                 <select name="status" class="form-select">
                     <option value="">全部狀態</option>
-                    <option value="Active" selected="@(Model.SelectedStatus == "Active")">啟用中</option>
-                    <option value="Inactive" selected="@(Model.SelectedStatus == "Inactive")">已停用</option>
+                    <option value="Active" selected="@(Model.SelectedStatus == "Active")">在職 / 啟用中</option>
+                    <option value="OnLeave" selected="@(Model.SelectedStatus == "OnLeave")">留職停薪</option>
+                    <option value="Resigned" selected="@(Model.SelectedStatus == "Resigned")">離職</option>
+                    <option value="Inactive" selected="@(Model.SelectedStatus == "Inactive")">已停用 (會員)</option>
                 </select>
             </div>
             <div class="col-md-2 d-flex align-items-end gap-2">
@@ -124,17 +125,30 @@
                                     }
                                 </td>
                                 <td>
-                                    @if (user.Status == "Active")
+                                    @* 根據不同狀態給予明確的 Badge 顏色與文字標籤 *@
+                                    @switch (user.Status)
                                     {
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                                            <i class="bi bi-check-circle me-1"></i>啟用中
-                                        </span>
-                                    }
-                                    else
-                                    {
-                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
-                                            <i class="bi bi-x-circle me-1"></i>已停用
-                                        </span>
+                                        case "Active":
+                                            <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
+                                                <i class="bi bi-check-circle me-1"></i>在職 / 啟用
+                                            </span>
+                                            break;
+                                        case "OnLeave":
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                                                <i class="bi bi-clock-history me-1"></i>留職停薪
+                                            </span>
+                                            break;
+                                        case "Resigned":
+                                            <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1">
+                                                <i class="bi bi-person-x me-1"></i>已離職
+                                            </span>
+                                            break;
+                                        case "Inactive":
+                                        default:
+                                            <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
+                                                <i class="bi bi-x-circle me-1"></i>已停用
+                                            </span>
+                                            break;
                                     }
                                 </td>
                                 <td class="text-muted small">@user.CreatedAt.ToString("yyyy-MM-dd HH:mm")</td>

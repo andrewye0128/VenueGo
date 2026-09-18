@@ -104,7 +104,7 @@ namespace VenueGo.Services.Venues
         {
             var query = from v in _db.Venues.AsNoTracking()
                         join st in _db.SportTypes on v.SportTypeId equals st.SportTypeId
-                        join pr in _db.SportTypePriceRules
+                        join pr in _db.SportTypePriceRules.Where(r => r.IsActive)
                             on v.SportTypeId equals pr.SportTypeId into prs
                         from pr in prs.DefaultIfEmpty()
                         select new VenueQueryRow { Venue = v, SportType = st, PriceRule = pr };

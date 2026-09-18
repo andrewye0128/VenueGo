@@ -1,0 +1,66 @@
+@model List<VenueGo.ViewModels.CheckinViewModels.EntryTicketListViewModel>
+
+@{
+    ViewData["Title"] = "今日票券";
+}
+
+<h2>今日票券清單</h2>
+<form method="post" class="my-3"> 輸入關鍵字: <input type="text" name="txtKeyword"/><input type="submit" value="查詢" class="mx-2"/></form>
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead>
+            <tr>
+                <th>票券編號</th>
+                <th>會員</th>
+                <th>場地</th>
+                <th>時段</th>
+                <th>QR Token</th>
+                <th>狀態</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (!Model.Any())
+            {
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-4">今天沒有票券資料</td>
+                </tr>
+                
+            }
+            else
+            {
+                @foreach (var item in Model)
+                {
+                    <tr class="@(item.IsCheckedIn ? "table-secondary" : "")">
+                        <td>@item.TicketId</td>
+                        <td>@item.UserName</td>
+                        <td>@item.VenueName</td>
+                        <td>@item.TimeRange</td>
+                        <td><code class="small">@item.Qrtoken</code></td>
+                        <td>
+                            <span class="badge @(item.Status switch
+                                {
+                                    1 => "bg-success",
+                                    2 => "bg-secondary",
+                                    3 => "bg-warning text-dark",
+                                    4 => "bg-danger",
+                                    _ => "bg-dark"
+                                })">
+                                @item.StatusText
+                            </span>
+                        </td>
+                        <td class="text-nowrap">
+                            @if (item.Status == 1)
+                            {
+                                <form asp-action="QuickCheckIn" asp-route-id="@item.TicketId" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success">快速報到</button>
+                                </form>
+                            }
+                            <a asp-action="Detail" asp-route-id="@item.TicketId" class="btn btn-sm btn-outline-primary">詳情</a>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>

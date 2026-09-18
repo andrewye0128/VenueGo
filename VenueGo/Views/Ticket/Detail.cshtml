@@ -1,0 +1,87 @@
+﻿@model VenueGo.ViewModels.CheckinViewModels.EntryTicketDetailViewModel
+
+@{
+    ViewData["Title"] = "票券詳情";
+}
+
+<h2>票券詳情 #@Model.TicketId</h2>
+<p>
+    會員:@Model.UserName
+    <span class="badge @(Model.Status switch
+          {
+              1 => "bg-success",
+              2 => "bg-secondary",
+              3 => "bg-warning text-dark",
+              4 => "bg-danger",
+              _ => "bg-dark"
+          })">@Model.StatusText</span>
+</p>
+
+<ul class="nav nav-tabs" id="detailTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#venueInfo" type="button">場館/時段資訊</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#checkinManage" type="button">報到管理</button>
+    </li>
+</ul>
+
+<div class="tab-content border border-top-0 p-3">
+    <div class="tab-pane fade show active" id="venueInfo">
+        <dl class="row">
+            <dt class="col-sm-2">場地</dt>
+            <dd class="col-sm-10">@Model.VenueName (@Model.Location)</dd>
+            <dt class="col-sm-2">日期</dt>
+            <dd class="col-sm-10">@Model.BookingDate</dd>
+            <dt class="col-sm-2">時段</dt>
+            <dd class="col-sm-10">@Model.TimeRange</dd>
+            <dt class="col-sm-2">QR Token</dt>
+            <dd class="col-sm-10"><code>@Model.Qrtoken</code></dd>
+        </dl>
+    </div>
+    <div class="tab-pane fade" id="checkinManage">
+        <div class="mb-3 d-flex flex-wrap gap-2">
+            <form asp-action="ManualCheckIn" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
+                <input type="text" name="remark" placeholder="原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
+                <button type="submit" class="btn btn-sm btn-success">手動報到</button>
+            </form>
+            <form asp-action="ManualCheckOut" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
+                <input type="text" name="remark" placeholder="原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
+                <button type="submit" class="btn btn-sm btn-outline-secondary">手動離場</button>
+            </form>
+            <form asp-action="ManualCancel" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
+                <input type="text" name="remark" placeholder="取消原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
+                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('確定取消這張票券?')">手動取消</button>
+            </form>
+            <form asp-action="ManualExpire" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
+                <input type="text" name="remark" placeholder="原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
+                <button type="submit" class="btn btn-sm btn-warning">手動轉逾期</button>
+            </form>
+        </div>
+
+        <table class="table table-sm">
+            <thead>
+                <tr><th>時間</th><th>動作</th><th>人工覆核</th><th>操作結果</th><th>員工編號</th></tr>
+            </thead>
+            <tbody>
+                @if (!Model.Logs.Any())
+                {
+                    <tr><td colspan="5" class="text-center text-muted">尚無報到記錄</td></tr>
+                }
+                else
+                {
+                    @foreach (var log in Model.Logs)
+                    {
+                        <tr>
+                            <td>@log.ActionTime</td>
+                            <td>@log.ActionText</td>
+                            <td>@(log.IsManualOverride ? "是" : "否")</td>
+                            <td>@(log.IsValid ? $"{log.ActionText}成功": "異常行為")</td>
+                            <td>@log.OperatorId</td>
+                        </tr>
+                    }
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

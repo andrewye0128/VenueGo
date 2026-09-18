@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 using VenueGo.Models.Entities;
 using VenueGo.Models.VenueModels;
 
-namespace VenueGo.ViewModels
+namespace VenueGo.ViewModels.VenueViewModels
 {
     public class VenueEditViewModel
     {
@@ -12,15 +12,15 @@ namespace VenueGo.ViewModels
         public int VenueId { get; set; }
 
 
-        [Required]
+        [Required(ErrorMessage = "場地名稱不可空白")]
         [Display(Name = "場地名稱")]
         public string VenueName { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "場地地點描述不可空白")]
         [Display(Name = "地點")]
         public string Location { get; set; }
 
-        [Required]
+        [Required(ErrorMessage = "容納人數不可空白")]
         [Display(Name = "容納人數")]
         public int? Capacity { get; set; }
 
@@ -30,7 +30,7 @@ namespace VenueGo.ViewModels
         [Display(Name = "上傳照片")]
         public IFormFile? PhotoFile { get; set; }   // 使用者上傳的檔案本身
 
-
+        [Required(ErrorMessage = "運動種類不可空白")]
         [Display(Name = "運動種類")]
         public int SportTypeId { get; set; }   // 拿掉 [Required]，int 不可能是 null
         //下拉選單的資料

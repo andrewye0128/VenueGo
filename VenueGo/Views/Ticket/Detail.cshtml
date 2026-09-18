@@ -76,7 +76,7 @@
                             <td>@log.ActionTime</td>
                             <td>@log.ActionText</td>
                             <td>@(log.IsManualOverride ? "是" : "否")</td>
-                            <td>@(log.IsValid ? $"{log.ActionText}成功": "異常行為")</td>
+                            <td>@(log.IsValid ? $"{log.ActionText}成功" : "異常行為")</td>
                             <td>@log.OperatorId</td>
                         </tr>
                     }

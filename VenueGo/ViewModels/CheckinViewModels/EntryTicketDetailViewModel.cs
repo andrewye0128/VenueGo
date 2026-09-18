@@ -46,4 +46,3 @@ namespace VenueGo.ViewModels.CheckinViewModels
         };
     }
 }
-

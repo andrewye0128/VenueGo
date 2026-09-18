@@ -5,7 +5,7 @@
     /// 摘要與完整內容都裝在同一個物件裡，因為 accordion 展開時
     /// 不換頁、不再發請求，完整內容必須一開始就送到前端。
     /// </summary>
-    public class ReviewQueueItemVM_1
+    public class __ReviewQueueItemVM
     {
         public int ReviewId { get; init; }
         public byte StarRating { get; init; }

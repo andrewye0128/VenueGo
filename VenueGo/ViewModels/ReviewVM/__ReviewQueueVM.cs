@@ -3,7 +3,7 @@
     /// <summary>
     /// 館方佇列頁（AReview/Index，三個 tab 共用）
     /// </summary>
-    public class ReviewQueueVM_1
+    public class __ReviewQueueVM
     {
         /// <summary>unread / pending / spam。決定哪個 tab active、查詢用哪組條件。</summary>
         public string Tab { get; init; } = "unread";
@@ -12,7 +12,7 @@
         public int? Star { get; init; }
         public bool RatingOnly { get; init; }   // 「僅評分」篩選
 
-        public List<ReviewQueueItemVM_1> Items { get; init; } = new();
+        public List<__ReviewQueueItemVM> Items { get; init; } = new();
 
         // ── 各 tab 的未處理數量，顯示在 tab 上的紅色 badge ──
         public int UnreadCount { get; init; }

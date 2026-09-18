@@ -65,7 +65,7 @@ namespace VenueGo.Controllers
         private IActionResult? RejectIfNotEmployee()
         {
             if (_currentUser.EmployeeId is null or <= 0)
-                return StatusCode(403, ApiResult.Fail("請先以員工身分登入", "NotEmployee"));
+                return StatusCode(403, ApiResultVM.Fail("請先以員工身分登入", "NotEmployee"));
             return null;
         }
 
@@ -76,12 +76,12 @@ namespace VenueGo.Controllers
         private IActionResult? RejectIfCannot(ReviewMain? review, Func<ReviewMain, bool> rule)
         {
             if (review == null)
-                return NotFound(ApiResult.Fail("找不到這則評論", "NotFound"));
+                return NotFound(ApiResultVM.Fail("找不到這則評論", "NotFound"));
 
             // 409 Conflict：請求本身沒錯，但資料的狀態已經不允許這個操作。
             // 最常見的情況是另一位員工剛處理掉這則評論。
             if (!rule(review))
-                return Conflict(ApiResult.Fail("這則評論的狀態已經改變，請重新整理清單", "StateChanged"));
+                return Conflict(ApiResultVM.Fail("這則評論的狀態已經改變，請重新整理清單", "StateChanged"));
 
             return null;
         }
@@ -356,7 +356,7 @@ namespace VenueGo.Controllers
 
             review!.IsPinned = isPinned;
             _db.SaveChanges();
-            return Ok(ApiResult.Ok());
+            return Ok(ApiResultVM.Ok());
         }
 
         [HttpPost, ValidateAntiForgeryToken]
@@ -368,11 +368,11 @@ namespace VenueGo.Controllers
             // 前端的 required、maxlength 擋不住直接送請求的人，這裡是最後一道
             // 全部是空白也不行：CHK_ReviewMain_Content_NotBlank 要求 ReplyContent 長度 > 0
             if (string.IsNullOrWhiteSpace(content))
-                return BadRequest(ApiResult.Fail("請輸入回覆內容", "EmptyContent"));
+                return BadRequest(ApiResultVM.Fail("請輸入回覆內容", "EmptyContent"));
 
             content = content.Trim();
             if (content.Length > ReviewPolicy.ReplyMaxLength)
-                return BadRequest(ApiResult.Fail($"回覆不可超過 {ReviewPolicy.ReplyMaxLength} 字", "TooLong"));
+                return BadRequest(ApiResultVM.Fail($"回覆不可超過 {ReviewPolicy.ReplyMaxLength} 字", "TooLong"));
 
             var review = _db.ReviewMains.FirstOrDefault(r => r.ReviewId == id);
             var reject = RejectIfCannot(review, CanHandle);
@@ -380,7 +380,7 @@ namespace VenueGo.Controllers
 
             ApplyReply(review!, content, _currentUser.EmployeeId!.Value);
             _db.SaveChanges();
-            return Ok(ApiResult.Ok("回覆已送出"));
+            return Ok(ApiResultVM.Ok("回覆已送出"));
         }
 
         [HttpPost, ValidateAntiForgeryToken]
@@ -390,7 +390,7 @@ namespace VenueGo.Controllers
             if (deny != null) return deny;
 
             if (reason == null || reason >= ReviewPolicy.SpamReasons.Length)
-                return BadRequest(ApiResult.Fail("請選擇標記理由", "InvalidReason"));
+                return BadRequest(ApiResultVM.Fail("請選擇標記理由", "InvalidReason"));
 
             var review = _db.ReviewMains.FirstOrDefault(r => r.ReviewId == id);
             var reject = RejectIfCannot(review, CanHandle);
@@ -398,7 +398,7 @@ namespace VenueGo.Controllers
 
             ApplySpam(review!, reason.Value, _currentUser.EmployeeId!.Value);
             _db.SaveChanges();
-            return Ok(ApiResult.Ok("已標記為垃圾"));
+            return Ok(ApiResultVM.Ok("已標記為垃圾"));
         }
     }
 }

@@ -309,7 +309,7 @@ namespace VenueGo.Controllers
             return View(BuildCreateVm(r.Ticket!));
         }
 
-        [HttpPost]
+        [HttpPost, ValidateAntiForgeryToken]
         public IActionResult CreateForVisit(ReviewCreateForVisitVM vm, string? token)
         {
             // ⚠️ 資格要重驗一次。表單可能停在頁面上好幾天，
@@ -364,7 +364,7 @@ namespace VenueGo.Controllers
             return View(BuildCreateVm(r.Ticket!));
         }
 
-        [HttpPost]
+        [HttpPost, ValidateAntiForgeryToken]
         public IActionResult CreateForBooking(ReviewCreateForBookingVM vm, int? id)
         {
             var r = ResolveBookingTicket(id);
@@ -474,7 +474,7 @@ namespace VenueGo.Controllers
         /// 切換公開狀態。只有現場評論做得到——預約評論一律不公開。
         /// token 從表單的 hidden 欄位帶上來（模型繫結會從表單本體找）。
         /// </summary>
-        [HttpPost]
+        [HttpPost, ValidateAntiForgeryToken]
         public IActionResult SetVisibility(string? token, bool isPublic)
         {
             var r = ResolveVisitTicket(token);
@@ -503,7 +503,7 @@ namespace VenueGo.Controllers
         /// ⚠️ 約束 ReplySatisfaction_Logic 要求 ReplyViewedAt 不為 null，
         ///    而進入檢視頁時 MarkReplyViewedIfNeeded 已經記過了。
         /// </summary>
-        [HttpPost]
+        [HttpPost, ValidateAntiForgeryToken]
         public IActionResult SetSatisfaction(string? token, int? bookingId, byte satisfaction)
         {
             if (satisfaction > 2)

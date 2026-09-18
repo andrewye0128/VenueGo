@@ -7,18 +7,25 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Views\MyReviewPageVM\**" />
     <Compile Remove="Views\ReviewCardViewModel\**" />
     <Compile Remove="Views\ReviewCreateInputVM\**" />
+    <Content Remove="Views\MyReviewPageVM\**" />
     <Content Remove="Views\ReviewCardViewModel\**" />
     <Content Remove="Views\ReviewCreateInputVM\**" />
+    <EmbeddedResource Remove="Views\MyReviewPageVM\**" />
     <EmbeddedResource Remove="Views\ReviewCardViewModel\**" />
     <EmbeddedResource Remove="Views\ReviewCreateInputVM\**" />
+    <None Remove="Views\MyReviewPageVM\**" />
     <None Remove="Views\ReviewCardViewModel\**" />
     <None Remove="Views\ReviewCreateInputVM\**" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="Controllers\CReview1Controller.cs" />
+    <Compile Remove="Controllers\__CReview1Controller.cs" />
+    <Compile Remove="ViewModels\ReviewVM\__ReviewQueueItemVM.cs" />
+    <Compile Remove="ViewModels\ReviewVM\__ReviewQueueVM.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -34,14 +41,12 @@
   <ItemGroup>
     <Folder Include="Models\CheckinModels\" />
     <Folder Include="Models\MemberModels\" />
-    <Folder Include="Models\OperationModels\" />
     <Folder Include="Models\ReservationModels\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="ViewModels\MemberViewModels\" />
     <Folder Include="ViewModels\CheckinViewModels\" />
     <Folder Include="ViewModels\VenueViewModels\" />
     <Folder Include="ViewModels\ReservationViewModels\" />
-    <Folder Include="Views\MyReviewPageVM\" />
     <Folder Include="Views\Reservation\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />

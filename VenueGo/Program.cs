@@ -53,6 +53,12 @@ builder.Services.AddScoped<IVenueQueryService, VenueQueryService>();
 // 註冊關於時段方法的服務：介面 → 實作
 builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
 
+// 註冊關於時段選取驗證的服務：介面 → 實作
+builder.Services.AddScoped<ISlotSelectionValidator, SlotSelectionValidator>();
+
+// 註冊關於預約計價的服務：介面 → 實作
+builder.Services.AddScoped<IReservationPricingService, ReservationPricingService>();
+
 // 註冊關於球館預約的業務邏輯的服務：介面 → 實作
 builder.Services.Configure<ReservationRulesOptions>(
     builder.Configuration.GetSection(ReservationRulesOptions.SectionName));

@@ -1,0 +1,258 @@
+﻿@*
+    步驟 4：選擇時段。
+
+    版面骨架與步驟 1~3 相同，只換中間卡片的內容：
+      步驟進度條 → _ReservationWizardSteps.cshtml
+      時段格線   → _SlotGrid.cshtml
+      右側摘要   → ReservationSummaryViewComponent
+*@
+@model VenueGo.ViewModels.ReservationViewModels.SelectSlotsViewModel
+
+@{
+    ViewData["Title"] = "新增預約";
+    var currentStep = (int)(ViewData["CurrentStep"] ?? 4);
+}
+
+<nav aria-label="麵包屑">
+    <ol class="breadcrumb small">
+        <li class="breadcrumb-item">
+            <a asp-controller="Reservation" asp-action="Index">預約管理</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">新增預約</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-1">新增預約</h1>
+<p class="text-secondary">由管理員代客建立預約，請依序完成以下步驟。</p>
+
+@await Html.PartialAsync("_ReservationWizardSteps", currentStep)
+
+<form id="cancelForm" asp-action="Cancel" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 mb-1">步驟 4：選擇時段</h2>
+                <p class="text-secondary small mb-3">
+                    請選擇預約的使用時段，系統會顯示可預約與已滿的時段。
+                </p>
+
+                @* 已選會員、場地與日期的資訊條 *@
+                <div class="row g-2 mb-3">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-start gap-2 bg-primary-subtle rounded p-3 h-100">
+                            <i class="bi bi-person text-primary mt-1"></i>
+                            <div class="small">
+                                <div class="text-secondary">會員</div>
+                                <div class="fw-semibold">@Model.MemberName</div>
+                                @if (!string.IsNullOrWhiteSpace(Model.MemberPhone))
+                                {
+                                    <div class="text-secondary">@Model.MemberPhone</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-start gap-2 bg-primary-subtle rounded p-3 h-100">
+                            <i class="bi bi-house text-primary mt-1"></i>
+                            <div class="small">
+                                <div class="text-secondary">場地</div>
+                                <div class="fw-semibold">@Model.VenueName</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-start gap-2 bg-primary-subtle rounded p-3 h-100">
+                            <i class="bi bi-calendar3 text-primary mt-1"></i>
+                            <div class="small">
+                                <div class="text-secondary">日期</div>
+                                <div class="fw-semibold">@Model.BookingDateText</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <partial name="_ValidationSummary" />
+
+                @* ── 選擇時段（POST）── *@
+                <form id="selectSlotsForm" asp-action="SelectSlots" method="post">
+                    @Html.AntiForgeryToken()
+                    <partial name="_SlotGrid" model="Model" />
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        @await Component.InvokeAsync("ReservationSummary", new { currentStep })
+    </div>
+</div>
+
+<div class="d-flex justify-content-end gap-2 border-top mt-4 pt-3">
+    <button type="submit" form="cancelForm" class="btn btn-outline-secondary">取消</button>
+
+    <a asp-action="SelectDate" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>上一步：選擇日期
+    </a>
+
+    <button type="submit" form="selectSlotsForm" class="btn btn-primary" id="nextStepButton">
+        下一步：確認資料
+        <i class="bi bi-arrow-right ms-1"></i>
+    </button>
+</div>
+
+@section Scripts {
+    <script>
+        // 時段選取的三條規則。
+        //
+        //   一、點空格
+        //       緊貼已選範圍的前或後 → 延伸一格
+        //       其他任何位置         → 清空，只選這一格
+        //   二、點已選的格子
+        //       是頭或尾 → 取消它
+        //       是中間   → 清空，只選這一格
+        //   三、已選滿上限時
+        //       兩端的空格變淡並以 title 提示，其他空格仍可點
+        //
+        // 「不相鄰就重新開始」而不是「截斷保留某一邊」，
+        // 是因為後者無法讓使用者預測系統會保留哪一邊。
+        //
+        // 漸進增強：沒有 JavaScript 時仍可勾選送出，
+        // 由 SlotSelectionValidator 在後端攔下不合規則的組合。
+        (function() {
+            const form = document.getElementById('selectSlotsForm');
+            const grid = document.getElementById('slotGrid');
+            const nextButton = document.getElementById('nextStepButton');
+            const summary = document.getElementById('slotSummary');
+            if (!form || !grid || !nextButton) return;
+
+            const maxSlots = parseInt(grid.dataset.maxSlots, 10) || 4;
+
+            // 只把「可預約」的格子納入索引，index 即為相鄰判斷的依據。
+            const cells = Array.from(grid.querySelectorAll('.slot-cell'));
+            const checks = cells.map(cell => cell.querySelector('.slot-check'));
+
+            // 目前選取的索引，永遠保持排序且連續。
+            let selection = [];
+            checks.forEach((check, index) => {
+                if (check && check.checked) selection.push(index);
+            });
+            selection.sort((a, b) => a - b);
+
+            function isSelectable(index) {
+                const check = checks[index];
+                return check && !check.disabled;
+            }
+
+            function handleClick(index) {
+                if (!isSelectable(index)) return;
+
+                const isSelected = selection.includes(index);
+                const first = selection[0];
+                const last = selection[selection.length - 1];
+
+                if (!isSelected) {
+                    // 規則一：點空格
+                    if (selection.length === 0) {
+                        selection = [index];
+                    } else if (index === first - 1 || index === last + 1) {
+                        if (selection.length >= maxSlots) return;   // 規則三：已達上限，不延伸
+                        selection.push(index);
+                        selection.sort((a, b) => a - b);
+                    } else {
+                        selection = [index];   // 不相鄰，重新開始
+                    }
+                } else {
+                    // 規則二：點已選的格子
+                    if (index === first) {
+                        selection.shift();
+                    } else if (index === last) {
+                        selection.pop();
+                    } else {
+                        selection = [index];   // 中間，重新開始
+                    }
+                }
+
+                render();
+            }
+
+            function render() {
+                const atLimit = selection.length >= maxSlots;
+                const first = selection[0];
+                const last = selection[selection.length - 1];
+
+                cells.forEach((cell, index) => {
+                    const check = checks[index];
+                    const label = cell.querySelector('.slot-btn');
+                    const selected = selection.includes(index);
+
+                    if (check && !check.disabled) check.checked = selected;
+                    cell.classList.toggle('is-selected', selected);
+
+                    // 已達上限時，只有兩端的空格會被擋下來（其他空格點了是重新開始）
+                    const isBlockedEnd = atLimit && !selected
+                        && (index === first - 1 || index === last + 1);
+                    cell.classList.toggle('is-limited', isBlockedEnd);
+
+                    if (label) {
+                        if (isBlockedEnd) {
+                            label.setAttribute('title', '一次最多可預約 ' + maxSlots + ' 小時');
+                        } else {
+                            label.removeAttribute('title');
+                        }
+                    }
+                });
+
+                nextButton.disabled = selection.length === 0;
+                renderSummary();
+            }
+
+            function renderSummary() {
+                if (!summary) return;
+
+                if (selection.length === 0) {
+                    summary.textContent = '尚未選擇時段。';
+                    return;
+                }
+
+                let total = 0;
+                selection.forEach(index => {
+                    total += parseInt(cells[index].dataset.price, 10) || 0;
+                });
+
+                const startText = cells[selection[0]]
+                    .querySelector('.slot-time').textContent.split(' - ')[0];
+                const endText = cells[selection[selection.length - 1]]
+                    .querySelector('.slot-time').textContent.split(' - ')[1];
+
+                summary.innerHTML =
+                    '<span>已選時段：' + startText + ' - ' + endText +
+                    '，共 ' + selection.length + ' 小時</span>' +
+                    '<span class="ms-2 fw-semibold text-primary">NT$ ' +
+                    total.toLocaleString('en-US') + '</span>';
+            }
+
+            // 攔在 click 而非 change：規則會改寫勾選狀態，
+            // 讓瀏覽器先自行切換再修正會造成畫面閃動。
+            cells.forEach((cell, index) => {
+                const label = cell.querySelector('.slot-btn');
+                if (!label) return;
+                label.addEventListener('click', event => {
+                    event.preventDefault();
+                    handleClick(index);
+                });
+            });
+
+            // 鍵盤操作：空白鍵或 Enter 會觸發 checkbox 的 change
+            checks.forEach((check, index) => {
+                if (!check) return;
+                check.addEventListener('change', () => handleClick(index));
+            });
+
+            render();
+        })();
+    </script>
+}

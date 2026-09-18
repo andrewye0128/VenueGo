@@ -1,7 +1,7 @@
 ﻿using System;
 using VenueGo.Models.Enums;
 
-namespace VenueGo.Models.TimeSlots
+namespace VenueGo.Models.ReservationModels
 {
     /// <summary>
     /// 單一時段的狀態。由 ITimeSlotService 計算產生。
@@ -42,6 +42,13 @@ namespace VenueGo.Models.TimeSlots
 
         /// <summary>單價顯示文字。</summary>
         public string UnitPriceText => UnitPrice.HasValue ? $"NT$ {UnitPrice:N0}" : "未設定";
+
+
+        /// <summary>
+        /// 表單送出用的值，格式 HH:mm，例如 19:00。
+        /// 與 Controller 的 TimeOnly 參數繫結對應。
+        /// </summary>
+        public string FormValue => SlotTime.ToString("HH\\:mm");
     }
 
     /// <summary>

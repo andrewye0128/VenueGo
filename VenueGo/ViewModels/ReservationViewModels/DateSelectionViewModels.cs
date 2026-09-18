@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using VenueGo.Models.TimeSlots;
+using VenueGo.Models.ReservationModels;
 
 namespace VenueGo.ViewModels.ReservationViewModels
 {

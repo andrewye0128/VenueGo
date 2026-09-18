@@ -8,7 +8,7 @@ using Microsoft.Extensions.Options;
 using VenueGo.Data;
 using VenueGo.Models.Enums;
 using VenueGo.Models.Options;
-using VenueGo.Models.TimeSlots;
+using VenueGo.Models.ReservationModels;
 
 namespace VenueGo.Services.TimeSlots
 {
@@ -298,7 +298,7 @@ namespace VenueGo.Services.TimeSlots
             var rule = await (from v in _db.Venues.AsNoTracking()
                               join r in _db.SportTypePriceRules
                                   on v.SportTypeId equals r.SportTypeId
-                              where v.VenueId == venueId
+                              where v.VenueId == venueId && r.IsActive
                               select new
                               {
                                   r.PeakStartTime,

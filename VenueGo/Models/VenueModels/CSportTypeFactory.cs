@@ -46,7 +46,7 @@ namespace VenueGo.Models.VenueModels
             {
                 return new CSportTypeWrap();
             }
-            
+
             SportTypeWrap.sportType = SportTypeDb;
             return SportTypeWrap;
         }

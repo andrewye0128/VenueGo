@@ -337,7 +337,7 @@ namespace VenueGo.Controllers
         // GET: Setting/ConvertToEmployee/5
         public async Task<IActionResult> ConvertToEmployee(int id)
         {
-            
+
             var user = await _db.Users.FindAsync(id);
             if (user == null) return NotFound();
 
@@ -437,14 +437,14 @@ namespace VenueGo.Controllers
             }
         }
 
-      
+
 
         // GET: Setting/UserList
         public async Task<IActionResult> UserList(string? keyword, int? roleId, string? status, string? userType = "all")
         {
             var availableRoles = await GetAvailableRolesAsync(excludeMemberRoles: false);
 
-            // 1. 基本查詢：從 Users 出發，Left Join 到 Employees 判斷是否為員工
+            // 1. 基本查詢：從 Users 出發，Left Join 到 Employees
             var baseQuery = from u in _db.Users
                             join e in _db.Employees on u.UserId equals e.UserId into empGroup
                             from e in empGroup.DefaultIfEmpty()
@@ -477,12 +477,13 @@ namespace VenueGo.Controllers
                 baseQuery = baseQuery.Where(x => _db.UserRoles.Any(ur => ur.UserId == x.Usr.UserId && ur.RoleId == roleId.Value));
             }
 
-            // 5. 狀態篩選
+            // 5. 狀態篩選 (核心修正：若為員工優先比對 Emp.Status，若非員工則比對 Usr.Status)
             if (!string.IsNullOrWhiteSpace(status))
             {
-                baseQuery = baseQuery.Where(x => x.Usr.Status == status);
+                baseQuery = baseQuery.Where(x => (x.Emp != null ? x.Emp.Status : x.Usr.Status) == status);
             }
 
+            // 6. 資料投射 (核心修正：狀態欄位優先取用員工狀態)
             var rawList = await baseQuery
                 .OrderByDescending(x => x.Usr.CreatedAt)
                 .Select(x => new
@@ -494,7 +495,8 @@ namespace VenueGo.Controllers
                     EmployeeNo = x.Emp != null ? x.Emp.EmployeeNo : null,
                     JobTitle = x.Emp != null ? x.Emp.JobTitle : null,
                     IsEmployee = x.Emp != null,
-                    Status = x.Usr.Status,
+                    // 優先顯示員工狀態 (Active/OnLeave/Resigned)；若非員工則顯示帳號狀態
+                    DisplayStatus = x.Emp != null ? x.Emp.Status : x.Usr.Status,
                     CreatedAt = x.Usr.CreatedAt
                 }).ToListAsync();
 
@@ -513,8 +515,8 @@ namespace VenueGo.Controllers
                 Phone = u.Phone ?? "未提供",
                 EmployeeNo = u.EmployeeNo ?? "無 (一般會員)",
                 JobTitle = u.JobTitle ?? "無",
-                IsEmployee = u.IsEmployee, // 請確保 DTO 有此欄位 (bool)
-                Status = u.Status,
+                IsEmployee = u.IsEmployee,
+                Status = u.DisplayStatus, // 給予判斷後的正確狀態
                 CreatedAt = u.CreatedAt,
                 Roles = userRolesMap.Where(ur => ur.UserId == u.UserId).Select(ur => ur.RoleName).ToList()
             }).ToList();
@@ -524,7 +526,7 @@ namespace VenueGo.Controllers
                 Keyword = keyword,
                 SelectedRoleId = roleId,
                 SelectedStatus = status,
-                SelectedUserType = userType, // 請確保 ViewModel 有此欄位 (string)
+                SelectedUserType = userType,
                 AvailableRoles = availableRoles,
                 Users = usersList
             };
@@ -567,12 +569,14 @@ namespace VenueGo.Controllers
         }
 
         // POST: Setting/EditUser
+        // POST: Setting/EditUser
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> EditUser(EditUserViewModel model)
         {
             int currentUserId = GetCurrentUserId();
 
+            // 1. 驗證 Email 是否被其他 User 佔用
             if (await _db.Users.AnyAsync(u => u.Email == model.Email && u.UserId != model.UserId))
             {
                 ModelState.AddModelError("Email", "此 Email 已被其他帳號使用");
@@ -589,56 +593,71 @@ namespace VenueGo.Controllers
             try
             {
                 var user = await _db.Users.FindAsync(model.UserId);
-                if (user == null)
+                var emp = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == model.UserId);
+
+                // 2. 嚴格驗證：必須同時存在 User 與 Employee 資料
+                if (user == null || emp == null)
                 {
-                    TempData["ErrorMessage"] = "找不到要修改的使用者資料。";
+                    TempData["ErrorMessage"] = "找不到該員工資料，或該使用者非員工。";
                     return RedirectToAction(nameof(UserList));
                 }
 
-                user.Name = model.Name.Trim();
-                user.Email = model.Email.Trim();
-                user.Phone = model.Phone;
-                user.Status = model.Status;
+                // 3. 更新 User 基礎聯絡資訊 (不修改 user.Status，維持會員帳號可用性)
+                user.Name = model.Name?.Trim();
+                user.Email = model.Email?.Trim();
+                user.Phone = model.Phone?.Trim();
                 user.UpdatedAt = DateTime.Now;
 
-                var emp = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == model.UserId);
-                if (emp != null)
-                {
-                    emp.JobTitle = model.JobTitle?.Trim(); // 安全處置 null
-                    emp.UpdatedAt = DateTime.Now;
-                }
+                // 4. 更新 Employee 員工資訊 (狀態改在 Employees 資料表更新)
+                emp.JobTitle = model.JobTitle?.Trim();
+                emp.Status = model.Status; // 例如: Active, OnLeave, Resigned
+                emp.UpdatedAt = DateTime.Now;
 
-                //var oldRoles = await _db.UserRoles.Where(ur => ur.UserId == model.UserId).ToListAsync();
-                //_db.UserRoles.RemoveRange(oldRoles);
-                // 僅刪除員工類型的角色，保留一般會員（Member / Customer）角色
-                var rolesToRemove = await (from ur in _db.UserRoles
-                                           join r in _db.Roles on ur.RoleId equals r.RoleId
-                                           where ur.UserId == model.UserId && r.RoleName != "Member" && r.RoleName != "Customer"
-                                           select ur).ToListAsync();
+                // 5. 角色更新：採用「差集運算」防止 PK 重複衝突與錯誤覆蓋
+                var currentRoles = await _db.UserRoles
+                    .Where(ur => ur.UserId == model.UserId)
+                    .ToListAsync();
+
+                var currentRoleIds = currentRoles.Select(ur => ur.RoleId).ToList();
+                var targetRoleIds = model.SelectedRoleIds ?? new List<int>();
+
+                // 5a. 取得「僅限員工類型的角色 ID」（排除 Member / Customer 角色 ID）
+                var staffRoleIds = (await GetAvailableRolesAsync(excludeMemberRoles: true))
+                    .Select(r => r.RoleId)
+                    .ToList();
+
+                // 5b. 移除「未勾選且屬於員工類型」的角色 (保留原本的 Member 角色)
+                var rolesToRemove = currentRoles
+                    .Where(ur => staffRoleIds.Contains(ur.RoleId) && !targetRoleIds.Contains(ur.RoleId))
+                    .ToList();
 
                 _db.UserRoles.RemoveRange(rolesToRemove);
 
-                if (model.SelectedRoleIds != null && model.SelectedRoleIds.Any())
+                // 5c. 僅新增「目前未擁有且這次有勾選」的角色
+                var roleIdsToAdd = targetRoleIds
+                    .Where(id => staffRoleIds.Contains(id)) // 安全防護：確保只新增員工角色
+                    .Except(currentRoleIds)
+                    .ToList();
+
+                foreach (var roleId in roleIdsToAdd)
                 {
-                    foreach (var roleId in model.SelectedRoleIds)
+                    _db.UserRoles.Add(new UserRole
                     {
-                        _db.UserRoles.Add(new UserRole
-                        {
-                            UserId = model.UserId,
-                            RoleId = roleId,
-                            AssignedBy = currentUserId,
-                            AssignedAt = DateTime.Now
-                        });
-                    }
+                        UserId = model.UserId,
+                        RoleId = roleId,
+                        AssignedBy = currentUserId,
+                        AssignedAt = DateTime.Now
+                    });
                 }
 
+                // 6. 紀錄稽核日誌
                 _db.AuditLogs.Add(new AuditLog
                 {
                     UserId = currentUserId,
                     Action = "EditUser",
-                    EntityType = "User",
-                    EntityId = model.UserId.ToString(),
-                    NewValue = $"Updated user {user.Name} ({user.Email}), Title: {model.JobTitle}, Status: {model.Status}",
+                    EntityType = "Employee",
+                    EntityId = emp.EmployeeId.ToString(),
+                    NewValue = $"Updated employee: {user.Name} ({user.Email}), JobTitle: {emp.JobTitle}, EmpStatus: {emp.Status}",
                     CreatedAt = DateTime.Now
                 });
 
@@ -721,6 +740,80 @@ namespace VenueGo.Controllers
                     Description = p.Description,
                     Status = p.Status
                 }).ToListAsync();
+        }
+        public enum EmployeeStatus
+        {
+            Active = 1,     // 在職
+            OnLeave = 2,    // 留職停薪 (如健康因素、育嬰等)
+            Resigned = 3    // 離職 (軟刪除狀態)
+        }
+        // POST: Setting/UpdateEmployeeStatus
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UpdateEmployeeStatus(int userId, string status)
+        {
+            int currentUserId = GetCurrentUserId();
+
+            var user = await _db.Users.FindAsync(userId);
+            var emp = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+
+            if (user == null || emp == null)
+            {
+                TempData["ErrorMessage"] = "找不到相關員工資料。";
+                return RedirectToAction(nameof(UserList));
+            }
+
+            using var transaction = await _db.Database.BeginTransactionAsync();
+
+            try
+            {
+                // 1. 更新 Employees 資料表中的狀態與更新時間
+                emp.Status = status; // "Active", "OnLeave", 或 "Resigned"
+                emp.UpdatedAt = DateTime.Now;
+
+                // 2. 根據狀態調整系統角色權限 (UserRoles)
+                if (status == "Resigned")
+                {
+                    // 離職：移除所有後台權限，退回普通會員
+                    var rolesToRemove = await (from ur in _db.UserRoles
+                                               join r in _db.Roles on ur.RoleId equals r.RoleId
+                                               where ur.UserId == userId && r.RoleName != "Member" && r.RoleName != "Customer"
+                                               select ur).ToListAsync();
+                    _db.UserRoles.RemoveRange(rolesToRemove);
+                }
+                else if (status == "OnLeave")
+                {
+                    // 留職停薪：可選擇暫時停用後台管理角色（視業務需求調整）
+                    var adminRoles = await (from ur in _db.UserRoles
+                                            join r in _db.Roles on ur.RoleId equals r.RoleId
+                                            where ur.UserId == userId && r.RoleName != "Member"
+                                            select ur).ToListAsync();
+                    _db.UserRoles.RemoveRange(adminRoles);
+                }
+
+                // 3. 紀錄操作日誌 (AuditLog)
+                _db.AuditLogs.Add(new AuditLog
+                {
+                    UserId = currentUserId,
+                    Action = "UpdateEmployeeStatus",
+                    EntityType = "Employee",
+                    EntityId = emp.EmployeeId.ToString(),
+                    NewValue = $"Updated employee {emp.EmployeeNo} status to '{status}'",
+                    CreatedAt = DateTime.Now
+                });
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                TempData["SuccessMessage"] = $"已成功將 {user.Name} 的狀態變更為：{status}";
+                return RedirectToAction(nameof(UserList));
+            }
+            catch (Exception)
+            {
+                await transaction.RollbackAsync();
+                TempData["ErrorMessage"] = "狀態變更失敗，請稍後再試。";
+                return RedirectToAction(nameof(UserList));
+            }
         }
 
         #endregion

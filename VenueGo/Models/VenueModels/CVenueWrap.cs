@@ -19,6 +19,7 @@ namespace VenueGo.Models.VenueModels
         [Required(ErrorMessage = "場地名稱不可空白")]
         public string VenueName { get { return _venue.VenueName; } set { _venue.VenueName = value; } }
         [Display(Name = "運動類型")]
+        [Required(ErrorMessage = "場地運動類型不可空白")]
         public int SportTypeId { get { return _venue.SportTypeId; } set { _venue.SportTypeId = value; } }
         [Display(Name = "位置")]
         [Required(ErrorMessage = "位置描述不可空白")]

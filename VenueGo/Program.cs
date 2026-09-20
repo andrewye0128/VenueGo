@@ -1,12 +1,14 @@
+using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Models.Options;
 using VenueGo.Services;
+using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
+using VenueGo.Services.Orders;
 using VenueGo.Services.Reservations;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
-using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -72,6 +74,22 @@ builder.Services.AddScoped<ISlotSelectionValidator, SlotSelectionValidator>();
 
 // 註冊關於預約計價的服務：介面 → 實作
 builder.Services.AddScoped<IReservationPricingService, ReservationPricingService>();
+
+// 註冊關於目前登入者的服務：介面 → 實作
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+
+// 註冊關於訂單編號產生器的服務：介面 → 實作
+builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();
+
+// 註冊關於預約建立的服務：介面 → 實作
+builder.Services.AddScoped<IReservationCreationService, ReservationCreationService>();
+
+// 註冊關於目前登入者的服務：介面 → 實作
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+// 註冊關於預約查詢與指令的服務：介面 → 實作
+builder.Services.AddScoped<IReservationQueryService, ReservationQueryService>();
+// 註冊關於預約指令的服務：介面 → 實作
+builder.Services.AddScoped<IReservationCommandService, ReservationCommandService>();
 
 // 註冊關於球館預約的業務邏輯的服務：介面 → 實作
 builder.Services.Configure<ReservationRulesOptions>(

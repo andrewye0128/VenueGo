@@ -1,17 +1,23 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
+using System.Threading;
+using System.Threading.Tasks;
+using VenueGo.Helpers;
+using VenueGo.Models.Constants;
+using VenueGo.Models.Enums;
+using VenueGo.Models.Options;
 using VenueGo.Models.ReservationModels;
-using VenueGo.ViewModels.ReservationViewModels;
+using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
 using VenueGo.Services.Reservations;
-using VenueGo.Services.Venues;
-using Microsoft.Extensions.Options;
-using VenueGo.Models.Options;
 using VenueGo.Services.TimeSlots;
+using VenueGo.Services.Venues;
+using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Controllers.Reservations
 {
+    //[Authorize(Roles = RoleNames.BackOffice)]  //2/ 登入權限，該頁面要求登入
     [Route("Reservation/Create")]
     public class ReservationCreateController : Controller
     {
@@ -25,7 +31,9 @@ namespace VenueGo.Controllers.Reservations
         private readonly ITimeSlotService _timeSlotService;
         private readonly ISlotSelectionValidator _slotValidator;
         private readonly IReservationPricingService _pricingService;
+        private readonly IReservationCreationService _creationService;
         private readonly IReservationDraftStore _draftStore;
+        private readonly ICurrentUserService _currentUser;
         private readonly ReservationRulesOptions _rules;
 
         public ReservationCreateController(
@@ -34,7 +42,9 @@ namespace VenueGo.Controllers.Reservations
             ITimeSlotService timeSlotService,
             ISlotSelectionValidator slotValidator,
             IReservationPricingService pricingService,
+            IReservationCreationService creationService,
             IReservationDraftStore draftStore,
+            ICurrentUserService currentUser,
             IOptionsSnapshot<ReservationRulesOptions> rules)
         {
             _memberQueryService = memberQueryService;
@@ -42,7 +52,9 @@ namespace VenueGo.Controllers.Reservations
             _timeSlotService = timeSlotService;
             _slotValidator = slotValidator;
             _pricingService = pricingService;
+            _creationService = creationService;
             _draftStore = draftStore;
+            _currentUser = currentUser;
             _rules = rules.Value;
         }
 
@@ -489,7 +501,8 @@ namespace VenueGo.Controllers.Reservations
             _draftStore.Save(draft);
 
             // TODO 步驟 5：Confirm 實作後改為 RedirectToAction(nameof(Confirm))
-            return RedirectToAction(nameof(SelectSlots));
+            //return RedirectToAction(nameof(SelectSlots));
+            return RedirectToAction(nameof(Confirm));
         }
 
         /// <summary>
@@ -544,6 +557,148 @@ namespace VenueGo.Controllers.Reservations
             if (!draft.IsMemberSelected) return nameof(SelectMember);
             if (!draft.IsVenueSelected) return nameof(SelectVenue);
             return nameof(SelectDate);
+        }
+
+
+        /// <summary>
+        /// 步驟 5：顯示確認頁。
+        /// </summary>
+        [HttpGet("Confirm")]
+        public async Task<IActionResult> Confirm(CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            if (draft.MaxAllowedStep < 5)
+            {
+                return RedirectToAction(ResolveIncompleteStep(draft));
+            }
+
+            return View(await BuildConfirmViewModel(draft, new ConfirmReservationInputModel
+            {
+                // 預設值：人數 1 人；載具若會員已登錄則自動帶入，
+                // 並順便把發票類型預設為手機條碼，省去櫃檯多一次操作。
+                PersonAmount = draft.PersonAmount,
+                CarrierNo = draft.MemberCarrierNo,
+                InvoiceType = string.IsNullOrWhiteSpace(draft.MemberCarrierNo)
+                    ? InvoiceType.Paper
+                    : InvoiceType.MobileBarcode
+            }, cancellationToken));
+        }
+
+        /// <summary>
+        /// 步驟 5：建立預約。
+        /// <para>
+        /// 成功後清除暫存並導向新建立的預約詳細頁。
+        /// 不留在本頁的原因是：若回傳 View，網址會停在 POST 的位置，
+        /// 使用者按 F5 時瀏覽器會再次送出表單，建立出第二筆一模一樣的預約。
+        /// </para>
+        /// </summary>
+        [HttpPost("Confirm")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Confirm(
+            ConfirmReservationInputModel input, CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            if (draft.MaxAllowedStep < 5)
+            {
+                return RedirectToAction(ResolveIncompleteStep(draft));
+            }
+
+            // 不論等一下驗證成功或失敗，先把這次送出的值同步回暫存，
+            // 讓「驗證失敗、留在本頁」時，右側「預約資訊摘要」顯示的是這次送出的內容，
+            // 而不是舊的暫存資料。
+            draft.PersonAmount = input.PersonAmount;
+            draft.InvoiceType = input.InvoiceType;
+            draft.CarrierNo = input.CarrierNo;
+
+            var operatorUserId = _currentUser.UserId;
+            if (operatorUserId is null)
+            {
+                // 未登入（或 Cookie 已過期）。Challenge 會導向登入頁，
+                // 登入成功後自動跳回這裡。
+                return Challenge();
+            }
+
+            var result = await _creationService.CreateAsync(
+                draft, input, operatorUserId.Value, cancellationToken);
+
+            if (result.IsSuccess)
+            {
+                // 流程結束，清掉暫存。不清的話下次點「新增預約」
+                // 會帶著這一次的選擇進入新的流程。
+                _draftStore.Clear();
+
+                TempData[CDictionary.TK_MSG_操作成功] =
+                    $"預約建立成功，訂單編號 {result.OrderNo}。";
+
+                return RedirectToAction("Details", "Reservation",
+                    new { id = result.ReservationId });
+            }
+
+            // 時段被搶走無法在本頁修正，必須回步驟 4 重選。
+            // 用 RedirectToAction 而非 View，才會重新向 TimeSlotService
+            // 查一次當天狀態，被訂走的那一格才會正確顯示為「已預約」。
+            if (result.IsSlotConflict)
+            {
+                draft.SlotTimes.Clear();
+                draft.EstimatedAmount = 0;
+                _draftStore.Save(draft);
+
+                TempData[CDictionary.TK_MSG_時段衝突] = string.Join(" ", result.Errors);
+
+                return RedirectToAction(nameof(SelectSlots));
+            }
+
+            // 其餘驗證失敗（人數超標、載具格式、未勾條款）留在本頁改正
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error);
+            }
+
+            _draftStore.Save(draft);
+            return View(await BuildConfirmViewModel(draft, input, cancellationToken));
+        }
+
+        /// <summary>
+        /// 組裝步驟 5 的 ViewModel。
+        /// <para>
+        /// 金額一律由伺服器端重新計價，不使用暫存的 EstimatedAmount，
+        /// 也不接受前端傳入的任何金額。
+        /// </para>
+        /// </summary>
+        private async Task<ConfirmReservationViewModel> BuildConfirmViewModel(
+            ReservationDraft draft,
+            ConfirmReservationInputModel input,
+            CancellationToken cancellationToken)
+        {
+            var daySlots = await _timeSlotService.GetDaySlotsAsync(
+                draft.VenueId!.Value, draft.BookingDate!.Value, cancellationToken);
+
+            var selectedSet = draft.SlotTimes.ToHashSet();
+            var selectedSlots = daySlots
+                .Where(slot => selectedSet.Contains(slot.SlotTime))
+                .ToList();
+
+            ViewData["CurrentStep"] = 5;
+
+            return new ConfirmReservationViewModel
+            {
+                Input = input,
+
+                UserId = draft.UserId ?? 0,
+                MemberNo = draft.MemberNo,
+                MemberName = draft.MemberName,
+                MemberPhone = draft.MemberPhone,
+                MemberEmail = draft.MemberEmail,
+
+                VenueName = draft.VenueName,
+                VenueCapacity = draft.VenueCapacity,
+
+                BookingDate = draft.BookingDate,
+                Pricing = _pricingService.Calculate(selectedSlots),
+                TermsVersion = _rules.TermsVersion
+            };
         }
 
 

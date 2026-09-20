@@ -1,0 +1,398 @@
+﻿@*
+    步驟 5：確認資料。
+
+    版面骨架與步驟 1~4 相同：
+      步驟進度條 → _ReservationWizardSteps.cshtml
+      右側摘要   → ReservationSummaryViewComponent
+
+    本頁是唯一需要使用者輸入的步驟，共四個欄位：
+    使用人數、發票類型與載具、租借條款勾選、是否已收款。
+    金額不在表單裡——若由前端傳入，任何人都能改成 1 元。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.ConfirmReservationViewModel
+@using VenueGo.Models.Enums
+
+@{
+    ViewData["Title"] = "新增預約";
+    var currentStep = (int)(ViewData["CurrentStep"] ?? 5);
+}
+
+<nav aria-label="麵包屑">
+    <ol class="breadcrumb small">
+        <li class="breadcrumb-item">
+            <a asp-controller="Reservation" asp-action="Index">預約管理</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">新增預約</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-1">新增預約</h1>
+<p class="text-secondary">由管理員代客建立預約，請依序完成以下步驟。</p>
+
+@await Html.PartialAsync("_ReservationWizardSteps", currentStep)
+
+<form id="cancelForm" asp-action="Cancel" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
+
+<form id="confirmForm" asp-action="Confirm" method="post">
+    @Html.AntiForgeryToken()
+
+    <div class="row g-4">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-body">
+                    <h2 class="h5 mb-1">步驟 5：確認資料</h2>
+                    <p class="text-secondary small mb-3">
+                        請確認以下預約與訂單資訊，確認無誤後建立預約。
+                    </p>
+
+                    <partial name="_ValidationSummary" />
+
+                    @* ── 會員資訊（唯讀）── *@
+                    <section class="border rounded p-3 mb-3">
+                        <h3 class="h6 d-flex align-items-center gap-2 mb-3">
+                            <i class="bi bi-person text-primary"></i>會員資訊
+                        </h3>
+                        <div class="row g-3 small">
+                            <div class="col-sm-6">
+                                <div class="text-secondary">會員編號</div>
+                                <div>@Model.MemberNo</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="text-secondary">姓名</div>
+                                <div>@Model.MemberName</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="text-secondary">手機</div>
+                                <div>@Model.MemberPhone</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="text-secondary">Email</div>
+                                <div class="text-break">@Model.MemberEmail</div>
+                            </div>
+                        </div>
+                    </section>
+
+                    @* ── 場地與時段（唯讀，僅使用人數可填）── *@
+                    <section class="border rounded p-3 mb-3">
+                        <h3 class="h6 d-flex align-items-center gap-2 mb-3">
+                            <i class="bi bi-house text-primary"></i>場地與時段
+                        </h3>
+                        <div class="row g-3 small">
+                            <div class="col-sm-6">
+                                <div class="text-secondary">場地</div>
+                                <div>@Model.VenueName</div>
+                            </div>
+                            @* <div class="col-sm-6">
+                                <div class="text-secondary">地點</div>
+                                <div class="text-break">@Model.VenueLocation</div>
+                            </div> *@
+                            <div class="col-sm-6">
+                                <div class="text-secondary">使用日期</div>
+                                <div>@Model.BookingDateText</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="text-secondary">使用時段</div>
+                                <div>@Model.TimeRangeText（@Model.TotalHours 小時）</div>
+                            </div>
+                        </div>
+
+                        <hr class="my-3" />
+
+                        <div class="row g-3 align-items-end">
+                            <div class="col-sm-6">
+                                <label class="form-label" asp-for="Input.PersonAmount">
+                                    使用人數 <span class="text-danger">*</span>
+                                </label>
+                                @*
+                                    max 綁場地的可容納人數。Venues.Capacity 允許為 null，
+                                    未設定時 ViewModel 會給一個保守的預設上限，
+                                    避免 + 按鈕無限往上加。
+                                *@
+                                <input asp-for="Input.PersonAmount"
+                                       type="number"
+                                       class="form-control"
+                                       min="1"
+                                       max="@Model.MaxPersonAmount"
+                                       required />
+                                <div class="form-text">
+                                    @if (Model.VenueCapacity.HasValue)
+                                    {
+                                        <span>此場地可容納 @Model.VenueCapacity 人。</span>
+                                    }
+                                    else
+                                    {
+                                        <span>此場地尚未設定可容納人數。</span>
+                                    }
+                                </div>
+                                <span asp-validation-for="Input.PersonAmount" class="text-danger small"></span>
+                            </div>
+                        </div>
+                    </section>
+
+                    @* ── 費用明細 ── *@
+                    <section class="border rounded mb-3">
+                        <h3 class="h6 d-flex align-items-center gap-2 p-3 mb-0 border-bottom">
+                            <i class="bi bi-file-text text-primary"></i>費用明細
+                        </h3>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm align-middle mb-0">
+                                <caption class="visually-hidden">每個時段一列的費用明細</caption>
+                                <thead class="table-light">
+                                    <tr class="small">
+                                        <th scope="col" class="fw-normal ps-3">時段</th>
+                                        <th scope="col" class="fw-normal">類型</th>
+                                        <th scope="col" class="fw-normal text-end">單價</th>
+                                        <th scope="col" class="fw-normal text-end pe-3">小計</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var line in Model.Pricing.Details)
+                                    {
+                                        <tr>
+                                            <td class="ps-3">@line.TimeRangeText</td>
+                                            <td class="@(line.IsPeak ? "text-warning-emphasis" : "text-secondary")">
+                                                @(line.IsPeak ? "尖峰" : "離峰")
+                                            </td>
+                                            <td class="text-end">NT$ @line.UnitPrice.ToString("N0")</td>
+                                            <td class="text-end pe-3">NT$ @line.Subtotal.ToString("N0")</td>
+                                        </tr>
+                                    }
+                                </tbody>
+                                <tfoot>
+                                    <tr class="table-light">
+                                        <td colspan="3" class="text-end text-secondary">總金額</td>
+                                        <td class="text-end pe-3 fs-5 fw-bold text-primary">
+                                            @Model.Pricing.TotalAmountText
+                                        </td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    </section>
+
+                    @* ── 付款與發票 ── *@
+                    <section class="border rounded p-3 mb-3">
+                        <h3 class="h6 d-flex align-items-center gap-2 mb-3">
+                            <i class="bi bi-credit-card text-primary"></i>付款與發票
+                        </h3>
+
+                        <div class="row g-3 small mb-3">
+                            <div class="col-sm-6">
+                                <div class="text-secondary">付款方式</div>
+                                <div>@Model.PaymentMethodText</div>
+                            </div>
+                            <div class="col-sm-6">
+                                <div class="text-secondary">付款通道</div>
+                                <div>@Model.PaymentChannelText</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <span class="form-label d-block">
+                                發票類型 <span class="text-danger">*</span>
+                            </span>
+                            <div class="d-flex flex-wrap gap-3">
+                                <div class="form-check">
+                                    <input class="form-check-input"
+                                           type="radio"
+                                           name="Input.InvoiceType"
+                                           id="invoicePaper"
+                                           value="@((byte)InvoiceType.Paper)"
+                                           checked="@(Model.Input.InvoiceType == InvoiceType.Paper)" />
+                                    <label class="form-check-label" for="invoicePaper">
+                                        @InvoiceType.Paper.GetDisplayName()
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input"
+                                           type="radio"
+                                           name="Input.InvoiceType"
+                                           id="invoiceBarcode"
+                                           value="@((byte)InvoiceType.MobileBarcode)"
+                                           checked="@(Model.Input.InvoiceType == InvoiceType.MobileBarcode)" />
+                                    <label class="form-check-label" for="invoiceBarcode">
+                                        @InvoiceType.MobileBarcode.GetDisplayName()
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-0" id="carrierField">
+                            <label class="form-label" asp-for="Input.CarrierNo">載具號碼</label>
+                            @*
+                                載具格式為斜線加 7 碼大寫英數字。
+                                oninput 自動轉大寫，讓使用者打小寫也不會被擋。
+                                前端的 pattern 只是即時提示，後端仍會再驗一次。
+                            *@
+                            <input asp-for="Input.CarrierNo"
+                                   class="form-control"
+                                   maxlength="8"
+                                   pattern="^/[0-9A-Z+\-.]{7}$"
+                                   placeholder="/AB12345"
+                                   oninput="this.value = this.value.toUpperCase()" />
+                            <div class="form-text">斜線加 7 碼大寫英數字，例如 /AB12345。</div>
+                            <span asp-validation-for="Input.CarrierNo" class="text-danger small"></span>
+                        </div>
+                    </section>
+
+                    @* ── 條款與收款 ── *@
+                    <section class="border rounded p-3">
+                        <h3 class="h6 d-flex align-items-center gap-2 mb-3">
+                            <i class="bi bi-check2-square text-primary"></i>確認事項
+                        </h3>
+
+                        <div class="form-check mb-3">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   asp-for="Input.TermsAccepted"
+                                   id="termsAccepted"
+                                   required />
+                            <label class="form-check-label" for="termsAccepted">
+                                已向會員說明並確認同意
+                                <button type="button"
+                                        class="btn btn-link p-0 align-baseline"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#termsModal">
+                                    租借條款（@Model.TermsVersion）
+                                </button>
+                                <span class="text-danger">*</span>
+                            </label>
+                            <span asp-validation-for="Input.TermsAccepted" class="text-danger small d-block"></span>
+                        </div>
+
+                        <div class="form-check">
+                            @*
+                                刻意不用 asp-for：這是非 nullable 的 bool，asp-for 會自動加上
+                                data-val-required，讓 jQuery Validation 誤判成「一定要勾選」，
+                                但這個核取方塊其實可勾可不勾。改成手動輸出 name/value，
+                                並補一個 hidden 欄位（跟 asp-for 平常產生的一樣），
+                                model binding 行為不變，只是不會被加上驗證屬性。
+                            *@
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   name="Input.MarkAsPaid"
+                                   id="markAsPaid"
+                                   value="true"
+                                   checked="@Model.Input.MarkAsPaid" />
+                            <input name="Input.MarkAsPaid" type="hidden" value="false" />
+                            <label class="form-check-label" for="markAsPaid">
+                                已於現場收款 @Model.Pricing.TotalAmountText
+                            </label>
+                            <div class="form-text">
+                                勾選後預約狀態直接為「已確認」、付款狀態為「已付款」；
+                                未勾選則為「待確認」與「未付款」，可於訂單管理再行標記。
+                            </div>
+                        </div>
+                    </section>
+
+                    <div class="alert alert-light border d-flex gap-2 mt-3 mb-0 py-2 px-3 small" role="note">
+                        <i class="bi bi-info-circle flex-shrink-0 mt-1"></i>
+                        <div>
+                            本次預約將建立 Reservation、ReservationSlots、Order、
+                            OrderDetail 與 Payment 資料，並記錄一筆操作紀錄。
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            @await Component.InvokeAsync("ReservationSummary", new { currentStep })
+        </div>
+    </div>
+</form>
+
+<div class="d-flex justify-content-end gap-2 border-top mt-4 pt-3">
+    <button type="submit" form="cancelForm" class="btn btn-outline-secondary">取消</button>
+
+    <a asp-action="SelectSlots" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>上一步：選擇時段
+    </a>
+
+    <button type="submit" form="confirmForm" class="btn btn-primary">
+        建立預約
+        <i class="bi bi-arrow-right ms-1"></i>
+    </button>
+</div>
+
+<partial name="_TermsModal" model="Model.TermsVersion" />
+
+@section Scripts {
+    @* 這一頁自己開啟 jQuery Unobtrusive Validation，只影響本頁，不動 _Layout.cshtml，
+       避免影響到其他隊友負責的頁面。 *@
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        // jQuery Validation 有些訊息（例如超過 max、原生 required 屬性）不會走
+        // ASP.NET Core 產生的中文 ErrorMessage，會顯示它內建的英文樣板，這裡統一換成中文。
+        // 只影響這一頁載入的驗證工具，不影響其他頁面。
+        if (window.jQuery && jQuery.validator) {
+            jQuery.extend(jQuery.validator.messages, {
+                required: "此欄位為必填。",
+                max: "數量不可超過 {0}。",
+                min: "數量不可小於 {0}。"
+            });
+        }
+
+        // 載具欄位只在選擇手機條碼時啟用。
+        //
+        // 選紙本時要 disable 並清空：不清的話，使用者先填了載具、
+        // 又改選紙本，那個值仍會被送出，而後端規定紙本的 CarrierNo 必須為 NULL。
+        // 後端也有同樣的處理，這裡只是讓畫面即時反應。
+        (function() {
+            const paperRadio = document.getElementById('invoicePaper');
+            const barcodeRadio = document.getElementById('invoiceBarcode');
+            const carrierField = document.getElementById('carrierField');
+            if (!paperRadio || !barcodeRadio || !carrierField) return;
+
+            const carrierInput = carrierField.querySelector('input');
+            if (!carrierInput) return;
+
+            function syncCarrierField() {
+                const useBarcode = barcodeRadio.checked;
+
+                carrierInput.disabled = !useBarcode;
+                carrierInput.required = useBarcode;
+                carrierField.classList.toggle('opacity-50', !useBarcode);
+
+                if (!useBarcode) carrierInput.value = '';
+
+                // 上面接了 jQuery Unobtrusive Validation 之後，它會關閉瀏覽器原生檢查，
+                // 只認自己內部的規則集合，原生 required 屬性不再有效，
+                // 必須用它自己的 API 補上/移除「必填」規則。
+                // 包 try/catch：驗證器還沒初始化好時 .rules() 可能丟例外，
+                // 不能讓它拖累後面其他程式碼不執行。
+                if (window.jQuery && jQuery.fn.rules) {
+                    try {
+                        jQuery(carrierInput).rules(useBarcode ? 'add' : 'remove', 'required');
+                    } catch (e) {
+                        console.warn('無法更新載具號碼的必填規則', e);
+                    }
+                }
+            }
+
+            paperRadio.addEventListener('change', syncCarrierField);
+            barcodeRadio.addEventListener('change', syncCarrierField);
+            syncCarrierField();
+        })();
+
+        // 使用人數：即時同步右側摘要文字。
+        // 超過上限／未填寫的檢查交給 jQuery Validation 自己處理（它會自動讀 max／required），
+        // 這裡不重複寫檢查邏輯，避免兩邊搶著改同一個錯誤訊息。
+        (function () {
+            const personInput = document.getElementById('Input_PersonAmount');
+            const summaryEl = document.getElementById('summaryPersonAmount');
+            if (!personInput || !summaryEl) return;
+
+            function syncPersonAmount() {
+                summaryEl.textContent = (personInput.value || '0') + ' 人';
+            }
+
+            personInput.addEventListener('input', syncPersonAmount);
+            syncPersonAmount();
+        })();
+    </script>
+}

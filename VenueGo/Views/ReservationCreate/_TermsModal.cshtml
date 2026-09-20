@@ -1,0 +1,59 @@
+﻿@*
+    租借條款的彈出視窗。
+
+    Model：條款版本字串（來自 appsettings.json 的 ReservationRules.TermsVersion）。
+
+    條款內容目前寫在版面裡。若日後需要由管理員在後台維護，
+    再改為從資料表讀取即可，版面不必改動。
+*@
+@model string
+
+<div class="modal fade" id="termsModal" tabindex="-1"
+     aria-labelledby="termsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable modal-dialog-centered">
+        <div class="modal-content">
+
+            <div class="modal-header">
+                <h5 class="modal-title" id="termsModalLabel">場地租借條款（@Model）</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+            </div>
+
+            <div class="modal-body">
+                <p class="text-secondary small">
+                    以下為場地租借的基本規範，管理員代客建立預約時請向會員說明要點。
+                </p>
+
+                <h6>一、預約與付款</h6>
+                <ol class="small">
+                    <li>場地以每小時為一個時段，單筆預約的時段須連續。</li>
+                    <li>預約成立後請於使用時段開始前完成付款，逾期未付款的預約將自動失效。</li>
+                    <li>場地費用依運動類型與尖峰、離峰時段計算，以建立預約時顯示的金額為準。</li>
+                </ol>
+
+                <h6>二、取消與退費</h6>
+                <ol class="small">
+                    <li>會員因故取消預約，得依取消時間與使用時間的間隔計算退費比例。</li>
+                    <li>因場地維護、設備故障或天災等場館因素取消者，全額退費，不扣任何費用。</li>
+                    <li>未依預約時間到場使用者，視為未報到，不予退費。</li>
+                </ol>
+
+                <h6>三、使用規範</h6>
+                <ol class="small">
+                    <li>使用人數不得超過場地公告的可容納人數。</li>
+                    <li>請於預約時段內使用場地，逾時使用須另行計費。</li>
+                    <li>場地內設備請妥善使用，因故意或過失致損壞者應負賠償責任。</li>
+                    <li>請自備運動鞋，禁止穿著硬底鞋或釘鞋進入室內場地。</li>
+                </ol>
+
+                <div class="alert alert-light border small mb-0">
+                    以上為示意條款，正式條款內容請依場館公告為準。
+                    版本 @Model 將記錄於本筆預約，日後條款改版不影響已成立的預約。
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">關閉</button>
+            </div>
+        </div>
+    </div>
+</div>

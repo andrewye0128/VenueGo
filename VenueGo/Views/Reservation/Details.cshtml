@@ -1,0 +1,612 @@
+﻿@*
+    預約詳細頁。
+
+    版面：三欄。左欄預約與時段（不會變的事實）、中欄場地與費用明細、
+    右欄狀態與流程（會隨流程改變的資訊）。
+
+    按鈕的顯示判斷全部來自 ViewModel 的唯讀屬性（CanMarkAsPaid、CanCancel…），
+    這裡只有單純的 @@if，不在 View 裡寫業務規則。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.ReservationDetailViewModel
+@using VenueGo.Models.Enums
+@using VenueGo.ViewModels.ReservationViewModels
+
+@{
+    ViewData["Title"] = $"預約詳情 #{Model.ReservationId}";
+}
+
+<nav aria-label="麵包屑">
+    <ol class="breadcrumb small">
+        <li class="breadcrumb-item"><a asp-action="Index">預約管理</a></li>
+        <li class="breadcrumb-item active" aria-current="page">預約詳情</li>
+    </ol>
+</nav>
+
+<partial name="_OperationMessages" />
+
+@* ── 標題與操作按鈕 ───────────────────────────── *@
+<div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-4">
+    <div>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+            <h1 class="h3 mb-0">預約詳情 #@Model.ReservationId</h1>
+            <span class="badge @Model.ReservationStatusBadgeClass">
+                @Model.ReservationStatus.GetDisplayName()
+            </span>
+            <span class="badge @Model.PaymentStatusBadgeClass">
+                @Model.PaymentStatus.GetDisplayName()
+            </span>
+        </div>
+        <p class="text-secondary small mb-0 mt-1">
+            @if (!string.IsNullOrWhiteSpace(Model.OrderNo))
+            {
+                <span>訂單編號 @Model.OrderNo</span>
+                <span class="mx-1">·</span>
+            }
+            <span>@Model.Source.GetDisplayName()</span>
+        </p>
+    </div>
+
+    <div class="d-flex gap-2 flex-shrink-0">
+        <a asp-action="Index" class="btn btn-outline-secondary"><i class="bi bi-arrow-left me-1"></i>返回列表</a>
+
+        @if (Model.CanEdit)
+        {
+            <a asp-action="Edit" asp-route-id="@Model.ReservationId" class="btn btn-outline-secondary">
+                <i class="bi bi-pencil me-1"></i>編輯預約
+            </a>
+        }
+
+        @if (Model.CanMarkAsPaid)
+        {
+            @* 獨立的表單，讓按鈕能放在版面上方而不必包住整個頁面 *@
+            <form id="markAsPaidForm" asp-action="MarkAsPaid" method="post" class="d-none">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="id" value="@Model.ReservationId" />
+            </form>
+            <button type="submit" form="markAsPaidForm" class="btn btn-primary">
+                <i class="bi bi-cash-coin me-1"></i>標記為已付款
+            </button>
+        }
+
+        @if (Model.CanCancel)
+        {
+            <button type="button" class="btn btn-outline-danger"
+                    data-bs-toggle="modal" data-bs-target="#cancelReservationModal">
+                <i class="bi bi-trash3 me-1"></i>取消預約
+            </button>
+        }
+
+        @*
+            作廢收進下拉選單。使用頻率遠低於取消（只有開錯單時才用），
+            而且作廢比取消更不可逆，不適合放在顯眼的位置。
+        *@
+        @if (Model.CanVoid)
+        {
+            <div class="dropdown">
+                <button class="btn btn-outline-secondary" type="button"
+                        data-bs-toggle="dropdown" aria-expanded="false" aria-label="更多操作">
+                    <i class="bi bi-three-dots"></i>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <button type="button" class="dropdown-item text-danger"
+                                data-bs-toggle="modal" data-bs-target="#voidReservationModal">
+                            作廢預約
+                        </button>
+                    </li>
+                </ul>
+            </div>
+        }
+    </div>
+</div>
+
+@* ── 終止資訊（僅在已取消／已作廢／場館取消時顯示）────── *@
+@if (Model.IsTerminated)
+{
+    <section class="card border-danger-subtle mb-4">
+        <div class="card-header bg-danger-subtle text-danger-emphasis">
+            <h2 class="h6 mb-0">@Model.TerminationTitle</h2>
+        </div>
+        <div class="card-body">
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="small text-secondary">狀態</div>
+                    <div>@Model.ReservationStatus.GetDisplayName()</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="small text-secondary">處理時間</div>
+                    <div>@(Model.CancelledAt?.ToString("yyyy/MM/dd HH:mm") ?? "-")</div>
+                </div>
+                <div class="col-md-4">
+                    <div class="small text-secondary">操作人員</div>
+                    <div>@(Model.CancelledByName ?? "系統自動處理")</div>
+                </div>
+                <div class="col-12">
+                    <div class="small text-secondary">原因</div>
+                    <div>@(Model.CancelReason ?? "-")</div>
+                </div>
+            </div>
+        </div>
+    </section>
+}
+
+@* ── 左寬右窄兩欄主體 ─────────────────────────
+   左欄：會員資訊、場地與時段、費用明細（不太會變動的預約事實）。
+   右欄：狀態、付款資訊、訂單與發票、建立與稽核（會隨流程變化的資訊）。
+   兩欄都直接放在同一個 row 底下、第一張卡片前面都沒有多餘間距，
+   所以左右兩欄最上面的卡片頂端會自動切齊在同一條水平線。 *@
+<div class="row g-4">
+
+    <div class="col-lg-8">
+        <div class="d-flex flex-column gap-4">
+
+            <section class="card">
+                <div class="card-header bg-white d-flex align-items-center gap-2">
+                    <i class="bi bi-person text-primary"></i>
+                    <h2 class="h6 mb-0 flex-grow-1">會員資訊</h2>
+                    <a asp-controller="Member" asp-action="Details" asp-route-id="@Model.UserId"
+                       class="small text-nowrap">
+                        查看會員 <i class="bi bi-arrow-right"></i>
+                    </a>
+                </div>
+                <div class="card-body">
+                    <dl class="member-info-grid mb-0">
+                        <div class="member-info-cell">
+                            <dt>會員編號</dt>
+                            <dd>@Model.MemberNo</dd>
+                        </div>
+                        <div class="member-info-cell">
+                            <dt>姓名</dt>
+                            <dd>@Model.MemberName</dd>
+                        </div>
+                        <div class="member-info-cell">
+                            <dt>手機</dt>
+                            <dd>@Model.MemberPhone</dd>
+                        </div>
+                        <div class="member-info-cell">
+                            <dt>Email</dt>
+                            <dd class="text-break">@Model.MemberEmail</dd>
+                        </div>
+                        <div class="member-info-cell">
+                            <dt>累計消費</dt>
+                            <dd>NT$ @Model.MemberCumulativeConsumption.ToString("N0")</dd>
+                        </div>
+                    </dl>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-header bg-white d-flex align-items-center gap-2">
+                    <i class="bi bi-house text-primary"></i>
+                    <h2 class="h6 mb-0">場地與時段</h2>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex flex-wrap gap-3">
+                        <div class="venue-detail-photo flex-shrink-0">
+                            @if (!string.IsNullOrWhiteSpace(Model.VenuePhotoPath))
+                            {
+                                <img src="@Model.VenuePhotoPath" alt="@Model.VenueName" loading="lazy">
+                            }
+                            else
+                            {
+                                <div class="venue-detail-photo-placeholder" aria-hidden="true">
+                                    <i class="bi bi-image"></i>
+                                </div>
+                            }
+                        </div>
+
+                        <dl class="venue-spec-grid flex-grow-1 mb-0">
+                            <div class="venue-spec-cell">
+                                <dt><i class="bi bi-signpost-2"></i>場地</dt>
+                                <dd>@Model.VenueName</dd>
+                            </div>
+                            <div class="venue-spec-cell">
+                                <dt><i class="bi bi-dribbble"></i>運動類型</dt>
+                                <dd>@Model.SportName</dd>
+                            </div>
+                            <div class="venue-spec-cell">
+                                <dt><i class="bi bi-people"></i>使用人數</dt>
+                                <dd>@Model.PersonAmountText</dd>
+                            </div>
+                            <div class="venue-spec-cell">
+                                <dt><i class="bi bi-calendar3"></i>使用日期</dt>
+                                <dd>@Model.BookingDateText</dd>
+                            </div>
+                            <div class="venue-spec-cell">
+                                <dt><i class="bi bi-clock"></i>使用時段</dt>
+                                <dd>@Model.TimeRangeText</dd>
+                            </div>
+                            <div class="venue-spec-cell">
+                                <dt><i class="bi bi-hourglass-split"></i>使用時數</dt>
+                                <dd>@Model.TotalHours 小時</dd>
+                            </div>
+                        </dl>
+                    </div>
+
+                    @* <div class="text-secondary small text-break mt-3">
+                        <i class="bi bi-geo-alt me-1"></i>@Model.VenueLocation
+                    </div> *@
+                </div>
+            </section>
+
+            @* ── 費用明細 ── *@
+            <section class="card">
+                <div class="card-header bg-white d-flex align-items-center gap-2">
+                    <i class="bi bi-file-text text-primary"></i>
+                    <h2 class="h6 mb-0">費用明細</h2>
+                </div>
+
+                @if (Model.Lines.Count == 0)
+                {
+                    <div class="card-body text-secondary">
+                        此預約查無費用明細，請聯絡系統管理員。
+                    </div>
+                }
+                else
+                {
+                    <div class="table-responsive">
+                        <table class="table align-middle mb-0">
+                            <caption class="visually-hidden">每個時段一列的費用明細</caption>
+                            <thead class="table-light">
+                                <tr class="small">
+                                    <th scope="col" class="fw-normal">時段</th>
+                                    <th scope="col" class="fw-normal">類型</th>
+                                    <th scope="col" class="fw-normal text-end">單價</th>
+                                    <th scope="col" class="fw-normal text-end">時數</th>
+                                    <th scope="col" class="fw-normal text-end">小計</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var line in Model.Lines)
+                                {
+                                    <tr>
+                                        <td>@line.TimeRangeText</td>
+                                        <td class="@line.PeakTextClass">@line.PeakText</td>
+                                        <td class="text-end">NT$ @line.UnitPrice.ToString("N0")</td>
+                                        <td class="text-end">@line.DurationHours</td>
+                                        <td class="text-end">NT$ @line.Subtotal.ToString("N0")</td>
+                                    </tr>
+                                }
+                            </tbody>
+                            <tfoot>
+                                <tr class="table-light">
+                                    <td colspan="4" class="text-end text-secondary">總金額</td>
+                                    <td class="text-end fs-5 fw-bold text-primary">@Model.TotalAmountText</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                }
+            </section>
+
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        <div class="d-flex flex-column gap-4">
+
+            <section class="card">
+                <div class="card-header bg-white d-flex align-items-center gap-2">
+                    <i class="bi bi-info-circle text-primary"></i>
+                    <h2 class="h6 mb-0">狀態</h2>
+                </div>
+                <div class="card-body">
+                    @*
+                        三個狀態並排顯示是刻意的：正常情況下它們應該一致
+                        （待確認／待付款／未付款）。若畫面上出現不一致的組合，
+                        那就是資料有問題的線索。
+                    *@
+                    <dl class="detail-list mb-0">
+                        <div class="detail-row">
+                            <dt>預約狀態</dt>
+                            <dd>
+                                <span class="badge @Model.ReservationStatusBadgeClass">
+                                    @Model.ReservationStatus.GetDisplayName()
+                                </span>
+                            </dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>訂單狀態</dt>
+                            <dd>
+                                <span class="badge @Model.OrderStatusBadgeClass">
+                                    @Model.OrderStatus.GetDisplayName()
+                                </span>
+                            </dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>付款狀態</dt>
+                            <dd>
+                                <span class="badge @Model.PaymentStatusBadgeClass">
+                                    @Model.PaymentStatus.GetDisplayName()
+                                </span>
+                            </dd>
+                        </div>
+                    </dl>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-header bg-white d-flex align-items-center gap-2">
+                    <i class="bi bi-credit-card text-primary"></i>
+                    <h2 class="h6 mb-0">付款資訊</h2>
+                </div>
+                <div class="card-body">
+                    <dl class="detail-list mb-0">
+                        <div class="detail-row">
+                            <dt>付款方式</dt>
+                            <dd>@Model.PaymentMethod.GetDisplayName()</dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>付款通道</dt>
+                            <dd>@Model.PaymentChannel.GetDisplayName()</dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>應收金額</dt>
+                            <dd>@Model.TotalAmountText</dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>付款期限</dt>
+                            <dd>@Model.PaymentDueAtText</dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>付款時間</dt>
+                            <dd class="@(Model.PaidAt.HasValue ? null : "text-secondary")">
+                                @Model.PaidAtText
+                            </dd>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(Model.TransactionNo))
+                        {
+                            <div class="detail-row">
+                                <dt>交易編號</dt>
+                                <dd class="text-break">@Model.TransactionNo</dd>
+                            </div>
+                        }
+                    </dl>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-header bg-white d-flex align-items-center gap-2">
+                    <i class="bi bi-receipt text-primary"></i>
+                    <h2 class="h6 mb-0">訂單與發票</h2>
+                </div>
+                <div class="card-body">
+                    <dl class="detail-list mb-0">
+                        <div class="detail-row">
+                            <dt>訂單編號</dt>
+                            <dd class="text-break">@Model.OrderNo</dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>建立時間</dt>
+                            <dd>@(Model.OrderCreatedAt?.ToString("yyyy/MM/dd HH:mm") ?? "-")</dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>發票類型</dt>
+                            <dd>@Model.InvoiceType.GetDisplayName()</dd>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(Model.CarrierNo))
+                        {
+                            <div class="detail-row">
+                                <dt>載具號碼</dt>
+                                <dd>@Model.CarrierNo</dd>
+                            </div>
+                        }
+                    </dl>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="card-header bg-white d-flex align-items-center gap-2">
+                    <i class="bi bi-clock-history text-primary"></i>
+                    <h2 class="h6 mb-0">建立與稽核</h2>
+                </div>
+                <div class="card-body">
+                    <dl class="detail-list mb-3">
+                        <div class="detail-row">
+                            <dt>建立時間</dt>
+                            <dd>@Model.ReservedAt.ToString("yyyy/MM/dd HH:mm")</dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>建立者</dt>
+                            <dd>@Model.CreatedByText</dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>預約來源</dt>
+                            <dd>@Model.Source.GetDisplayName()</dd>
+                        </div>
+                        <div class="detail-row">
+                            <dt>條款版本</dt>
+                            <dd>@Model.TermsText</dd>
+                        </div>
+                    </dl>
+
+                    @* ── 操作紀錄時間軸 ── *@
+                    @if (Model.AuditLogs.Count > 0)
+                    {
+                        <hr class="my-3" />
+                        <h3 class="h6 mb-3">操作紀錄</h3>
+                        <ol class="audit-timeline mb-0">
+                            @foreach (var log in Model.AuditLogs)
+                            {
+                                <li class="audit-item">
+                                    <div class="small text-secondary">@log.CreatedAtText</div>
+                                    <div class="fw-medium">@log.ActionTitle</div>
+                                    <div class="small text-secondary">@log.Description</div>
+                                </li>
+                            }
+                        </ol>
+                    }
+                </div>
+            </section>
+
+        </div>
+    </div>
+</div>
+
+@* ── 彈出視窗 ─────────────────────────────── *@
+@if (Model.CanCancel)
+{
+    <partial name="_TerminateReservationModal" model="TerminateModalViewModel.ForCancel(Model)" />
+}
+
+@if (Model.CanVoid)
+{
+    <partial name="_TerminateReservationModal" model="TerminateModalViewModel.ForVoid(Model)" />
+}
+
+<style>
+    /* 會員資訊卡片：三欄格子，標籤在上（小灰字）、數值在下 */
+    .member-info-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 1rem 1.5rem;
+    }
+
+    .member-info-cell dt {
+        font-size: .8125rem;
+        font-weight: 400;
+        color: var(--bs-secondary-color);
+        margin-bottom: .25rem;
+    }
+
+    .member-info-cell dd {
+        margin: 0;
+        font-weight: 500;
+    }
+
+    @@media (max-width: 575.98px) {
+        .member-info-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* 場地與時段卡片的照片 */
+    .venue-detail-photo img,
+    .venue-detail-photo-placeholder {
+        width: 8rem;
+        height: 8rem;
+        border-radius: .5rem;
+        object-fit: cover;
+    }
+
+    .venue-detail-photo-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--bs-secondary-bg);
+        color: var(--bs-secondary-color);
+        font-size: 1.75rem;
+    }
+
+    /* 場地與時段卡片的圖示化格子，取代原本的兩欄文字列表 */
+    .venue-spec-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+        gap: .75rem 1.5rem;
+        min-width: 0;
+    }
+
+    .venue-spec-cell dt {
+        display: flex;
+        align-items: center;
+        gap: .375rem;
+        font-size: .8125rem;
+        font-weight: 400;
+        color: var(--bs-secondary-color);
+        margin-bottom: .125rem;
+    }
+
+    .venue-spec-cell dd {
+        margin: 0;
+        font-weight: 500;
+    }
+
+    /* 標籤靠左、數值靠右的兩欄式資料列 */
+    .detail-list .detail-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+        padding: .375rem 0;
+    }
+
+        .detail-list .detail-row + .detail-row {
+            border-top: 1px solid var(--bs-border-color-translucent);
+        }
+
+    .detail-list dt {
+        flex: 0 0 auto;
+        font-weight: 400;
+        color: var(--bs-secondary-color);
+        white-space: nowrap;
+    }
+
+    /*
+            min-width: 0 是必要的。
+            flex 子元素的 min-width 預設為 auto，無法縮到比內容更小，
+            長字串（Email、交易編號）會把卡片撐破版面。
+            Bootstrap 沒有對應的工具類別，必須自己寫。
+        */
+    .detail-list dd {
+        margin: 0;
+        min-width: 0;
+        text-align: right;
+    }
+
+    /* 操作紀錄的時間軸 */
+    .audit-timeline {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+    }
+
+    .audit-item {
+        position: relative;
+        padding-left: 1.25rem;
+        padding-bottom: 1rem;
+    }
+
+        .audit-item:last-child {
+            padding-bottom: 0;
+        }
+
+        .audit-item::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: .375rem;
+            width: .5rem;
+            height: .5rem;
+            border-radius: 50%;
+            background-color: var(--bs-primary);
+        }
+
+        /* 連接線畫到下一個項目，最後一項不畫 */
+        .audit-item:not(:last-child)::after {
+            content: "";
+            position: absolute;
+            left: .1875rem;
+            top: 1rem;
+            bottom: 0;
+            width: 1px;
+            background-color: var(--bs-border-color);
+        }
+</style>
+
+@section Scripts {
+    <script>
+        // 原因欄位的字數計數器。
+        // 上限 200 對應 Reservations.CancelReason 的 nvarchar(200)，
+        // textarea 的 maxlength 已經擋住超出的輸入，這裡只負責顯示。
+        (function() {
+            document.querySelectorAll('.reason-counter').forEach(function(counter) {
+                const textarea = document.getElementById(counter.dataset.target);
+                if (!textarea) return;
+
+                textarea.addEventListener('input', function() {
+                    counter.textContent = textarea.value.length;
+                });
+            });
+        })();
+    </script>
+}

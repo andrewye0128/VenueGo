@@ -6,20 +6,12 @@
     使用預設的後台版型 _Layout.cshtml。
 
     這一頁只放「不會跟著清單變的東西」：
-      標題、訊息區、標記垃圾的 modal、腳本。
-    會變的部分（篩選列、清單）全部在 _QueueList.cshtml。
+      標題、訊息區、標記垃圾的 modal、樣式、腳本。
+    會變的部分（搜尋列、篩選列、清單）全部在 _QueueList.cshtml。
 *@
 
 @{
       ViewData["Title"] = "評論管理";
-}
-
-@section Styles {
-      <style>
-            /* 未回覆警示：左側色條。之後可以搬到 site.css */
-            .queue-overdue { border-left: 4px solid var(--bs-danger)  !important; }
-            .queue-soon    { border-left: 4px solid var(--bs-warning) !important; }
-      </style>
 }
 
 @* 給置頂按鈕用的防偽 token（回覆表單自己會帶，不用這個） *@
@@ -71,7 +63,7 @@
 
 @section Scripts {
       @* axios 版本請改成課堂上用的版本，並寫死，不要用 latest *@
-      <script src="https://cdn.jsdelivr.net/npm/axios@1.20.0/dist/axios.min.js"></script>
+      <script src="https://cdn.jsdelivr.net/npm/axios@@1.20.0/dist/axios.min.js"></script>
       @* <script src="https://unpkg.com/axios/dist/axios.min.js"></script> *@
       <script src="~/js/areview-queue.js" asp-append-version="true"></script>
 }

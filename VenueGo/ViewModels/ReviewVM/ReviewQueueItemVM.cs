@@ -17,7 +17,17 @@ namespace VenueGo.ViewModels.ReviewVM
         public bool IsBookingReview { get; init; }
         public string? VenueName { get; init; }
         public DateTime? RentStartTime { get; init; }
+
+        /// <summary>
+        /// 訂單編號。兩種評論都會有值：
+        ///   預約評論 → ReviewPerBooking.OrderId
+        ///   現場評論 → ReviewPerVisit.Qrtoken 對到 EntryTicket，再拿它的 OrderId
+        /// 追不到訂單時是 null（資料異常，不該發生但要擋得住）。
+        /// </summary>
         public string? OrderNo { get; init; }
+
+        /// <summary>分組用。顯示用的是 OrderNo，這個是拿來 GroupBy 的鍵。</summary>
+        public int? OrderId { get; init; }
 
         // ── 處理狀態 ──
         public DateTime? ReadAt { get; init; }

@@ -9,10 +9,14 @@
     //    預約評論憑證               → 訂單／付款系統呼叫
     //
     //  如果合成一個介面，報到系統注入之後 IntelliSense 會跳出
-    //  CreateReviewPerBooking，他不知道那是不是該他叫的，
+    //  CreateReviewPerBookingAsync，他不知道那是不是該他叫的，
     //  可能在錯的時機叫下去。拆開之後各自只看得到自己該用的方法。
     //
     //  實作仍然是同一個 ReviewTicketFactory 類別，一份程式碼兩個門。
+    //
+    //  ⚠️ 方法名一律以 Async 結尾，這是 .NET 的慣例：
+    //     看到 Async 就知道回傳的是 Task、必須 await。
+    //     介面一旦交給別組就很難改名，所以在交出去之前定型。
     // ════════════════════════════════════════════════════════
 
     /// <summary>
@@ -30,7 +34,7 @@
         /// true = 已建立憑證；
         /// false = 不符合條件或已經建立過，屬於正常情況，不是錯誤，不需要重試。
         /// </returns>
-        bool CreateReviewPerVisit(string? token);
+        Task<bool> CreateReviewPerVisitAsync(string? token);
 
         /// <summary>
         /// 校正現場評論憑證的實際離場時間。
@@ -42,7 +46,7 @@
         /// true = 已寫入離場時間；
         /// false = 查無資料、時間不合理或尚未建立評論憑證，屬正常情況，不需要重試。
         /// </returns>
-        bool RecordVisitEndTime(int? ticketId);
+        Task<bool> RecordVisitEndTimeAsync(int? ticketId);
     }
 
     /// <summary>
@@ -61,6 +65,6 @@
         /// true = 已建立憑證；
         /// false = 查無付款紀錄或已經建立過，屬正常情況，不是錯誤，不需要重試。
         /// </returns>
-        bool CreateReviewPerBooking(int? orderId);
+        Task<bool> CreateReviewPerBookingAsync(int? orderId);
     }
 }

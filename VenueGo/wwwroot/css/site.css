@@ -165,3 +165,38 @@ body {
     border-left: 3px solid #dee2e6;
     background: #f8f9fa;
 }
+
+/* 未回覆警示：左側色條。搬到 site.css */
+.queue-overdue {
+    border-left: 4px solid var(--bs-danger) !important;
+}
+
+.queue-soon {
+    border-left: 4px solid var(--bs-warning) !important;
+}
+
+/* ── 依訂單分組的外框 ──────────────────────────
+               只有「同一張訂單、而且不只一則」的組才會套用。
+               用細框線 + 淡底，跟評論本身的白底區隔開來。 */
+.queue-group {
+    border: 1px solid var(--bs-info-border-subtle, #9eeaf9);
+    border-radius: .5rem;
+    padding: .5rem;
+    background: var(--bs-info-bg-subtle, #f0fbfd);
+}
+
+.queue-group-head {
+    padding: .25rem .5rem .5rem;
+    color: var(--bs-info-text-emphasis, #055160);
+}
+
+/* 框裡的每一則保持白底，才看得出來框裡裝了幾則 */
+.queue-group .accordion-item {
+    background-color: #fff;
+}
+
+/* 搜尋命中的標註。限定在評論清單裡，不影響別人頁面上的 <mark> */
+#queueRoot mark {
+    padding: .05em .15em;
+    border-radius: .15em;
+}

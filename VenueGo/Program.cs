@@ -1,15 +1,16 @@
 using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Services;
+using VenueGo.Helpers;
+using VenueGo.Models.Options;
 using VenueGo.Models.ReviewModels;
+using VenueGo.Services;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
 using VenueGo.Services.Orders;
 using VenueGo.Services.Reservations;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
-using VenueGo.Models.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -88,8 +89,6 @@ builder.Services.Configure<ReservationRulesOptions>(
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
 
 // 評論系統使用
-//builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
-
 builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
 builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
 builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
@@ -100,6 +99,9 @@ builder.Services.AddSingleton<ITimeService, TimeService>();
 builder.Services.AddHostedService<TimeSyncHostedService>();
 
 var app = builder.Build();
+
+// 在應用程式啟動時，將單例 TimeService 橋接給靜態類別
+TimeAgo.TimeService = app.Services.GetRequiredService<ITimeService>();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

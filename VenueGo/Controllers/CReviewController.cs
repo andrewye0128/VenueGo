@@ -1,8 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 using VenueGo.Data;
 using VenueGo.Helpers;
+using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
@@ -604,7 +605,7 @@ namespace VenueGo.Controllers
         // ── 預約評論撰寫 ────────────────────────────────────
 
         [HttpGet]
-        [EmployeeAuthorize(RoleNames.Member)]
+        [Authorize(Roles = RoleNames.Member)]
         public async Task<IActionResult> CreateForBooking(int? id)
         {
             var r = await ResolveBookingTicketAsync(id);
@@ -615,7 +616,7 @@ namespace VenueGo.Controllers
         }
 
         [HttpPost, ValidateAntiForgeryToken]
-        [EmployeeAuthorize(RoleNames.Member)]
+        [Authorize(Roles = RoleNames.Member)]
         public async Task<IActionResult> CreateForBooking(ReviewCreateForBookingVM vm, int? id)
         {
             var r = await ResolveBookingTicketAsync(id);

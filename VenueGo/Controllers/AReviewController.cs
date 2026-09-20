@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;   // 新增：Database.SqlQuery<T> 在這�
 using System.Linq.Expressions;
 using VenueGo.Data;
 using VenueGo.Helpers;
+using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
@@ -12,7 +13,7 @@ using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = RoleNames.BackOffice)]
     public class AReviewController(dbVenueContext db, ICurrentUserService currentUserService, ITimeService timeService) : Controller
     {
         private readonly dbVenueContext _db = db;

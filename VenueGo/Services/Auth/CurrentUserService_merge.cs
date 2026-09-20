@@ -16,7 +16,6 @@ namespace VenueGo.Services.Auth
     public class CurrentUserService(IHttpContextAccessor contextAccessor) : ICurrentUserService
     {
         private readonly IHttpContextAccessor _httpContextAccessor = contextAccessor;
-        private readonly dbVenueContext _db = db;
 
         // ════════════════════════════════════════════════════════
         //  EmployeeId 的「請求內快取」
@@ -29,8 +28,8 @@ namespace VenueGo.Services.Auth
         //     只用 _employeeId == null 判斷的話，非員工的每一次存取
         //     都會再打一次資料庫，等於沒有快取到。
         // ════════════════════════════════════════════════════════
-        private int? _employeeId;
-        private bool _employeeIdLoaded;
+        //private int? _employeeId;
+        //private bool _employeeIdLoaded;
 
         private ClaimsPrincipal? Principal => _httpContextAccessor.HttpContext?.User;
 

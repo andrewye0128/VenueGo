@@ -1,5 +1,6 @@
-﻿using System.Linq.Expressions;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Linq.Expressions;
 using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Entities;
@@ -9,6 +10,7 @@ using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
+    [Authorize]
     public class AReviewController(dbVenueContext db, ICurrentUser currentUser) : Controller
     {
         private readonly dbVenueContext _db = db;
@@ -60,7 +62,9 @@ namespace VenueGo.Controllers
         /// <summary>
         /// 回傳 null 代表「是員工，繼續」。
         /// 約束要求 EmployeeId > 0，所以 0 也擋。
-        /// ⚠️ 不用 Forbid()：專案還沒有設定驗證機制，Forbid() 會直接丟例外。
+        /// ⚠️ 不用 Forbid()：Cookie 驗證的 Forbid() 會變成 302 導向登入頁，
+        ///    而這幾個都是 axios 呼叫的端點，跟著導向拿回 200 + HTML，
+        ///    前端會把失敗當成功。這裡固定回 403 + JSON。
         /// </summary>
         private IActionResult? RejectIfNotEmployee()
         {
@@ -110,8 +114,9 @@ namespace VenueGo.Controllers
             QueueTab.Pending => q.Where(PendingRule)
                                  .OrderByDescending(r => r.IsPinned)
                                  .ThenBy(r => r.CreatedAt),
+            // 已完成是「回頭查」用的清單，最近處理的放最上面
             QueueTab.Completed => q.Where(r => r.RepliedAt != null)
-                                 .OrderBy(r => r.CreatedAt),
+                                 .OrderByDescending(r => r.RepliedAt),
             QueueTab.Spam    => q.Where(SpamRule)
                                  .OrderByDescending(r => r.SpamMarkedAt),
             _                => q.Where(UnreadRule)
@@ -184,7 +189,7 @@ namespace VenueGo.Controllers
             // ── 員工姓名：Employees 本身沒有姓名，要再接 Users ──
             //    Employees.EmployeeId 與 Employees.UserId 都是 int NOT NULL，
             //    Users.UserId 也是 int，所以 join 接得起來。
-            var employeeIds = reviews.SelectMany(r => new[] { r.ReadByEmployeeId, r.SpamMarkedByEmployeeId })
+            var employeeIds = reviews.SelectMany(r => new[] { r.ReadByEmployeeId, r.RepliedByEmployeeId, r.SpamMarkedByEmployeeId })
                                      .Where(id => id != null)
                                      .Select(id => id!.Value)
                                      .Distinct().ToList();
@@ -230,6 +235,13 @@ namespace VenueGo.Controllers
                 ReadByEmployeeName = r.ReadByEmployeeId is int rid
                                      ? lk.EmployeeNames.GetValueOrDefault(rid) : null,
                 IsPinned           = r.IsPinned,
+
+                                RepliedAt             = r.RepliedAt,
+                ReplyContent          = r.ReplyContent,
+                RepliedByEmployeeName = r.RepliedByEmployeeId is int pid
+                                        ? lk.EmployeeNames.GetValueOrDefault(pid) : null,
+                ReplyViewedAt         = r.ReplyViewedAt,
+                ReplySatisfaction     = r.ReplySatisfaction,
 
                 SpamMarkedAt             = r.SpamMarkedAt,
                 SpamReasonText           = r.SpamMarkedAt != null ? ReviewPolicy.SpamReasonText(r.SpamReason) : null,
@@ -400,5 +412,6 @@ namespace VenueGo.Controllers
             _db.SaveChanges();
             return Ok(ApiResultVM.Ok("已標記為垃圾"));
         }
+
     }
 }

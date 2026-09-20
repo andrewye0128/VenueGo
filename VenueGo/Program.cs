@@ -1,7 +1,8 @@
+using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Services;
-using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
+using VenueGo.Models.ReviewModels;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,7 +40,14 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 builder.Services.AddSession();
 
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
-builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
+
+// 評論系統使用
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+
+builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
+builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
+builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
 
 var app = builder.Build();
 
@@ -68,7 +76,6 @@ app.MapStaticAssets();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")
-    //pattern: "{controller=CReview}/{action=Index}/{id?}")
     .WithStaticAssets();
 
 

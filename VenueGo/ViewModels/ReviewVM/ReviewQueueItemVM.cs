@@ -24,6 +24,18 @@ namespace VenueGo.ViewModels.ReviewVM
         public string? ReadByEmployeeName { get; init; }
         public bool IsPinned { get; init; }
 
+        // ── 回覆（已完成／全部清單要看的）──
+        public DateTime? RepliedAt { get; init; }
+        public string? ReplyContent { get; init; }
+        public string? RepliedByEmployeeName { get; init; }
+
+        /// <summary>顧客看到回覆的時間。null 代表還沒看到，與「看到了但不表態」不同。</summary>
+        public DateTime? ReplyViewedAt { get; init; }
+
+        /// <summary>0 不滿意 / 1 普通 / 2 滿意，null 是還沒表態。</summary>
+        public byte? ReplySatisfaction { get; init; }
+
+        // ── 垃圾標記 ──
         public DateTime? SpamMarkedAt { get; init; }
         public string? SpamReasonText { get; init; }
         public string? SpamMarkedByEmployeeName { get; init; }
@@ -37,10 +49,13 @@ namespace VenueGo.ViewModels.ReviewVM
 
         // ── 計算屬性 ──
         public bool IsRead => ReadAt != null;
+        public bool HasReply => RepliedAt != null;
+        public bool IsReplyViewed => ReplyViewedAt != null;
+        public bool IsSpam => SpamMarkedAt != null;
         public bool IsRatingOnly => string.IsNullOrWhiteSpace(Content);
 
         /// <summary>
-        /// 已滿 3 天、沒回覆、顧客選了公開 → 依規則已經出現在評論專區。
+        /// 已超過緩衝天數、沒回覆、顧客選了公開 → 依規則已經出現在評論專區。
         /// 預約評論的 IsPublic 一律是 false，所以不必另外排除。
         /// </summary>
         public bool IsAutoPublished => OverdueLevel == OverdueLevel.Overdue && IsPublic;

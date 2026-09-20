@@ -22,6 +22,24 @@
         OverdueLevel.Soon    => "queue-soon",
         _                    => ""
     };
+
+      // 已表態的滿意度：左側色條。未表態或還沒回覆就不上色。
+      static string SatisfactionClass(byte? satisfaction) => satisfaction switch
+      {
+            2 => "queue-satisfied",
+            1 => "queue-neutral",
+            0 => "queue-unsatisfied",
+            _ => ""
+      };
+
+      // 滿意度的圖示與文字，摘要列與回覆區塊共用
+      static (string Icon, string Text, string Css) SatisfactionFace(byte? satisfaction) => satisfaction switch
+      {
+            2 => ("bi-emoji-smile",   "顧客滿意",  "text-bg-success"),
+            1 => ("bi-emoji-neutral", "顧客覺得普通", "text-bg-secondary"),
+            0 => ("bi-emoji-frown",   "顧客不滿意", "text-bg-danger"),
+            _ => ("", "", "")
+      };
 }
 
 @* JS 靠這個知道目前的篩選條件，處理完一則後用同樣條件重新載入 *@
@@ -112,8 +130,8 @@ else
 <div class="accordion" id="reviewQueue">
 @foreach (var item in Model.Items)
 {
-    <div class="accordion-item @OverdueClass(item.OverdueLevel)"
-         data-read="@(item.IsRead ? "1" : "0")"
+                  <div class="accordion-item @OverdueClass(item.OverdueLevel) @SatisfactionClass(item.ReplySatisfaction)"
+                       data-read="@(item.IsRead ? "1" : "0")"
          data-read-url="@Url.Action("MarkRead", new { id = item.ReviewId })">
 
         @* 頁首：圖釘放在 accordion-button 的「旁邊」，不能放進去——
@@ -165,11 +183,26 @@ else
                         else if (item.OverdueLevel == OverdueLevel.Soon)
                         {
                             <span class="badge text-bg-warning">
-                                <i class="bi bi-hourglass-split"></i> 即將滿 @ReviewPolicy.PublicBufferDays 天
+                                <i class="bi bi-hourglass-split"></i> 請儘快回覆
                             </span>
                         }
 
                         <span class="badge text-bg-secondary js-read-badge @(item.IsRead ? "" : "d-none")">已閱覽</span>
+
+                                                @if (item.HasReply)
+                                                {
+                                                      <span class="badge text-bg-light border"><i class="bi bi-reply-fill"></i> 已回覆</span>
+
+                                                      if (item.ReplySatisfaction != null)
+                                                      {
+                                                            var face = SatisfactionFace(item.ReplySatisfaction);
+                                                            <span class="badge @face.Css"><i class="bi @face.Icon"></i> @face.Text</span>
+                                                      }
+                                                      else if (!item.IsReplyViewed)
+                                                      {
+                                                            <span class="badge text-bg-light border text-muted">顧客尚未看到回覆</span>
+                                                      }
+                                                }
                     </div>
                     <div class="small text-truncate @(item.IsRatingOnly ? "text-muted fst-italic" : "")">
                         @item.Summary
@@ -233,9 +266,47 @@ else
                     {
                         <div class="text-danger">
                             <i class="bi bi-exclamation-triangle"></i> 已超過 @ReviewPolicy.PublicBufferDays 天，這則評論已經公開在評論專區
-                        </div>
-                    }
-                </div>
+                                                </div>
+                                          }
+                                    </div>
+
+                                    @* ── 館方回覆（唯讀）。任何清單只要有回覆就顯示 ── *@
+                                    @if (item.HasReply)
+                                    {
+                                          <div class="reply-block border rounded p-3 mb-3 bg-light">
+                                                <div class="small text-muted mb-1">
+                                                      <i class="bi bi-reply-fill"></i>
+                                                      由 @(item.RepliedByEmployeeName ?? "（查無員工）")
+                                                      於 @(item.RepliedAt?.ToString("yyyy/M/d HH:mm")) 回覆
+                                                </div>
+
+                                                <p class="mb-2">@item.ReplyContent</p>
+
+                                                <div class="small border-top pt-2 mb-0">
+                                                      @if (item.ReplySatisfaction != null)
+                                                      {
+                                                            var face = SatisfactionFace(item.ReplySatisfaction);
+                                                            <span class="badge @face.Css"><i class="bi @face.Icon"></i> @face.Text</span>
+                                                            <span class="text-muted ms-1">
+                                                                  （顧客於 @(item.ReplyViewedAt?.ToString("M/d HH:mm")) 看過回覆）
+                                                            </span>
+                                                      }
+                                                      else if (item.IsReplyViewed)
+                                                      {
+                                                            <span class="text-muted">
+                                                                  <i class="bi bi-clock-history"></i>
+                                                                  顧客已於 @(item.ReplyViewedAt?.ToString("M/d HH:mm")) 看過回覆，尚未表態
+                                                            </span>
+                                                      }
+                                                      else
+                                                      {
+                                                            <span class="text-muted">
+                                                                  <i class="bi bi-clock-history"></i> 顧客還沒看到這則回覆
+                                                            </span>
+                                                      }
+                                                </div>
+                                          </div>
+                                    }
 
                 @* ── 依清單不同，能做的事不同 ── *@
                 @if (Model.Tab == QueueTab.Pending)
@@ -276,8 +347,8 @@ else
                         </div>
                     </form>
                 }
-                else if (Model.Tab == QueueTab.Spam)
-                {
+                                    else if (item.IsSpam)
+                                    {
                     <div class="alert alert-secondary small mb-0">
                         <div>理由：<span class="badge rounded-pill text-bg-dark">@item.SpamReasonText</span></div>
                         <div class="mt-1">

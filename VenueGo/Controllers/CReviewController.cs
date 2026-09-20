@@ -1,16 +1,20 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using VenueGo.Data;
 using VenueGo.Helpers;
+using VenueGo.Models.ReviewModels;
 using VenueGo.Models.Entities;
 using VenueGo.Services;
 using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
-    public class CReviewController(dbVenueContext db, ICurrentUser currentUser) : Controller
+    public class CReviewController(dbVenueContext db, ICurrentUser currentUser, IVisitReviewTicketFactory factory) : Controller
     {
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUser _currentUser = currentUser;
+        // 只注入「現場評論」那個介面：這支 Controller 的補償邏輯只會用到
+        // CreateReviewPerVisit，不該看得到預約評論的方法。
+        private readonly IVisitReviewTicketFactory _reviewTicketFactory = factory;
 
         // ════════════════════════════════════════════════════════
         //  第一區：資格判定
@@ -37,10 +41,22 @@ namespace VenueGo.Controllers
             if (string.IsNullOrWhiteSpace(token))
                 return new(EligState.NotFound, null, null);          // 未輸入 ❌
 
+            string qrToken = token.Trim();
             var ticket = _db.ReviewPerVisits
-                            .FirstOrDefault(v => v.Qrtoken == token.Trim());
+                            .FirstOrDefault(v => v.Qrtoken == qrToken);
             if (ticket == null)
-                return new(EligState.NotFound, null, null);          // 查無憑證 ❌
+            {
+                if (_reviewTicketFactory.CreateReviewPerVisit(qrToken))
+                {
+                    ticket = _db.ReviewPerVisits.FirstOrDefault(v => v.Qrtoken == qrToken);
+                    if (ticket == null) 
+                        return new(EligState.NotFound, null, null);      // 憑證補建失敗 ❌
+                }
+                else
+                {
+                    return new(EligState.NotFound, null, null);          // 查無憑證 ❌
+                }
+            }
 
             var existing = _db.ReviewMains
                               .FirstOrDefault(r => r.ReviewPerVisitId == ticket.ReviewPerVisitId);

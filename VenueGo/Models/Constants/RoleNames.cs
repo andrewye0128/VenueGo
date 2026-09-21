@@ -31,5 +31,12 @@
         /// </para>
         /// </summary>
         public const string BackOffice = $"{Staff},{Manager},{Admin}";
+
+
+        /// <summary>場館營運管理者與系統管理員 </summary>
+        public const string ManagerOrAdmin = $"{Manager},{Admin}";
+
+        /// <summary>員工與場館營運管理者</summary>
+        public const string StaffOrManager = $"{Staff},{Manager}";
     }
 }

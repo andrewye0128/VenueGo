@@ -1,86 +1,475 @@
-﻿@using VenueGo.Helpers
-@{
-      ViewData["Title"] = "Index";
-}
-<style>
-    /* 修正：精準指定表單內的群組區塊，不影響外層佈局 */
-    div.form-group .control-label,.form-control,.btn {
-        margin-bottom: 10px; /* 只推上下間距，左右留空 */
-    }
-    
-</style>
+﻿@model VenueGo.ViewModels.ReviewVM.ReviewIndexVM
+@using VenueGo.Helpers
+@using VenueGo.ViewModels.ReviewVM
+@using Microsoft.AspNetCore.Routing
 
-<h1>評論主頁</h1>
-<hr />
-<div class="row">
-      <div class="col-md-6">
-            @* <a asp-action="CreateForVisit" asp-route-id="@item.FId" onclick="return confirm('確定要刪除嗎？')">刪除</a> *@
-            <form asp-action="CreateForVisit" method="get">
-                <div class="form-group">
-                        <label for="tokenInput" class="control-label">
-                              請輸入評論用QRToken ( TESTVISIT01 - 03 )
-                  </label>
-                  <input type="text" name="token" id="tokenInput" class="form-control" />
-                  <button class="btn btn-primary">開始評論</button>
-                </div>
-            </form>
-            <form asp-action="CreateForBooking" method="get">
-                <div class="form-group">
-                  <label for="idInput" class="control-label">
-                              請輸入評論用ReviewPerBookingId ( 9002 / 9004 )
-                  </label>
-                  <input type="text" name="id" id="idInput" class="form-control" />
-                  <button class="btn btn-primary">開始評論</button>
-                </div>
-            </form>
-            <div class="row">
-                <a asp-controller="AReview" asp-action="Index" class="btn btn-outline-info">跳轉館方</a>
+@*
+    放置路徑：Views/CReview/Index.cshtml
+    評論專區：任何人都看得到的公開評論。
+
+    篩選全部用一般連結整頁載入，不用 axios——顧客端的網址要能分享、
+    能加書籤、能按上一頁。館方清單是內部工具才適合局部更新。
+
+    ⚠️ 版型暫時沿用後台的 _Layout.cshtml。顧客端的 _LayoutPublic
+       還不存在，等群組做好再換。
+*@
+
+@{
+      ViewData["Title"] = "評論專區";
+
+      // 每個篩選連結都要帶著「目前所有條件」，不然點一下就把別的條件弄丟了。
+      // 傳 null 代表「沿用目前的值」，clearStar 用來做「取消星等篩選」。
+      RouteValueDictionary RouteFor(
+          int? sportTypeId = null, string? range = null, int? star = null,
+          bool? hasContentOnly = null, string? sort = null,
+          bool clearSport = false, bool clearStar = false)
+      {
+            var rv = new RouteValueDictionary();
+
+            var sid = clearSport ? null : (sportTypeId ?? Model.SportTypeId);
+            if (sid != null) rv["sportTypeId"] = sid;
+
+            rv["range"] = range ?? Model.TimeRange;
+
+            var st = clearStar ? null : (star ?? Model.Star);
+            if (st != null) rv["star"] = st;
+
+            var hc = hasContentOnly ?? Model.HasContentOnly;
+            if (hc) rv["hasContentOnly"] = "true";
+
+            rv["sort"] = sort ?? Model.Sort;
+            return rv;
+      }
+
+      // 唯讀星等。site.css 的 .star-view 已經定義好顏色。
+      void Stars(int rating, string extraClass = "")
+      {
+            <span class="star-view @extraClass">
+                  @for (int i = 1; i <= 5; i++)
+                  {
+                        <i class="@(i <= rating ? "bi bi-star-fill" : "bi bi-star empty")"></i>
+                  }
+            </span>
+      }
+}
+
+@section Styles {
+      <style>
+            /* ⚠️ 這一區之後可以整段搬進 site.css，跟你上次搬的那些放一起。
+                       先放在這裡是為了讓你直接看得到效果。 */
+
+            /* ── 摘要區的大分數 ────────────────────────── */
+            .summary-score {
+                  font-size: 3rem;
+                  font-weight: 600;
+                  line-height: 1;
+            }
+
+            /* ── 星等分布：整列都是連結，命中區域要夠大 ── */
+            .star-bar {
+                  display: flex;
+                  align-items: center;
+                  gap: .5rem;
+                  padding: .25rem .5rem;
+                  border-radius: .375rem;
+                  text-decoration: none;
+                  color: inherit;
+                  transition: background-color .12s;
+            }
+
+                  .star-bar:hover {
+                        background-color: var(--bs-secondary-bg, #e9ecef);
+                  }
+
+                  /* 目前套用中的那一條：外框 + 底色，兩個訊號一起給 */
+                  .star-bar.is-active {
+                        background-color: var(--bs-warning-bg-subtle, #fff3cd);
+                        box-shadow: inset 0 0 0 1px var(--bs-warning-border-subtle, #ffe69c);
+                  }
+
+                  /* 筆數為 0 的不給點：點了只會得到空清單，那是挫折不是功能 */
+                  .star-bar.is-empty {
+                        opacity: .45;
+                        pointer-events: none;
+                  }
+
+                  .star-bar .label {
+                        width: 3.2rem;
+                        flex-shrink: 0;
+                        font-size: .85rem;
+                  }
+
+                  .star-bar .progress {
+                        flex: 1;
+                        height: .6rem;
+                  }
+
+                  .star-bar .count {
+                        width: 2.6rem;
+                        flex-shrink: 0;
+                        text-align: right;
+                        font-size: .8rem;
+                        color: var(--bs-secondary-color, #6c757d);
+                  }
+
+            /* ── 卡片 ──────────────────────────────────
+                       單欄滿寬。長短差異在單欄下幾乎不構成視覺問題，
+                       因為每張卡片本來就是獨立的一條。
+
+                       想改成磚牆式多欄的話，把 .review-cards 換成下面註解那組，
+                       卡片本身不用改。代價是閱讀順序會變成「先往下再往右」。
+
+                       .review-cards { column-count: 3; column-gap: 1rem; }
+                       .review-cards .review-card { break-inside: avoid; }
+                       @@media (max-width: 992px) { .review-cards { column-count: 2; } }
+                       @@media (max-width: 576px) { .review-cards { column-count: 1; } }
+                    */
+            .review-cards {
+                  max-width: 52rem;   /* 一行太長會不好讀，限制寬度 */
+            }
+
+            /* 只給星等沒留言的卡片：刻意做成另一種樣子。
+                       不一致要做成刻意的，不要做成意外的。 */
+            .review-card--rating-only {
+                  background-color: var(--bs-tertiary-bg, #f8f9fa);
+                  border-style: dashed;
+            }
+
+            /* ── 內容截斷 ──────────────────────────────
+                       收合時固定四行，一千字和八十字的卡片一樣高。
+                       ⚠️ -webkit-line-clamp 是各家瀏覽器通用的寫法，
+                          但我沒有實測過 Firefox，你順手開一下確認。 */
+            .review-clamp {
+                  display: -webkit-box;
+                  -webkit-line-clamp: 4;
+                  -webkit-box-orient: vertical;
+                  overflow: hidden;
+            }
+
+                  .review-clamp.is-expanded {
+                        display: block;
+                        -webkit-line-clamp: none;
+                        overflow: visible;
+                  }
+      </style>
+}
+
+<h1 class="h4 mb-3">評論專區</h1>
+
+@* ── 運動類型分頁 ───────────────────────────────── *@
+<ul class="nav nav-tabs mb-3">
+      @foreach (var tab in Model.SportTabs)
+      {
+            var active = Model.SportTypeId == tab.SportTypeId;
+            <li class="nav-item">
+                  <a class="nav-link @(active ? "active" : "")"
+                     href="@Url.Action("Index", tab.SportTypeId == null
+                                                               ? RouteFor(clearSport: true)
+                                                               : RouteFor(sportTypeId: tab.SportTypeId))">
+                        @tab.Name
+                  </a>
+            </li>
+      }
+</ul>
+
+@* ── 摘要與星等分布 ─────────────────────────────── *@
+<div class="card mb-3">
+      <div class="card-body">
+            <div class="row g-4 align-items-center">
+
+                  <div class="col-md-4 text-center">
+                        <div class="summary-score">@Model.Distribution.Average.ToString("0.0")</div>
+                        @{
+                              Stars((int)Math.Round(Model.Distribution.Average));
+                        }
+                        <div class="small text-muted mt-2">共 @Model.Distribution.Total 則評論</div>
+                  </div>
+
+                  <div class="col-md-8">
+                        @* 「看起來可以點」要同時給三個訊號：外觀、文字、狀態。
+                   這行字是成本最低、也最有效的那一個。 *@
+                        <div class="small text-muted mb-2">
+                              <i class="bi bi-hand-index"></i> 點選星等可以只看該分數的評論
+                              @if (Model.Star != null)
+                              {
+                                    <a class="ms-2" href="@Url.Action("Index", RouteFor(clearStar: true))">
+                                          <i class="bi bi-x-circle"></i> 取消星等篩選
+                                    </a>
+                              }
+                        </div>
+
+                        @for (int star = 5; star >= 1; star--)
+                        {
+                              var count = Model.Distribution.CountOf(star);
+                              var percent = Model.Distribution.PercentOf(star);
+                              var isActive = Model.Star == star;
+                              var isEmpty = count == 0;
+
+                              <a class="star-bar @(isActive ? "is-active" : "") @(isEmpty ? "is-empty" : "")"
+                                 href="@Url.Action("Index", isActive ? RouteFor(clearStar: true) : RouteFor(star: star))"
+                                 aria-current="@(isActive ? "true" : null)"
+                                 aria-label="@star 星，@count 則@(isEmpty ? "" : "，點選以篩選")"
+                                 title="@(isActive ? "再點一次取消篩選" : (isEmpty ? "沒有這個星等的評論" : $"只看 {star} 星的評論"))">
+                                    <span class="label">@star 星</span>
+                                    <div class="progress" role="presentation">
+                                          <div class="progress-bar bg-warning" style="width:@percent%"></div>
+                                    </div>
+                                    <span class="count">@count</span>
+                              </a>
+                        }
+                  </div>
             </div>
       </div>
 </div>
 
+@* ── 篩選列 ─────────────────────────────────────── *@
+<form method="get" asp-action="Index" class="d-flex flex-wrap align-items-center gap-3 mb-3">
 
+      @* 分頁與星等不是表單控制項，用 hidden 帶著走，切換排序時才不會弄丟 *@
+      @if (Model.SportTypeId != null)
+      {
+            <input type="hidden" name="sportTypeId" value="@Model.SportTypeId" />
+      }
+      @if (Model.Star != null)
+      {
+            <input type="hidden" name="star" value="@Model.Star" />
+      }
+
+      <div class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0 small text-nowrap" for="rangeSelect">時間</label>
+            <select id="rangeSelect" name="range" class="form-select form-select-sm" style="width:auto"
+                    onchange="this.form.submit()">
+                  @foreach (var opt in ReviewRange.Options)
+                  {
+                        <option value="@opt.Value" selected="@(Model.TimeRange == opt.Value ? "selected" : null)">
+                              @opt.Text
+                        </option>
+                  }
+            </select>
+      </div>
+
+      <div class="d-flex align-items-center gap-2">
+            <label class="form-label mb-0 small text-nowrap" for="sortSelect">排序</label>
+            <select id="sortSelect" name="sort" class="form-select form-select-sm" style="width:auto"
+                    onchange="this.form.submit()">
+                  @foreach (var opt in ReviewSort.Options)
+                  {
+                        <option value="@opt.Value" selected="@(Model.Sort == opt.Value ? "selected" : null)">
+                              @opt.Text
+                        </option>
+                  }
+            </select>
+      </div>
+
+      <div class="form-check form-switch mb-0">
+            <input class="form-check-input" type="checkbox" id="hasContentOnly" name="hasContentOnly" value="true"
+                   checked="@(Model.HasContentOnly ? "checked" : null)"
+                   onchange="this.form.submit()">
+            <label class="form-check-label small text-nowrap" for="hasContentOnly">只看有留言的</label>
+      </div>
+
+      @* 沒有 JS 的時候還是要能送出 *@
+      <noscript><button type="submit" class="btn btn-sm btn-secondary">套用</button></noscript>
+
+      @if (Model.HasFilter)
+      {
+            <a class="btn btn-sm btn-outline-secondary" href="@Url.Action("Index")">清除全部篩選</a>
+      }
+</form>
+
+@* ── 卡片列表 ───────────────────────────────────── *@
+@if (Model.IsEmpty)
+{
+      <div class="text-center text-muted py-5 border rounded">
+            <i class="bi bi-chat-square-text fs-1 d-block mb-2"></i>
+            @if (Model.HasFilter)
+            {
+                  <div>目前的條件沒有找到評論</div>
+                  <div class="small mt-1">可以放寬時間範圍，或按「清除全部篩選」</div>
+            }
+            else
+            {
+                  <text>這裡還沒有公開的評論</text>
+            }
+      </div>
+}
+else
+{
+      <div class="review-cards">
+            @foreach (var item in Model.Items)
+            {
+                  <article class="card mb-3 review-card @(item.IsRatingOnly ? "review-card--rating-only" : "")">
+                        <div class="card-body">
+
+                              @* ── 頁首：星等、署名、時間 ── *@
+                              <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                                          @{
+                                                Stars(item.StarRating);
+                                          }
+                                          <span class="fw-semibold">@item.DisplayName</span>
+                                    </div>
+                                    <span class="small text-muted text-nowrap" title="@TimeAgo.Full(item.CreatedAt)">
+                                          @TimeAgo.Of(item.CreatedAt)
+                                    </span>
+                              </div>
+
+                              @* ── 內容 ── *@
+                              @if (item.IsRatingOnly)
+                              {
+                                    <p class="small text-muted fst-italic mb-2">
+                                          這位使用者只留下評分，沒有寫評論。
+                                    </p>
+                              }
+                              else
+                              {
+                                    <p class="review-body review-clamp js-clamp mb-1">@item.Content</p>
+                                    @* 內容沒有超過四行的話，這顆按鈕會被 JS 留在隱藏狀態 *@
+                                    <button type="button" class="btn btn-link btn-sm p-0 mb-2 js-clamp-toggle d-none">
+                                          展開全文
+                                    </button>
+                              }
+
+                              @* ── 提及標籤 ── *@
+                              @if (item.MentionsVenue || item.MentionsStaff)
+                              {
+                                    <div class="mb-2">
+                                          @if (item.MentionsVenue)
+                                          {
+                                                <span class="badge rounded-pill text-bg-light border me-1">
+                                                      <i class="bi bi-hash"></i> 場地設施
+                                                </span>
+                                          }
+                                          @if (item.MentionsStaff)
+                                          {
+                                                <span class="badge rounded-pill text-bg-light border">
+                                                      <i class="bi bi-hash"></i> 人員服務
+                                                </span>
+                                          }
+                                    </div>
+                              }
+
+                              @* ── 館方回覆 ──
+                       只顯示內容與時間。員工姓名與顧客滿意度是內部資訊，
+                       這裡的 ViewModel 根本沒有那些欄位，從結構上就洩漏不了。 *@
+                              @if (item.HasReply)
+                              {
+                                    <div class="reply-block border rounded p-3 mt-2">
+                                          <div class="small text-muted mb-1">
+                                                <i class="bi bi-reply-fill"></i> 館方回覆
+                                                <span class="ms-2" title="@TimeAgo.Full(item.RepliedAt!.Value)">
+                                                      @TimeAgo.Of(item.RepliedAt!.Value)
+                                                </span>
+                                          </div>
+                                          <p class="review-body mb-0">@item.ReplyContent</p>
+                                    </div>
+                              }
+
+                              @* ── 頁尾：場地 ── *@
+                              @if (item.VenueName != null)
+                              {
+                                    <div class="small text-muted mt-2">
+                                          <i class="bi bi-geo-alt"></i> @item.VenueName
+                                    </div>
+                              }
+                        </div>
+                  </article>
+            }
+      </div>
+}
+
+@* ── 開發測試入口 ────────────────────────────────
+   原本這一頁的內容。收進摺疊區塊，交件前整段刪掉。 *@
+<details class="mt-5">
+      <summary class="text-muted small">開發測試入口（交件前刪除）</summary>
+      <div class="row mt-3">
+            <div class="col-md-6">
+                  <form asp-action="CreateForVisit" method="get" class="mb-3">
+                        <label for="tokenInput" class="form-label small">
+                              現場評論 QRToken（TESTVISIT02 / 03、TESTENTRY02）
+                        </label>
+                        <div class="input-group input-group-sm">
+                              <input type="text" name="token" id="tokenInput" class="form-control" />
+                              <button class="btn btn-outline-primary">開始評論</button>
+                        </div>
+                  </form>
+
+                  <form asp-action="CreateForBooking" method="get" class="mb-3">
+                        <label for="idInput" class="form-label small">
+                              預約評論 ReviewPerBookingId（9002 / 9003）
+                        </label>
+                        <div class="input-group input-group-sm">
+                              <input type="text" name="id" id="idInput" class="form-control" />
+                              <button class="btn btn-outline-primary">開始評論</button>
+                        </div>
+                  </form>
+
+                  <a asp-controller="AReview" asp-action="Index" class="btn btn-sm btn-outline-info">跳轉館方</a>
+            </div>
+      </div>
+</details>
 
 @section Scripts {
       @{
-            @* 這裡只用來放載入 Partial 視窗的 C# 區塊 *@
             await Html.RenderPartialAsync("_ValidationScriptsPartial");
-       }
+      }
 
-       <script>
-            // 畫面一載入，立刻強制聚焦到輸入框
-            document.addEventListener("DOMContentLoaded", function() {
-                  document.getElementById("tokenInput").focus();
-            });
+      <script>
+            // ⚠️ 暫時放這裡，讓你先看得到效果。
+            //    之後搬去 wwwroot/js/creview-cards.js。
+            (function () {
+                'use strict';
+
+                // 內容真的超過四行的卡片，才顯示「展開全文」。
+                // scrollHeight 是「完整內容有多高」，clientHeight 是「現在看得到多高」，
+                // 前者比較大就代表被截掉了。留 2px 是給瀏覽器的四捨五入誤差。
+                document.querySelectorAll('.js-clamp').forEach(function (el) {
+                    if (el.scrollHeight > el.clientHeight + 2) {
+                        var btn = el.nextElementSibling;
+                        if (btn && btn.classList.contains('js-clamp-toggle')) {
+                            btn.classList.remove('d-none');
+                        }
+                    }
+                });
+
+                document.addEventListener('click', function (e) {
+                    var btn = e.target.closest('.js-clamp-toggle');
+                    if (!btn) return;
+
+                    var body = btn.previousElementSibling;
+                    var expanded = body.classList.toggle('is-expanded');
+                    btn.textContent = expanded ? '收合' : '展開全文';
+                });
+            })();
       </script>
 
-            @* 把彈出視窗的邏輯集中放到這裡 *@
-            @if (TempData[CDictionary.TK_MSG_Input錯誤] != null)
-            {
-                <script>
-                      @* 使用 setTimeout(..., 30) 讓 JavaScript 稍微收手，給瀏覽器時間「畫」出背景 *@
-                      setTimeout(function() {
-                           var msgInputError = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_Input錯誤]));
-                           alert(msgInputError);
-                      }, 20);</script>
-            }
-            @if (TempData[CDictionary.TK_MSG_找不到指定物件] != null)
-            {
-                    <script>
-                        setTimeout(function() {
-                            var msgNotFound = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_找不到指定物件]));
-                            alert(msgNotFound);
-                        }, 20);
-                        </script>
-            }
-            @if (TempData[CDictionary.TK_MSG_評論資格過期] != null)
-            {
-                <script>
-                        setTimeout(function() {
-                            var msgHasExpired = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_評論資格過期]));
-                            alert(msgHasExpired);
-                        }, 20);
-                        </script>
-            }
-      
+      @* 把彈出視窗的邏輯集中放到這裡 *@
+      @if (TempData[CDictionary.TK_MSG_Input錯誤] != null)
+      {
+            <script>
+                @* 使用 setTimeout(..., 30) 讓 JavaScript 稍微收手，給瀏覽器時間「畫」出背景 *@
+                  setTimeout(function () {
+                      var msgInputError = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_Input錯誤]));
+                      alert(msgInputError);
+                  }, 20);
+            </script>
+      }
+      @if (TempData[CDictionary.TK_MSG_找不到指定物件] != null)
+      {
+            <script>
+                  setTimeout(function () {
+                      var msgNotFound = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_找不到指定物件]));
+                      alert(msgNotFound);
+                  }, 20);
+            </script>
+      }
+      @if (TempData[CDictionary.TK_MSG_評論資格過期] != null)
+      {
+            <script>
+                  setTimeout(function () {
+                      var msgHasExpired = @Html.Raw(Json.Serialize(TempData[CDictionary.TK_MSG_評論資格過期]));
+                      alert(msgHasExpired);
+                  }, 20);
+            </script>
+      }
 }

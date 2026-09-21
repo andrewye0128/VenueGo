@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.ViewModels
+namespace VenueGo.ViewModels.MemberViewModels
 {
     // 角色清單列表項目
     public class RoleListItemViewModel

@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.ViewModels
+namespace VenueGo.ViewModels.MemberViewModels
 {
     public class RegisterUserViewModel
     {
@@ -77,5 +77,33 @@ namespace VenueGo.ViewModels
         public string Password { get; set; } = string.Empty;
 
         public bool RememberMe { get; set; }
+    }
+
+    // 1. 忘記密碼 - 輸入 Email 的模型
+    public class ForgotPasswordViewModel
+    {
+        [Required(ErrorMessage = "請輸入 Email 帳號")]
+        [EmailAddress(ErrorMessage = "Email 格式不正確")]
+        public string Email { get; set; } = string.Empty;
+    }
+
+    // 2. 重置密碼 - 輸入新密碼的模型
+    public class ResetPasswordViewModel
+    {
+        [Required]
+        public string Token { get; set; } = string.Empty;
+
+        [Required]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "請輸入新密碼")]
+        [MinLength(6, ErrorMessage = "密碼長度至少需要 6 個字元")]
+        [DataType(DataType.Password)]
+        public string Password { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "請再次輸入新密碼")]
+        [DataType(DataType.Password)]
+        [Compare("Password", ErrorMessage = "兩次輸入的密碼不一致")]
+        public string ConfirmPassword { get; set; } = string.Empty;
     }
 }

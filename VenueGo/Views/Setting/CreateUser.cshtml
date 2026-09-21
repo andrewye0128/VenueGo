@@ -1,4 +1,4 @@
-﻿@model VenueGo.ViewModels.RegisterUserViewModel
+﻿@model VenueGo.ViewModels.MemberViewModels.RegisterUserViewModel
 
 @{
     ViewData["Title"] = "新增員工帳號";
@@ -49,7 +49,8 @@
                 </div>
                 <div class="col-md-6">
                     <label asp-for="Birth" class="form-label fw-bold">出生日期 <span class="text-danger">*</span></label>
-                    <input asp-for="Birth" class="form-control" type="date" />
+                    <!-- 👈 修改點：明確加上 value 格式化，確保 input type="date" 能精確解析顯示為今日 -->
+                    <input asp-for="Birth" class="form-control" type="date" value="@Model.Birth.ToString("yyyy-MM-dd")" />
                     <span asp-validation-for="Birth" class="text-danger small"></span>
                 </div>
             </div>

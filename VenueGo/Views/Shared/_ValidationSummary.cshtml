@@ -1,0 +1,27 @@
+﻿@*
+    表單層級的錯誤訊息。全專案通用，沒有錯誤時不輸出任何內容。
+
+    用法：
+        <partial name="_ValidationSummary" />
+
+    只顯示 ModelOnly 的錯誤（也就是 ModelState.AddModelError(string.Empty, ...) 加入的訊息），
+    欄位層級的錯誤交給各欄位旁的 asp-validation-for 顯示，
+    避免同一句話在畫面上出現兩次。
+*@
+@if (!ViewData.ModelState.IsValid)
+{
+    var errors = ViewData.ModelState[string.Empty]?.Errors;
+
+    @if (errors is { Count: > 0 })
+    {
+        <div class="alert alert-danger d-flex gap-2" role="alert">
+            <i class="bi bi-exclamation-triangle flex-shrink-0 mt-1"></i>
+            <div>
+                @foreach (var error in errors)
+                {
+                    <div>@error.ErrorMessage</div>
+                }
+            </div>
+        </div>
+    }
+}

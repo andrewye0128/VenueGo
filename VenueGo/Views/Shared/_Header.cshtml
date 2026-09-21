@@ -2,11 +2,15 @@
     放置路徑：Views/Shared/_Header.cshtml
     頁首：選單開關、頁面標題、通知、全螢幕、使用者選單
 *@
+@using System.Security.Claims
 @{
     var pageTitle = ViewData["Title"] as string ?? "儀表板";
     var notifyCount = 3;   // TODO: 之後改由 ViewComponent 或 ViewBag 帶入
-    var userName = "管理員";
-    var userEmail = "admin@venuego.com";
+    // var userName = "管理員";
+    // var userEmail = "admin@venuego.com";
+    var userName = User.Identity?.IsAuthenticated == true ? User.Identity.Name : "訪客";
+    var userEmail = User.FindFirst(ClaimTypes.Email)?.Value ?? "guest@venuego.com";
+    var avatarChar = !string.IsNullOrEmpty(userName) ? userName.Substring(0, 1) : "G";
 }
 
 <header class="admin-header">
@@ -46,7 +50,16 @@
                 <li><a class="dropdown-item" asp-controller="Member" asp-action="Profile">個人資料</a></li>
                 <li><a class="dropdown-item" asp-controller="Setting" asp-action="Index">系統設定</a></li>
                 <li><hr class="dropdown-divider" /></li>
-                <li><a class="dropdown-item text-danger" asp-controller="Account" asp-action="Logout">登出</a></li>
+                @* <li><a class="dropdown-item text-danger" asp-controller="Account" asp-action="Logout">登出</a></li> *@
+                <li>
+                    <!-- 改用 Form 提交 POST 登出請求並帶上防偽標籤 -->
+                    <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline w-100">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="dropdown-item text-danger border-0 bg-transparent w-100 text-start">
+                            <i class="bi bi-box-arrow-right me-2"></i>登出
+                        </button>
+                    </form>
+                </li>
             </ul>
         </div>
     </div>

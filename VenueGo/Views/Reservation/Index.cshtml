@@ -1,6 +1,6 @@
 @* @model IEnumerable<VenueGo.Models.Entities.Reservation> *@
 @* @model IEnumerable<VenueGo.Models.ReservationModels.CReservationWrap> *@
-@model IEnumerable<VenueGo.ViewModels.ReservationListViewModel>
+@model IEnumerable<VenueGo.ViewModels.ReservationViewModels.ReservationListViewModel>
 
 @{
     ViewData["Title"] = "預約管理";
@@ -9,7 +9,9 @@
 <h1>預約管理</h1>
 
 <p>
-    <a asp-action="Create">新增預約</a>
+    <a asp-controller="ReservationCreate" asp-action="Start" class="btn btn-primary">
+        + 新增預約
+    </a>
 </p>
 <table class="table">
     <thead>
@@ -58,10 +60,9 @@
                         @Html.DisplayFor(model => item.VenueName)
                     </td>
                     <td>
-                        @Html.DisplayFor(model => item.BookingDate.ToString("yyyy/MM/dd"))
+                        @item.BookingDate.ToString("yyyy/MM/dd")
                     </td>
                     <td>
-                        // @Html.DisplayFor(model => item.StartTime) ~ @Html.DisplayFor(model => item.EndTime)
                         @Html.DisplayFor(model => item.TimeRange)
                     </td>
                     <td>
@@ -81,3 +82,5 @@
         }
     </tbody>
 </table>
+<partial name="_OperationMessages" />
+@* @Html.DisplayFor(model => item.StartTime) ~ @Html.DisplayFor(model => item.EndTime)> *@

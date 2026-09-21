@@ -1,0 +1,86 @@
+@model IEnumerable<VenueGo.Models.VenueModels.CSportTypeWrap>
+
+@{
+    ViewData["Title"] = "運動類型管理";
+}
+
+<!-- 功能頁籤 -->
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "VenueIndex" || ViewContext.RouteData.Values["action"]?.ToString() == "VenueCreate" || ViewContext.RouteData.Values["action"]?.ToString() == "VenueEdit" ? "active" : "")"
+           asp-controller="Venue" asp-action="VenueIndex">
+            <i class="bi bi-geo-alt me-1"></i>場地管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "SportTypeIndex" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypeCreate" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypeEdit" ? "active" : "")"
+           asp-controller="Venue" asp-action="SportTypeIndex">
+            <i class="bi bi-tags me-1"></i>運動類型管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "SportTypePriceRuleIndex" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypePriceRuleCreate" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypePriceRuleEdit" ? "active" : "")"
+           asp-controller="Venue" asp-action="SportTypePriceRuleIndex">
+            <i class="bi bi-cash-coin me-1"></i>價格規則管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "WeekBusinessHourIndex" ? "active" : "")"
+           asp-controller="Venue" asp-action="WeekBusinessHourIndex">
+            <i class="bi bi-clock me-1"></i>營業時間管理
+        </a>
+    </li>
+</ul>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+        <h5 class="mb-0 fw-bold">運動類型列表</h5>
+        <a asp-action="SportTypeCreate" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>新增運動類型
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4" style="width: 10%;">序</th>
+                        <th>@Html.DisplayNameFor(model => model.SportName)</th>
+                        <th class="text-center" style="width: 20%;">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (!Model.Any())
+                    {
+                        <tr>
+                            <td colspan="3" class="text-center py-4 text-muted">目前尚無運動類型資料</td>
+                        </tr>
+                    }
+                    else
+                    {
+                        int count = 0;
+                        foreach (var item in Model)
+                        {
+                            count++;
+                            <tr>
+                                <td class="ps-4">@count</td>
+                                <td>@Html.DisplayFor(model => item.SportName)</td>
+                                <td class="text-center">
+                                    <a asp-action="SportTypeEdit" asp-route-id="@item.SportTypeId"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil-square me-1"></i>編輯
+                                    </a>
+                                    <a asp-action="SportTypeDelete" asp-route-id="@item.SportTypeId"
+                                       class="btn btn-sm btn-outline-danger"
+                                       onclick="return confirm('確定要刪除該運動類型嗎?')">
+                                        <i class="bi bi-trash me-1"></i>刪除
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

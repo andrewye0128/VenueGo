@@ -1,0 +1,87 @@
+@model VenueGo.ViewModels.VenueViewModels.VenueEditViewModel
+
+@{
+    ViewData["Title"] = "場地管理";
+}
+
+<div class="mb-3">
+    <a asp-action="VenueIndex" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-pencil-square me-2 text-primary"></i>場地資料編輯</h5>
+    </div>
+    <div class="card-body">
+        <form asp-action="VenueEdit" method="POST" enctype="multipart/form-data">
+            @Html.AntiForgeryToken()
+
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4" role="alert"></div>
+
+            <input asp-for="VenueId" type="hidden" />
+            <input asp-for="PhotoPath" type="hidden" />
+
+            <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-card-heading me-1"></i>基本資料</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label asp-for="VenueName" class="form-label fw-bold">場地名稱 <span class="text-danger">*</span></label>
+                    <input asp-for="VenueName" class="form-control" />
+                    <span asp-validation-for="VenueName" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Location" class="form-label fw-bold">地點 <span class="text-danger">*</span></label>
+                    <input asp-for="Location" class="form-control" />
+                    <span asp-validation-for="Location" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="Capacity" class="form-label fw-bold">容納人數 <span class="text-danger">*</span></label>
+                    <input asp-for="Capacity" class="form-control" />
+                    <span asp-validation-for="Capacity" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label asp-for="SportTypeId" class="form-label fw-bold">運動種類 <span class="text-danger">*</span></label>
+                    <select asp-for="SportTypeId" asp-items="Model.SportTypes" class="form-select">
+                        <option value="">請選擇運動種類</option>
+                    </select>
+                    <span asp-validation-for="SportTypeId" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <hr class="my-4" />
+
+            <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-image me-1"></i>照片</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <label asp-for="PhotoFile" class="form-label fw-bold">上傳新照片</label>
+                    <input asp-for="PhotoFile" type="file" class="form-control" accept="image/*"
+                           data-preview-target="photoPreview" />
+                    <span asp-validation-for="PhotoFile" class="text-danger small"></span>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">照片預覽</label>
+                    <div>
+                        <img id="photoPreview" src="@Model.PhotoPath" alt="@Model.VenueName"
+                             class="rounded" style="width: 180px; height: 130px; object-fit: cover;"
+                             hidden="@(string.IsNullOrEmpty(Model.PhotoPath))" />
+                        <p id="photoPreviewEmptyText" class="text-muted mb-0"
+                           hidden="@(!string.IsNullOrEmpty(Model.PhotoPath))">尚未上傳照片</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-top text-end">
+                <a asp-action="VenueIndex" class="btn btn-light me-2">取消</a>
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-check-lg me-1"></i>送出修改
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/photo-preview.js" asp-append-version="true"></script>
+}

@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace VenueGo.ViewModels
+namespace VenueGo.ViewModels.ReservationViewModels
 {
     public class ReservationListViewModel
     {

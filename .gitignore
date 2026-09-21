@@ -493,5 +493,9 @@ appsettings.Local.json
 wwwroot/uploads/*
 !wwwroot/uploads/.gitkeep
 
+# Claude Code personal instructions/settings (not shared)
+CLAUDE.local.md
+.claude/settings.local.json
+
 # 場地上傳圖片
 /VenueGo/wwwroot/images/venues/

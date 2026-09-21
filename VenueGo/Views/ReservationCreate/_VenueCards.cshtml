@@ -1,0 +1,229 @@
+﻿@*
+    場地卡片清單。獨立成 Partial View 的理由與 _MemberTable 相同：
+    讓 SelectVenue.cshtml 只負責版面組裝，且日後要改成 AJAX 篩選時
+    可以直接回傳這一塊。
+
+    Model：SelectVenueViewModel（分頁連結需要搜尋條件，所以傳整個 VM）。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.SelectVenueViewModel
+
+@if (Model.Venues.IsEmpty)
+{
+    <div class="text-center text-secondary border rounded py-5">
+        <p class="mb-1">找不到符合條件的場地。</p>
+        <p class="mb-0 small">可以換個運動類型，或清空關鍵字重新搜尋。</p>
+    </div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var venue in Model.Venues.Items)
+        {
+            var inputId = $"venue-{venue.VenueId}";
+            var isChecked = Model.SelectedVenueId == venue.VenueId;
+
+            <div class="col-md-6">
+                <div class="venue-card card h-100 @(venue.IsSelectable ? null : "venue-card-disabled")">
+                    @*
+                        radio 用 visually-hidden 而不是 display:none，
+                        這樣仍可被鍵盤 Tab 聚焦，也保留螢幕閱讀器可讀性。
+                        name 必須與 Controller 的參數名 venueId 一致。
+                    *@
+                    <input class="visually-hidden venue-radio"
+                           type="radio"
+                           name="venueId"
+                           id="@inputId"
+                           value="@venue.VenueId"
+                           checked="@isChecked"
+                           disabled="@(!venue.IsSelectable)"
+                           aria-label="選擇 @venue.VenueName">
+
+                    <div class="card-body pb-2">
+                        <div class="d-flex gap-3">
+                            <div class="venue-photo flex-shrink-0">
+                                @if (!string.IsNullOrWhiteSpace(venue.PhotoPath))
+                                {
+                                    <img src="@venue.PhotoPath" alt="@venue.VenueName" loading="lazy">
+                                }
+                                else
+                                {
+                                    <div class="venue-photo-placeholder" aria-hidden="true">
+                                        <i class="bi bi-image"></i>
+                                    </div>
+                                }
+                            </div>
+
+                            <div class="venue-info flex-grow-1">
+                                @* 標題獨佔一行。場地名稱較長（例如「三民國民運動中心 羽球館」），
+       讓它自然換行比截斷好，名稱是管理員辨識場地的主要依據。 *@
+                                <h3 class="h6 mb-2">@venue.VenueName</h3>
+
+                                <dl class="venue-spec mb-0">
+                                    <div class="venue-spec-row">
+                                        <dt>運動類型</dt>
+                                        <dd>@venue.SportName</dd>
+                                    </div>
+                                    <div class="venue-spec-row">
+                                        <dt>可容納人數</dt>
+                                        <dd>@venue.CapacityText</dd>
+                                    </div>
+                                    @foreach (var priceRow in venue.PriceRows)
+                                    {
+                                        <div class="venue-spec-row">
+                                            <dt>@priceRow.Label</dt>
+                                            <dd>@priceRow.Value</dd>
+                                        </div>
+                                    }
+                                    <div class="venue-spec-row">
+                                        <dt>狀態</dt>
+                                        <dd class="@venue.StatusTextClass">@venue.StatusText</dd>
+                                    </div>
+                                </dl>
+
+                                @if (venue.UnselectableReason is not null)
+                                {
+                                    <p class="small text-secondary mt-2 mb-0">@venue.UnselectableReason</p>
+                                }
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body pt-0 flex-grow-0">
+                        @if (venue.IsSelectable)
+                        {
+                            @* label 的 for 指向同卡片的 radio，不需要 JavaScript 也能點選 *@
+                            <label class="btn btn-outline-primary w-100 venue-select-btn" for="@inputId">
+                                <span class="label-default">選擇場地</span>
+                                <span class="label-selected">
+                                    <i class="bi bi-check-circle-fill me-1"></i>已選擇
+                                </span>
+                            </label>
+                        }
+                        else
+                        {
+                            <button type="button" class="btn btn-outline-secondary w-100" disabled>
+                                無法選擇
+                            </button>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+        <span class="text-secondary small">
+            顯示 @Model.Venues.FirstItemNumber - @Model.Venues.LastItemNumber
+            / 共 @Model.Venues.TotalCount 筆
+        </span>
+        @await Html.PartialAsync("_Pager", Model.Pager)
+    </div>
+}
+
+<style>
+    /*
+            選取狀態的兩種判斷方式並列，理由與步驟 1 相同：
+              :has()       純 CSS，JavaScript 失效時仍有效
+              .is-selected 由 SelectVenue.cshtml 的 JavaScript 加上，涵蓋不支援 :has() 的瀏覽器
+        */
+    .venue-card {
+        border-color: var(--bs-border-color);
+        transition: border-color .15s ease-in-out, box-shadow .15s ease-in-out;
+    }
+
+        .venue-card:has(.venue-radio:checked),
+        .venue-card.is-selected {
+            border-color: var(--bs-primary);
+            box-shadow: 0 0 0 1px var(--bs-primary);
+        }
+
+    .venue-card-disabled {
+        background-color: var(--bs-secondary-bg-subtle);
+    }
+
+    /* 選取後按鈕改為實心藍底白字 */
+    .venue-card:has(.venue-radio:checked) .venue-select-btn,
+    .venue-card.is-selected .venue-select-btn {
+        background-color: var(--bs-primary);
+        border-color: var(--bs-primary);
+        color: #fff;
+    }
+
+        .venue-card:has(.venue-radio:checked) .venue-select-btn:hover,
+        .venue-card.is-selected .venue-select-btn:hover {
+            background-color: var(--bs-primary);
+            border-color: var(--bs-primary);
+            color: #fff;
+            filter: brightness(.95);
+        }
+
+    /* 按鈕文字在「選擇場地」與「已選擇」之間切換 */
+    .venue-select-btn .label-selected {
+        display: none;
+    }
+
+    .venue-card:has(.venue-radio:checked) .venue-select-btn .label-default,
+    .venue-card.is-selected .venue-select-btn .label-default {
+        display: none;
+    }
+
+    .venue-card:has(.venue-radio:checked) .venue-select-btn .label-selected,
+    .venue-card.is-selected .venue-select-btn .label-selected {
+        display: inline;
+    }
+
+    /* 鍵盤聚焦時給卡片外框，因為 radio 本身是隱藏的 */
+    .venue-card:has(.venue-radio:focus-visible) {
+        outline: 2px solid var(--bs-primary);
+        outline-offset: 2px;
+    }
+
+    .venue-photo img,
+    .venue-photo-placeholder {
+        width: 7.5rem;
+        height: 6rem;
+        border-radius: .375rem;
+        object-fit: cover;
+    }
+
+    .venue-photo-placeholder {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--bs-secondary-bg);
+        color: var(--bs-secondary-color);
+        font-size: 1.5rem;
+    }
+
+    .venue-spec-row {
+        display: flex;
+        gap: .75rem;
+        font-size: .875rem;
+        padding: .125rem 0;
+    }
+
+    .venue-spec dt {
+        flex: 0 0 5.5rem;
+        font-weight: 400;
+        color: var(--bs-secondary-color);
+    }
+
+    .venue-spec dd {
+        margin: 0;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .venue-info {
+        min-width: 0;
+    }
+
+    /* 窄螢幕時照片縮小，避免把規格欄位擠掉 */
+    @@media (max-width: 767.98px) {
+        .venue-photo img,
+        .venue-photo-placeholder {
+            width: 5rem;
+            height: 4.5rem;
+        }
+    }
+</style>

@@ -1,0 +1,96 @@
+﻿@*
+    取消／作廢預約的彈出視窗。兩者共用同一份版面，只換標題與文案。
+
+    用法：
+        <partial name="_TerminateReservationModal"
+                 model='new TerminateModalViewModel { ... }' />
+
+    Model：TerminateModalViewModel（定義在本檔案最下方的 @functions 區塊）。
+
+    為何兩者共用：取消與作廢的欄位完全相同（都只要一個原因），
+    差別只在標題、按鈕文字與送出的 Action。複製成兩份會讓
+    「字數上限」「退款提示」這類規則之後只改到其中一份。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.TerminateModalViewModel
+
+<div class="modal fade" id="@Model.ModalId" tabindex="-1"
+     aria-labelledby="@(Model.ModalId)Label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-controller="Reservation" asp-action="@Model.ActionName" method="post">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="id" value="@Model.ReservationId" />
+
+            <div class="modal-content">
+
+                <div class="modal-header bg-primary-subtle">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-primary text-white me-2"
+                          style="width: 2rem; height: 2rem;" aria-hidden="true">
+                        <i class="bi bi-exclamation-lg"></i>
+                    </span>
+                    <h5 class="modal-title flex-grow-1" id="@(Model.ModalId)Label">
+                        @Model.Title #@Model.ReservationId
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+                </div>
+
+                <div class="modal-body d-flex flex-column gap-3">
+
+                    @* 時段釋放提示。兩種操作都會釋放時段，所以一律顯示。 *@
+                    <div class="alert alert-primary d-flex gap-2 mb-0 py-2 px-3" role="note">
+                        <i class="bi bi-info-circle flex-shrink-0 mt-1"></i>
+                        <span>此操作將釋放 @Model.BookingDateText @Model.TimeRangeText 的時段。</span>
+                    </div>
+
+                    @*
+                        退款提示只在已收款時顯示。
+                        未提醒的話那筆錢會卡在系統裡沒人處理。
+                    *@
+                    @if (Model.RequiresRefund)
+                    {
+                        <div class="alert alert-warning d-flex gap-2 mb-0 py-2 px-3" role="alert">
+                            <i class="bi bi-exclamation-triangle flex-shrink-0 mt-1"></i>
+                            <span>
+                                此預約已收款 <strong>@Model.PaidAmountText</strong>，
+                                @Model.RefundHintText
+                            </span>
+                        </div>
+                    }
+                    else
+                    {
+                        <p class="text-secondary small mb-0">
+                            此預約尚未收款，@(Model.ActionNoun)後無需處理退款。
+                        </p>
+                    }
+
+                    <div>
+                        <label class="form-label fw-medium" for="@(Model.ModalId)Reason">
+                            (@Model.ActionNoun)原因 <span class="text-danger">*</span>
+                        </label>
+                        <textarea class="form-control"
+                                  id="@(Model.ModalId)Reason"
+                                  name="reason"
+                                  rows="4"
+                                  maxlength="200"
+                                  required
+                                  placeholder="@Model.ReasonPlaceholder"></textarea>
+
+                        <div class="d-flex justify-content-between gap-3 mt-1 small text-secondary">
+                            <span>此操作不會刪除資料，系統將保留@(Model.ActionNoun)紀錄。</span>
+                            @* 字數上限 200 對應 Reservations.CancelReason 的 nvarchar(200) *@
+                            <span><span class="reason-counter" data-target="@(Model.ModalId)Reason">0</span> / 200</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-footer bg-body-tertiary">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                        返回
+                    </button>
+                    <button type="submit" class="btn btn-danger d-inline-flex align-items-center gap-2">
+                        <i class="bi bi-trash3"></i>@Model.ConfirmButtonText
+                    </button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

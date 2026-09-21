@@ -1,0 +1,207 @@
+﻿@*
+    時段按鈕格線。
+
+    互動規則（三條，由 SelectSlots.cshtml 的 JavaScript 實作）：
+      一、點空格：緊貼已選範圍的前或後 → 延伸一格；其他位置 → 清空，只選這一格
+      二、點已選：是頭或尾 → 取消它；是中間 → 清空，只選這一格
+      三、已選滿上限時：兩端的空格變淡並提示上限，其他空格仍可點
+
+    checkbox 使用 visually-hidden 而非 display:none，保留鍵盤可聚焦與螢幕閱讀器可讀性。
+    name 必須與 Controller 的參數名 slotTimes 一致。
+
+    Model：SelectSlotsViewModel。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.SelectSlotsViewModel
+
+@if (Model.IsDayClosed)
+{
+    <div class="text-center text-secondary border rounded py-5">
+        <p class="mb-1">該日期為公休日。</p>
+        <p class="mb-0 small">請返回上一步選擇其他日期。</p>
+    </div>
+}
+else if (Model.IsDayFull)
+{
+    <div class="text-center text-secondary border rounded py-5">
+        <p class="mb-1">該日期已無可預約時段。</p>
+        <p class="mb-0 small">請返回上一步改選其他日期，或改選其他場地。</p>
+    </div>
+}
+else
+{
+    <div class="d-flex flex-wrap gap-3 mb-2 small text-secondary">
+        <span><span class="slot-legend slot-legend-free"></span>可預約</span>
+        <span><span class="slot-legend slot-legend-sel"></span>已選</span>
+        <span><span class="slot-legend slot-legend-booked"></span>已預約</span>
+        <span><span class="slot-legend slot-legend-maint"></span>維護中</span>
+    </div>
+
+    <div class="slot-grid" id="slotGrid" data-max-slots="@Model.MaxSlots">
+        @foreach (var slot in Model.Slots)
+        {
+            var inputId = $"slot-{slot.SlotTime:HHmm}";
+            var stateClass = slot.IsSelectable ? "is-free" : "is-blocked";
+
+            <div class="slot-cell @stateClass" data-price="@(slot.UnitPrice ?? 0)">
+                <input class="visually-hidden slot-check"
+                       type="checkbox"
+                       name="slotTimes"
+                       id="@inputId"
+                       value="@slot.FormValue"
+                       checked="@slot.IsSelected"
+                       disabled="@(!slot.IsSelectable)"
+                       aria-label="@slot.TimeRangeText @slot.SecondaryText">
+
+                <label class="slot-btn" for="@inputId">
+                    <span class="slot-time">@slot.TimeRangeText</span>
+                    <span class="slot-note">@slot.SecondaryText</span>
+                </label>
+            </div>
+        }
+    </div>
+
+    <div class="alert alert-light border d-flex gap-2 mt-3 mb-0 py-2 px-3 small" role="status">
+        <i class="bi bi-info-circle flex-shrink-0 mt-1"></i>
+        <div>
+            <div id="slotSummary">
+                @if (Model.HasSelection)
+                {
+                    <span>已選時段：@Model.SelectedRangeText，共 @Model.SelectedCount 小時</span>
+                    <span class="ms-2 fw-semibold text-primary">@Model.Pricing.TotalAmountText</span>
+                }
+                else
+                {
+                    <span>尚未選擇時段。</span>
+                }
+            </div>
+            <div class="text-secondary">
+                一次最多可預約 @Model.MaxSlots 小時，且所選時段必須連續。
+                不連續的時段請分次建立預約。
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .slot-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .5rem;
+    }
+
+    .slot-cell {
+        min-width: 0;
+    }
+
+    .slot-btn {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .125rem;
+        width: 100%;
+        margin: 0;
+        padding: .625rem .5rem;
+        border: 1px solid var(--bs-border-color);
+        border-radius: var(--bs-border-radius);
+        background-color: var(--bs-body-bg);
+        cursor: pointer;
+        transition: background-color .1s ease-in-out, border-color .1s ease-in-out;
+    }
+
+    .slot-time {
+        font-size: .875rem;
+        line-height: 1.2;
+    }
+
+    .slot-note {
+        font-size: .75rem;
+        line-height: 1.2;
+        color: var(--bs-secondary-color);
+    }
+
+    .slot-cell.is-free .slot-btn:hover {
+        border-color: var(--bs-primary);
+        background-color: var(--bs-primary-bg-subtle);
+    }
+
+    /*
+            選取狀態的兩種判斷方式並列，與步驟 1~3 一致：
+              :has()       純 CSS，JavaScript 失效時仍有效
+              .is-selected 由 SelectSlots.cshtml 的 JavaScript 加上
+        */
+    .slot-cell:has(.slot-check:checked) .slot-btn,
+    .slot-cell.is-selected .slot-btn {
+        border-color: var(--bs-primary);
+        background-color: var(--bs-primary);
+        color: #fff;
+    }
+
+    .slot-cell:has(.slot-check:checked) .slot-note,
+    .slot-cell.is-selected .slot-note {
+        color: rgba(255, 255, 255, .85);
+    }
+
+    /* 已預約或維護中：不可點，原因寫在按鈕上 */
+    .slot-cell.is-blocked .slot-btn {
+        cursor: not-allowed;
+        background-color: var(--bs-secondary-bg-subtle);
+        color: var(--bs-secondary-color);
+        border-style: dashed;
+    }
+
+    /*
+            已達上限時，兩端的空格變淡。
+            不寫文字，原因以 title 屬性提示，由 JavaScript 設定。
+        */
+    .slot-cell.is-limited .slot-btn {
+        opacity: .45;
+        cursor: not-allowed;
+    }
+
+        .slot-cell.is-limited .slot-btn:hover {
+            border-color: var(--bs-border-color);
+            background-color: var(--bs-body-bg);
+        }
+
+    /* 鍵盤聚焦時給外框，因為 checkbox 本身是隱藏的 */
+    .slot-cell:has(.slot-check:focus-visible) .slot-btn {
+        outline: 2px solid var(--bs-primary);
+        outline-offset: 2px;
+    }
+
+    .slot-legend {
+        display: inline-block;
+        width: .625rem;
+        height: .625rem;
+        border-radius: .1875rem;
+        margin-right: .25rem;
+        vertical-align: -1px;
+        border: 1px solid var(--bs-border-color);
+    }
+
+    .slot-legend-free {
+        background-color: var(--bs-body-bg);
+    }
+
+    .slot-legend-sel {
+        background-color: var(--bs-primary);
+        border-color: var(--bs-primary);
+    }
+
+    .slot-legend-booked {
+        background-color: var(--bs-secondary-bg-subtle);
+        border-style: dashed;
+    }
+
+    .slot-legend-maint {
+        background-color: var(--bs-secondary-bg);
+        border-style: dashed;
+    }
+
+    @@media (max-width: 767.98px) {
+        .slot-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+</style>

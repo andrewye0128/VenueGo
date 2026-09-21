@@ -1,0 +1,27 @@
+﻿@* 放置路徑：Views/Setting/_SettingTabs.cshtml
+   系統設定模組共用頂部頁籤
+*@
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+}
+
+<!-- 頂部頁籤 -->
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link @(currentAction == "Roles" || currentAction == "CreateRole" || currentAction == "EditRole" ? "active fw-bold" : "")"
+           asp-controller="Setting" asp-action="Roles">
+            <i class="bi bi-shield-lock me-1"></i>角色權限管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(currentAction == "UserList" || currentAction == "EditUser" || currentAction == "CreateUser" || currentAction == "ConvertToEmployee" ? "active fw-bold" : "")"
+           asp-controller="Setting" asp-action="UserList">
+            <i class="bi bi-people me-1"></i>員工帳號管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link disabled" href="#" tabindex="-1" aria-disabled="true">
+            <i class="bi bi-gear me-1"></i>系統參數設定 (未開放)
+        </a>
+    </li>
+</ul>

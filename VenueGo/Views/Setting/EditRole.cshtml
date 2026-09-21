@@ -1,7 +1,11 @@
-﻿@model VenueGo.ViewModels.RoleEditViewModel
-
+﻿@model VenueGo.ViewModels.MemberViewModels.RoleEditViewModel
+@using VenueGo.Helpers
+@using VenueGo.Data
+@inject dbVenueContext Db
 @{
     ViewData["Title"] = "編輯角色權限";
+    // 檢查目前登入者是否為 Admin 角色
+    bool isAdmin = await AuthHelper.HasRoleAsync(User, Db, "Admin", "SystemAdmin");
 }
 
 <div class="mb-3">
@@ -23,7 +27,7 @@
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
                     <label asp-for="RoleName" class="form-label fw-bold">角色名稱 <span class="text-danger">*</span></label>
-                    <input asp-for="RoleName" class="form-value form-control" />
+                    <input asp-for="RoleName" class="form-control" />
                     <span asp-validation-for="RoleName" class="text-danger small"></span>
                 </div>
                 <div class="col-md-6">

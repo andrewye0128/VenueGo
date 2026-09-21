@@ -492,3 +492,6 @@ appsettings.Local.json
 # User uploaded files
 wwwroot/uploads/*
 !wwwroot/uploads/.gitkeep
+
+# 場地上傳圖片
+/VenueGo/wwwroot/images/venues/

@@ -1,4 +1,6 @@
-﻿namespace VenueGo.ViewModels.MemberViewModels
+﻿using System.ComponentModel.DataAnnotations;
+
+namespace VenueGo.ViewModels.MemberViewModels
 {
     public class UserListViewModel
     {
@@ -26,9 +28,14 @@
         public string EmployeeNo { get; set; } = string.Empty;
         public string JobTitle { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;
+
+        // 👈 新增：帳號鎖定截止時間（用於判斷密碼輸入錯誤多次導致的鎖定）
+        public DateTime? LockedUntil { get; set; }
         public DateTime CreatedAt { get; set; }
         public List<string> Roles { get; set; } = new();
         // 新增：是否為員工 (用來判斷顯示「編輯」或「轉任員工」按鈕)
         public bool IsEmployee { get; set; }
     }
+
+   
 }

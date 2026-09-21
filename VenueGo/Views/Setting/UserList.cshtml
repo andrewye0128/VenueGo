@@ -1,54 +1,33 @@
 ﻿@model VenueGo.ViewModels.MemberViewModels.UserListViewModel
 
 @{
-    ViewData["Title"] = "帳號權限管理";
+    ViewData["Title"] = "員工帳號管理";
 }
 
-<!-- 頂部頁籤 -->
-@* <ul class="nav nav-tabs mb-4">
-    <li class="nav-item">
-        <a class="nav-link" asp-controller="Setting" asp-action="Roles">
-            <i class="bi bi-shield-lock me-1"></i>角色權限管理
-        </a>
-    </li>
-    <li class="nav-item">
-        <a class="nav-link active fw-bold" asp-controller="Setting" asp-action="UserList">
-            <i class="bi bi-people me-1"></i>帳號列表管理
-        </a>
-    </li>
-</ul> *@
 <!-- 引進共用頁籤 -->
 <partial name="_SettingTabs" />
 
 <div class="d-flex justify-content-between align-items-center mb-3">
-    <h4 class="fw-bold mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>帳號列表</h4>
+    <h4 class="fw-bold mb-0"><i class="bi bi-person-badge me-2 text-primary"></i>員工帳號列表</h4>
     <a asp-controller="Setting" asp-action="CreateUser" class="btn btn-primary">
         <i class="bi bi-person-plus-fill me-1"></i>新增員工帳號
     </a>
 </div>
 
 <!-- 搜尋與篩選區塊 -->
-<div class="card shadow-sm mb-4">
-    <div class="card-body">
+<div class="card shadow-sm border-0 mb-4">
+    <div class="card-body p-3">
         <form asp-controller="Setting" asp-action="UserList" method="get" class="row g-3">
-            <div class="col-md-3">
-                <label class="form-label small fw-bold text-muted">帳號類型</label>
-                <select name="userType" class="form-select">
-                    <option value="all" selected="@(Model.SelectedUserType == "all")">全部使用者</option>
-                    <option value="employee" selected="@(Model.SelectedUserType == "employee")">僅顯示員工</option>
-                    <option value="member" selected="@(Model.SelectedUserType == "member")">僅顯示一般會員 (非員工)</option>
-                </select>
-            </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label small fw-bold text-muted">關鍵字搜尋</label>
-                <div class="input-group">
+                <div class="input-group input-group-sm">
                     <span class="input-group-text bg-white"><i class="bi bi-search"></i></span>
                     <input type="text" name="keyword" value="@Model.Keyword" class="form-control" placeholder="搜尋姓名、Email 或員工編號..." />
                 </div>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <label class="form-label small fw-bold text-muted">依角色篩選</label>
-                <select name="roleId" class="form-select">
+                <select name="roleId" class="form-select form-select-sm">
                     <option value="">全部角色</option>
                     @foreach (var role in Model.AvailableRoles)
                     {
@@ -58,26 +37,25 @@
                     }
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-3">
                 <label class="form-label small fw-bold text-muted">依狀態篩選</label>
-                <select name="status" class="form-select">
+                <select name="status" class="form-select form-select-sm">
                     <option value="">全部狀態</option>
-                    <option value="Active" selected="@(Model.SelectedStatus == "Active")">在職 / 啟用中</option>
-                    <option value="OnLeave" selected="@(Model.SelectedStatus == "OnLeave")">留職停薪</option>
-                    <option value="Resigned" selected="@(Model.SelectedStatus == "Resigned")">離職</option>
-                    <option value="Inactive" selected="@(Model.SelectedStatus == "Inactive")">已停用 (會員)</option>
+                    <option value="Active" selected="@(Model.SelectedStatus == "Active")">在職 (Active)</option>
+                    <option value="OnLeave" selected="@(Model.SelectedStatus == "OnLeave")">留職停薪 (OnLeave)</option>
+                    <option value="Resigned" selected="@(Model.SelectedStatus == "Resigned")">已離職 (Resigned)</option>
                 </select>
             </div>
             <div class="col-md-2 d-flex align-items-end gap-2">
-                <button type="submit" class="btn btn-primary flex-fill">篩選</button>
-                <a asp-controller="Setting" asp-action="UserList" class="btn btn-outline-secondary">重置</a>
+                <button type="submit" class="btn btn-primary btn-sm flex-fill">篩選</button>
+                <a asp-controller="Setting" asp-action="UserList" class="btn btn-outline-secondary btn-sm">重置</a>
             </div>
         </form>
     </div>
 </div>
 
 <!-- 使用者列表表格 -->
-<div class="card shadow-sm">
+<div class="card shadow-sm border-0">
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -87,7 +65,7 @@
                         <th>姓名 / Email</th>
                         <th>職稱</th>
                         <th>擁有角色</th>
-                        <th>狀態</th>
+                        <th>在職狀態</th>
                         <th>建立時間</th>
                         <th class="text-end pe-3">操作</th>
                     </tr>
@@ -127,12 +105,11 @@
                                     }
                                 </td>
                                 <td>
-                                    @* 根據不同狀態給予明確的 Badge 顏色與文字標籤 *@
                                     @switch (user.Status)
                                     {
                                         case "Active":
                                             <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                                                <i class="bi bi-check-circle me-1"></i>在職 / 啟用
+                                                <i class="bi bi-check-circle me-1"></i>在職
                                             </span>
                                             break;
                                         case "OnLeave":
@@ -145,10 +122,9 @@
                                                 <i class="bi bi-person-x me-1"></i>已離職
                                             </span>
                                             break;
-                                        case "Inactive":
                                         default:
                                             <span class="badge bg-danger-subtle text-danger border border-danger-subtle px-2 py-1">
-                                                <i class="bi bi-x-circle me-1"></i>已停用
+                                                <i class="bi bi-x-circle me-1"></i>@user.Status
                                             </span>
                                             break;
                                     }
@@ -163,7 +139,8 @@
                                     }
                                     else
                                     {
-                                        <a asp-controller="Setting" asp-action="ConvertToEmployee" asp-route-id="@user.UserId" class="btn btn-sm btn-success">
+                                        <!-- 👈 指向 MemberController 的 ConvertToEmployee -->
+                                        <a asp-controller="Member" asp-action="ConvertToEmployee" asp-route-id="@user.UserId" class="btn btn-sm btn-success">
                                             <i class="bi bi-person-up me-1"></i>轉任員工
                                         </a>
                                     }
@@ -176,7 +153,7 @@
                         <tr>
                             <td colspan="7" class="text-center py-5 text-muted">
                                 <i class="bi bi-inbox fs-1 d-block mb-2 text-secondary"></i>
-                                <span>查無符合條件的帳號資料</span>
+                                <span>查無符合條件的員工帳號資料</span>
                             </td>
                         </tr>
                     }

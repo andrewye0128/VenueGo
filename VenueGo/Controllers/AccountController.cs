@@ -218,7 +218,155 @@ namespace VenueGo.Controllers
             }
             return ip ?? "127.0.0.1";
         }
+        // -------------------------------------------------------------
+        // 1. 忘記密碼 - 顯示輸入 Email 頁面
+        // -------------------------------------------------------------
+        [HttpGet]
+        public IActionResult ForgotPassword()
+        {
+            return View();
+        }
 
+        // -------------------------------------------------------------
+        // 2. 忘記密碼 - 產生 Token 並寫入 PasswordResetTokens 表格
+        // -------------------------------------------------------------
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ForgotPassword(ForgotPasswordViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == model.Email && u.Status == "Active");
+
+            if (user != null)
+            {
+                // 產生長度 32 字元的 Guid 明文 Token
+                string rawToken = Guid.NewGuid().ToString("N");
+                string ipAddress = GetClientIpAddress();
+
+                // 為了資安，將 Token 用 SHA256 轉成 TokenHash 存入資料庫
+                using var sha256 = System.Security.Cryptography.SHA256.Create();
+                byte[] hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(rawToken));
+                string tokenHash = Convert.ToBase64String(hashBytes);
+
+                // 建立資料庫 ResetToken 紀錄 (效期設定 30 分鐘)
+                var resetToken = new PasswordResetToken
+                {
+                    UserId = user.UserId,
+                    TokenHash = tokenHash,
+                    IpAddress = ipAddress,
+                    ExpiresAt = DateTime.Now.AddMinutes(30),
+                    UsedAt = null,
+                    CreatedAt = DateTime.Now
+                };
+
+                _db.PasswordResetTokens.Add(resetToken);
+                await _db.SaveChangesAsync();
+
+                // 💡【開發測試無 Email 替代方案】：產生重置連結
+                string resetLink = Url.Action("ResetPassword", "Account", new { token = rawToken, email = user.Email }, Request.Scheme) ?? "";
+
+                // 將重置連結透過 TempData 傳給畫面直接顯示 (測試與展示極為方便！)
+                TempData["DevResetLink"] = resetLink;
+            }
+
+            // 資安建議：無論 Email 是否存在，提示文字保持一致，防止帳號列舉攻擊
+            TempData["SuccessMessage"] = "重置密碼申請已送出！請點擊下方的模擬連結進行密碼重置。";
+            return RedirectToAction(nameof(ForgotPassword));
+        }
+
+        // -------------------------------------------------------------
+        // 3. 重置密碼 - 驗證連結 Token 是否有效
+        // -------------------------------------------------------------
+        [HttpGet]
+        public async Task<IActionResult> ResetPassword(string token, string email)
+        {
+            if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(email))
+            {
+                TempData["ErrorMessage"] = "無效的重置連結。";
+                return RedirectToAction(nameof(Login));
+            }
+
+            // 將傳入的 rawToken 轉成 TokenHash 再去比對資料庫
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            byte[] hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(token));
+            string tokenHash = Convert.ToBase64String(hashBytes);
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == email);
+            if (user == null)
+            {
+                TempData["ErrorMessage"] = "連結無效或帳號不存在。";
+                return RedirectToAction(nameof(Login));
+            }
+
+            var tokenRecord = await _db.PasswordResetTokens
+                .FirstOrDefaultAsync(t => t.UserId == user.UserId && t.TokenHash == tokenHash);
+
+            // 檢查 Token 是否存在、未被使用、且未過期
+            if (tokenRecord == null || tokenRecord.UsedAt != null || tokenRecord.ExpiresAt < DateTime.Now)
+            {
+                TempData["ErrorMessage"] = "重置密碼連結已過期或已被使用，請重新申請。";
+                return RedirectToAction(nameof(Login));
+            }
+
+            var model = new ResetPasswordViewModel
+            {
+                Token = token,
+                Email = email
+            };
+
+            return View(model);
+        }
+
+        // -------------------------------------------------------------
+        // 4. 重置密碼 - 寫入新密碼並將 Token 標示為已使用
+        // -------------------------------------------------------------
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ResetPassword(ResetPasswordViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            byte[] hashBytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(model.Token));
+            string tokenHash = Convert.ToBase64String(hashBytes);
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email == model.Email);
+            if (user == null)
+            {
+                ModelState.AddModelError(string.Empty, "無效的帳號。");
+                return View(model);
+            }
+
+            var tokenRecord = await _db.PasswordResetTokens
+                .FirstOrDefaultAsync(t => t.UserId == user.UserId && t.TokenHash == tokenHash);
+
+            if (tokenRecord == null || tokenRecord.UsedAt != null || tokenRecord.ExpiresAt < DateTime.Now)
+            {
+                ModelState.AddModelError(string.Empty, "重置密碼連結已過期或已被使用，請重新申請。");
+                return View(model);
+            }
+
+            // 1. 使用 PasswordHelper 加密新密碼並更新 User
+            user.PasswordHash = PasswordHelper.HashPassword(model.Password);
+            user.FailedLoginCount = 0; // 解鎖帳號
+            user.LockedUntil = null;
+            user.UpdatedAt = DateTime.Now;
+
+            // 2. 將 Token 標示為已使用 (UsedAt)
+            tokenRecord.UsedAt = DateTime.Now;
+
+            await _db.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "密碼重置成功！請使用新密碼重新登入。";
+            return RedirectToAction(nameof(Login));
+        }
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()

@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Models.Options;
 using VenueGo.Services;
+using VenueGo.Models.ReviewModels;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
 using VenueGo.Services.Orders;
@@ -43,16 +43,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 
 // 註冊 Session
-//builder.Services.AddSession();
-builder.Services.AddSession(options =>
-{
-    options.IdleTimeout = TimeSpan.FromMinutes(30);
-    options.Cookie.HttpOnly = true;
-    options.Cookie.IsEssential = true;
-});
-
-
-builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
+builder.Services.AddSession();
 
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
@@ -96,6 +87,18 @@ builder.Services.Configure<ReservationRulesOptions>(
     builder.Configuration.GetSection(ReservationRulesOptions.SectionName));
 
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
+
+// 評論系統使用
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+
+builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
+builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
+builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
+// TimeAPI 使用
+builder.Services.AddHttpClient(); // 👈 這行寫下去，系統自動打包註冊了 IHttpClientFactory
+builder.Services.AddScoped<ITimeService, TimeService>(); // 註冊 TimeService
+
 builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
 
 var app = builder.Build();

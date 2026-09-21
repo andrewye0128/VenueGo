@@ -287,7 +287,7 @@
                               }
 
                               @* ── 依清單不同，能做的事不同 ── *@
-                              @if (Model.Tab == QueueTab.Pending)
+                              @if ((Model.Tab == QueueTab.Pending) || (Model.Tab == QueueTab.Unread))
                               {
                                     @* asp-action + method="post" 會自動插入防偽 token 的 hidden，
                            JS 把整張表單的內容送出，token 就一起帶上了。 *@

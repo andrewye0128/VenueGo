@@ -48,6 +48,10 @@ builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
 builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
 builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
+// TimeAPI 使用
+builder.Services.AddHttpClient(); // 👈 這行寫下去，系統自動打包註冊了 IHttpClientFactory
+builder.Services.AddScoped<ITimeService, TimeService>(); // 註冊 TimeService
+
 
 var app = builder.Build();
 

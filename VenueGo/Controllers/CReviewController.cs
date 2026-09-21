@@ -9,13 +9,14 @@ using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
-    public class CReviewController(dbVenueContext db, ICurrentUser currentUser, IVisitReviewTicketFactory factory) : Controller
+    public class CReviewController(dbVenueContext db, ICurrentUser currentUser, IVisitReviewTicketFactory factory, ITimeService timeService) : Controller
     {
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUser _currentUser = currentUser;
         // 只注入「現場評論」那個介面：這支 Controller 的補償邏輯只會用到
         // CreateReviewPerVisitAsync，不該看得到預約評論的方法。
         private readonly IVisitReviewTicketFactory _reviewTicketFactory = factory;
+        private readonly ITimeService _timeService = timeService;
 
         // ════════════════════════════════════════════════════════
         //  關於 async：為什麼整支改成非同步
@@ -54,6 +55,8 @@ namespace VenueGo.Controllers
         /// <summary>現場評論：用 QRToken 判定資格。</summary>
         private async Task<VisitTicket> ResolveVisitTicketAsync(string? token)
         {
+            DateTime exactTime = await _timeService.GetCurrentTimeAsync();
+
             if (string.IsNullOrWhiteSpace(token))
                 return new(EligState.NotFound, null, null);          // 未輸入 ❌
 
@@ -81,7 +84,7 @@ namespace VenueGo.Controllers
             if (existing != null)
                 return new(EligState.AlreadyReviewed, ticket, existing);  // 已評過 📋
 
-            if (DateTime.Now >= ticket.ExpiredAt)
+            if (exactTime >= ticket.ExpiredAt)
                 return new(EligState.Expired, ticket, null);         // 已逾期 ❌
 
             return new(EligState.Ok, ticket, null);                  // 可以評論 👌
@@ -96,6 +99,8 @@ namespace VenueGo.Controllers
         /// </summary>
         private async Task<BookingTicket> ResolveBookingTicketAsync(int? id)
         {
+            DateTime exactTime = await _timeService.GetCurrentTimeAsync();
+
             if (id == null || id <= 0)
                 return new(EligState.NotFound, null, null);          // 無效輸入 ❌
 
@@ -113,7 +118,7 @@ namespace VenueGo.Controllers
             if (existing != null)
                 return new(EligState.AlreadyReviewed, ticket, existing);  // 已評過 📋
 
-            if (DateTime.Now >= ticket.ExpiredAt)
+            if (exactTime >= ticket.ExpiredAt)
                 return new(EligState.Expired, ticket, null);         // 已逾期 ❌
 
             return new(EligState.Ok, ticket, null);                  // 可以評論 👌
@@ -421,11 +426,13 @@ namespace VenueGo.Controllers
         private async Task<ReviewIndexVM> BuildIndexVmAsync(
             int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort)
         {
+            DateTime exactTime = await _timeService.GetCurrentTimeAsync();
+
             string rg = NormalizeRange(range);
             string so = NormalizeSort(sort);
             int? st = NormalizeStar(star);
 
-            DateTime now = DateTime.Now;
+            DateTime now = exactTime;
             DateTime todayStart = DateTime.Today;
 
             // 分頁列：啟用中的運動類型，前面加一個「全部」
@@ -486,9 +493,10 @@ namespace VenueGo.Controllers
         /// visitId 與 bookingId 一定只有一個有值（XOR 約束）。
         /// 純計算、不碰資料庫，所以維持同步。
         /// </summary>
-        private ReviewMain BuildNewReview(
+        private async Task<ReviewMain> BuildNewReview(
             ReviewCreateInputVM vm, int? visitId, int? bookingId, int? userId)
         {
+            DateTime exactTime = await _timeService.GetCurrentTimeAsync();
             // 只有匿名才產生暱稱，實名留 null（= 用會員當下的真實姓名）
             string? nickname = vm.IsAnonymous ? NicknameGenerator.Generate() : null;
 
@@ -506,7 +514,7 @@ namespace VenueGo.Controllers
                 MentionsVenue = vm.MentionsVenue,
                 MentionsStaff = vm.MentionsStaff,
                 AnonymousNickname = nickname,
-                CreatedAt = DateTime.Now
+                CreatedAt = exactTime
             };
         }
 
@@ -517,10 +525,12 @@ namespace VenueGo.Controllers
         /// </summary>
         private async Task MarkReplyViewedIfNeededAsync(ReviewMain review)
         {
+            DateTime exactTime = await _timeService.GetCurrentTimeAsync();
+
             if (review.RepliedAt == null) return;
             if (review.ReplyViewedAt != null) return;
 
-            review.ReplyViewedAt = DateTime.Now;
+            review.ReplyViewedAt = exactTime;
             await _db.SaveChangesAsync();
         }
 
@@ -588,7 +598,7 @@ namespace VenueGo.Controllers
             if (userId == null)
                 vm.IsAnonymous = true;   // 前端 disabled 擋不住直接送請求的人
 
-            var newReview = BuildNewReview(vm, r.Ticket.ReviewPerVisitId, null, userId);
+            var newReview = await BuildNewReview(vm, r.Ticket.ReviewPerVisitId, null, userId);
 
             _db.ReviewMains.Add(newReview);
             await _db.SaveChangesAsync();
@@ -636,7 +646,7 @@ namespace VenueGo.Controllers
             vm.IsPublic = false;
             vm.IsAnonymous = false;
 
-            var newReview = BuildNewReview(vm, null, r.Ticket.ReviewPerBookingId,
+            var newReview = await BuildNewReview(vm, null, r.Ticket.ReviewPerBookingId,
                                            _currentUser.MemberId);
 
             _db.ReviewMains.Add(newReview);
@@ -751,6 +761,8 @@ namespace VenueGo.Controllers
         [HttpPost, ValidateAntiForgeryToken]
         public async Task<IActionResult> SetSatisfaction(string? token, int? bookingId, byte satisfaction)
         {
+            DateTime exactTime = await _timeService.GetCurrentTimeAsync();
+
             if (satisfaction > 2)
             {
                 TempData[CDictionary.TK_MSG_Input錯誤] = "輸入異常，請重試";
@@ -780,7 +792,7 @@ namespace VenueGo.Controllers
             // 沒有回覆就沒有滿意度可言；已表態過不給改（按鈕本來就不會出現）
             if (review!.RepliedAt != null && review.ReplySatisfaction == null)
             {
-                review.ReplyViewedAt ??= DateTime.Now;   // 保險，正常已經有值
+                review.ReplyViewedAt ??= exactTime;   // 保險，正常已經有值
                 review.ReplySatisfaction = satisfaction;
                 await _db.SaveChangesAsync();
             }

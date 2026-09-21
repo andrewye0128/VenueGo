@@ -1,0 +1,148 @@
+﻿@*
+    步驟 1：選擇會員。
+
+    這個檔案刻意只負責「版面組裝」：
+      步驟進度條   → _ReservationWizardSteps.cshtml
+      會員表格分頁 → _MemberTable.cshtml + _Pager.cshtml
+      右側摘要     → ReservationSummaryViewComponent
+    如此一來步驟 2~5 的頁面可以沿用同一個骨架，只換中間那張卡片的內容。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.SelectMemberViewModel
+
+@{
+    ViewData["Title"] = "新增預約";
+    var currentStep = (int)(ViewData["CurrentStep"] ?? 1);
+}
+
+<nav aria-label="麵包屑">
+    <ol class="breadcrumb small">
+        <li class="breadcrumb-item">
+            <a asp-controller="Reservation" asp-action="Index">預約管理</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">新增預約</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-1">新增預約</h1>
+<p class="text-secondary">由管理員代客建立預約，請依序完成以下步驟。</p>
+
+@await Html.PartialAsync("_ReservationWizardSteps", currentStep)
+
+@*
+    取消整個流程用的表單。放在這裡是為了讓頁尾的按鈕可以透過
+    form="cancelForm" 觸發，而不必把按鈕塞進版面中間。
+*@
+<form id="cancelForm" asp-action="Cancel" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 mb-1">步驟 1：選擇會員</h2>
+                <p class="text-secondary small mb-3">請選擇要預約的會員。</p>
+
+                <ul class="nav nav-tabs mb-3">
+                    <li class="nav-item">
+                        <span class="nav-link active" aria-current="page">選擇既有會員</span>
+                    </li>
+                    <li class="nav-item">
+                        @*
+                            新增會員導向會員管理頁，不在此處內嵌表單。
+                            原因：Users 的 Email、密碼、生日皆為必填，
+                            櫃檯當場問不到這些資料，硬做只會讓流程卡住。
+                        *@
+                        <a class="nav-link" asp-controller="Member" asp-action="Create">
+                            新增會員
+                        </a>
+                    </li>
+                </ul>
+
+                @* ── 搜尋（GET，讓搜尋條件留在網址上，可加入書籤、可重新整理） ── *@
+                <form asp-action="SelectMember" method="get" class="mb-3">
+                    <div class="input-group">
+                        <span class="input-group-text bg-white border-end-0">
+                            <i class="bi bi-search text-secondary"></i>
+                        </span>
+                        <input asp-for="Criteria.Keyword"
+                               name="keyword"
+                               class="form-control border-start-0 ps-0"
+                               placeholder="輸入會員姓名、手機或 Email 搜尋..."
+                               autocomplete="off">
+                        <button type="submit" class="btn btn-primary">搜尋</button>
+                    </div>
+
+                    <div class="form-check mt-2">
+                        <input class="form-check-input"
+                               type="checkbox"
+                               name="includeInactive"
+                               value="true"
+                               id="includeInactive"
+                               checked="@Model.Criteria.IncludeInactive">
+                        <label class="form-check-label small text-secondary" for="includeInactive">
+                            顯示停權或鎖定中的會員（僅供查詢，無法選為預約人）
+                        </label>
+                    </div>
+                </form>
+
+                <partial name="_ValidationSummary" />
+
+                @* ── 選擇（POST） ── *@
+                <form id="selectMemberForm"
+                      asp-action="SelectMember"
+                      asp-all-route-data="Model.Criteria.ToRouteValues()"
+                      method="post">
+                    @Html.AntiForgeryToken()
+                    <partial name="_MemberTable" model="Model" />
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        @await Component.InvokeAsync("ReservationSummary", new { currentStep })
+    </div>
+</div>
+
+<div class="d-flex justify-content-end gap-2 border-top mt-4 pt-3">
+    @*
+        form 屬性讓按鈕可以送出頁面上任一個表單，
+        因此按鈕能放在版面最下方，不必跟表單綁在同一個位置。
+    *@
+    <button type="submit" form="cancelForm" class="btn btn-outline-secondary">取消</button>
+    <button type="submit" form="selectMemberForm" class="btn btn-primary" id="nextStepButton">
+        下一步：選擇場地
+        <i class="bi bi-arrow-right ms-1"></i>
+    </button>
+</div>
+
+@section Scripts {
+    <script>
+        // 漸進增強：沒有 JavaScript 時，未選擇會員仍可送出，
+        // 由後端回傳「請先選擇一位會員」的訊息，流程不會壞掉。
+        // 有 JavaScript 時，直接在前端擋下來並標示選取的那一列，減少一次往返。
+        (function () {
+            const form = document.getElementById('selectMemberForm');
+            const nextButton = document.getElementById('nextStepButton');
+            if (!form || !nextButton) return;
+
+            const radios = form.querySelectorAll('input[name="userId"]');
+
+            function syncState() {
+                const selected = form.querySelector('input[name="userId"]:checked');
+                nextButton.disabled = !selected;
+
+                radios.forEach(radio => {
+                    const row = radio.closest('tr');
+                    if (!row) return;
+                    row.classList.toggle('table-primary', radio.checked);
+                    row.classList.toggle('is-selected', radio.checked);
+                });
+            }
+
+            radios.forEach(radio => radio.addEventListener('change', syncState));
+            syncState();
+        })();
+    </script>
+}

@@ -19,8 +19,8 @@
     static string OverdueClass(OverdueLevel level) => level switch
     {
         OverdueLevel.Overdue => "queue-overdue",
-        OverdueLevel.Soon    => "queue-soon",
-        _                    => ""
+        OverdueLevel.Soon => "queue-soon",
+        _ => ""
     };
 }
 
@@ -45,7 +45,7 @@
                 未讀
                 @if (Model.UnreadCount != 0)
                 {
-                    <span class="badge rounded-pill text-bg-danger ms-1" data-count-for="unread">@Model.UnreadCount</span>  
+                    <span class="badge rounded-pill text-bg-danger ms-1" data-count-for="unread">@Model.UnreadCount</span>
                 }
             </a>
         </li>
@@ -108,187 +108,187 @@
 }
 else
 {
-@* ── 評論清單 ──────────────────────────────────────── *@
-<div class="accordion" id="reviewQueue">
-@foreach (var item in Model.Items)
-{
-    <div class="accordion-item @OverdueClass(item.OverdueLevel)"
-         data-read="@(item.IsRead ? "1" : "0")"
-         data-read-url="@Url.Action("MarkRead", new { id = item.ReviewId })">
+    @* ── 評論清單 ──────────────────────────────────────── *@
+    <div class="accordion" id="reviewQueue">
+        @foreach (var item in Model.Items)
+        {
+            <div class="accordion-item @OverdueClass(item.OverdueLevel)"
+                 data-read="@(item.IsRead ? "1" : "0")"
+                 data-read-url="@Url.Action("MarkRead", new { id = item.ReviewId })">
 
-        @* 頁首：圖釘放在 accordion-button 的「旁邊」，不能放進去——
+                @* 頁首：圖釘放在 accordion-button 的「旁邊」，不能放進去——
            按鈕裡不能再放按鈕，而且點圖釘會連帶觸發展開。 *@
-        <div class="accordion-header d-flex align-items-center">
+                <div class="accordion-header d-flex align-items-center">
 
-            @if (Model.Tab == QueueTab.Pending)
-            {
-                <button type="button"
-                        class="pin-btn ms-2 flex-shrink-0 js-pin @(item.IsPinned ? "pinned" : "")"
-                        data-url="@Url.Action("TogglePin", new { id = item.ReviewId })"
-                        aria-pressed="@(item.IsPinned ? "true" : "false")"
-                        title="@(item.IsPinned ? "取消置頂" : "標記為優先處理")">
-                    <i class="bi bi-pin-angle-fill"></i>
-                </button>
-            }
+                    @if (Model.Tab == QueueTab.Pending)
+                    {
+                        <button type="button"
+                                class="pin-btn ms-2 flex-shrink-0 js-pin @(item.IsPinned ? "pinned" : "")"
+                                data-url="@Url.Action("TogglePin", new { id = item.ReviewId })"
+                                aria-pressed="@(item.IsPinned ? "true" : "false")"
+                                title="@(item.IsPinned ? "取消置頂" : "標記為優先處理")">
+                            <i class="bi bi-pin-angle-fill"></i>
+                        </button>
+                    }
 
-            <button class="accordion-button collapsed" type="button"
-                    data-bs-toggle="collapse"
-                    data-bs-target="#rev-@item.ReviewId"
-                    aria-expanded="false"
-                    aria-controls="rev-@item.ReviewId">
-                <div class="flex-grow-1 me-2" style="min-width:0">
-                    <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
-                        <span class="star-view">
-                            @for (int i = 1; i <= 5; i++)
-                            {
-                                <i class="@(i <= item.StarRating ? "bi bi-star-fill" : "bi bi-star empty")"></i>
-                            }
-                        </span>
-                        <span class="fw-semibold">@item.DisplayName</span>
+                    <button class="accordion-button collapsed" type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#rev-@item.ReviewId"
+                            aria-expanded="false"
+                            aria-controls="rev-@item.ReviewId">
+                        <div class="flex-grow-1 me-2" style="min-width:0">
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                <span class="star-view">
+                                    @for (int i = 1; i <= 5; i++)
+                                    {
+                                        <i class="@(i <= item.StarRating ? "bi bi-star-fill" : "bi bi-star empty")"></i>
+                                    }
+                                </span>
+                                <span class="fw-semibold">@item.DisplayName</span>
 
-                        @if (item.IsBookingReview)
+                                @if (item.IsBookingReview)
+                                {
+                                    <span class="badge rounded-pill text-bg-light border"><i class="bi bi-receipt"></i> 預約</span>
+                                }
+                                else
+                                {
+                                    <span class="badge rounded-pill text-bg-light border"><i class="bi bi-geo-alt"></i> 現場</span>
+                                }
+
+                                @* 警示：顏色之外還有圖示與文字，色覺障礙者也分得出來 *@
+                                @if (item.OverdueLevel == OverdueLevel.Overdue)
+                                {
+                                    <span class="badge text-bg-danger">
+                                        <i class="bi bi-exclamation-triangle"></i> 超過 @ReviewPolicy.PublicBufferDays 天未回覆
+                                    </span>
+                                }
+                                else if (item.OverdueLevel == OverdueLevel.Soon)
+                                {
+                                    <span class="badge text-bg-warning">
+                                        <i class="bi bi-hourglass-split"></i> 即將滿 @ReviewPolicy.PublicBufferDays 天
+                                    </span>
+                                }
+
+                                <span class="badge text-bg-secondary js-read-badge @(item.IsRead ? "" : "d-none")">已閱覽</span>
+                            </div>
+                            <div class="small text-truncate @(item.IsRatingOnly ? "text-muted fst-italic" : "")">
+                                @item.Summary
+                            </div>
+                        </div>
+                        <div class="small text-muted text-nowrap me-2">
+                            @item.CreatedAt.ToString("M/d HH:mm")
+                        </div>
+                    </button>
+                </div>
+
+                <div id="rev-@item.ReviewId" class="accordion-collapse collapse" data-bs-parent="#reviewQueue">
+                    <div class="accordion-body">
+
+                        @* ── 完整內容 ── *@
+                        @if (item.IsRatingOnly)
                         {
-                            <span class="badge rounded-pill text-bg-light border"><i class="bi bi-receipt"></i> 預約</span>
+                            <p class="text-muted fst-italic">（只給了星等，沒有留下文字）</p>
                         }
                         else
                         {
-                            <span class="badge rounded-pill text-bg-light border"><i class="bi bi-geo-alt"></i> 現場</span>
+                            <p class="review-body">@item.Content</p>
                         }
 
-                        @* 警示：顏色之外還有圖示與文字，色覺障礙者也分得出來 *@
-                        @if (item.OverdueLevel == OverdueLevel.Overdue)
+                        @if (item.MentionsVenue || item.MentionsStaff)
                         {
-                            <span class="badge text-bg-danger">
-                                <i class="bi bi-exclamation-triangle"></i> 超過 @ReviewPolicy.PublicBufferDays 天未回覆
-                            </span>
+                            <div class="mb-2">
+                                @if (item.MentionsVenue)
+                                {
+                                    <span class="badge rounded-pill text-bg-light border me-1"><i class="bi bi-hash"></i> 場地設施</span>
+                                }
+                                @if (item.MentionsStaff)
+                                {
+                                    <span class="badge rounded-pill text-bg-light border"><i class="bi bi-hash"></i> 人員服務</span>
+                                }
+                            </div>
                         }
-                        else if (item.OverdueLevel == OverdueLevel.Soon)
-                        {
-                            <span class="badge text-bg-warning">
-                                <i class="bi bi-hourglass-split"></i> 即將滿 @ReviewPolicy.PublicBufferDays 天
-                            </span>
-                        }
 
-                        <span class="badge text-bg-secondary js-read-badge @(item.IsRead ? "" : "d-none")">已閱覽</span>
-                    </div>
-                    <div class="small text-truncate @(item.IsRatingOnly ? "text-muted fst-italic" : "")">
-                        @item.Summary
-                    </div>
-                </div>
-                <div class="small text-muted text-nowrap me-2">
-                    @item.CreatedAt.ToString("M/d HH:mm")
-                </div>
-            </button>
-        </div>
-
-        <div id="rev-@item.ReviewId" class="accordion-collapse collapse" data-bs-parent="#reviewQueue">
-            <div class="accordion-body">
-
-                @* ── 完整內容 ── *@
-                @if (item.IsRatingOnly)
-                {
-                    <p class="text-muted fst-italic">（只給了星等，沒有留下文字）</p>
-                }
-                else
-                {
-                    <p class="review-body">@item.Content</p>
-                }
-
-                @if (item.MentionsVenue || item.MentionsStaff)
-                {
-                    <div class="mb-2">
-                        @if (item.MentionsVenue)
-                        {
-                            <span class="badge rounded-pill text-bg-light border me-1"><i class="bi bi-hash"></i> 場地設施</span>
-                        }
-                        @if (item.MentionsStaff)
-                        {
-                            <span class="badge rounded-pill text-bg-light border"><i class="bi bi-hash"></i> 人員服務</span>
-                        }
-                    </div>
-                }
-
-                @* ── 系統資訊 ── *@
-                <div class="small text-muted border-top pt-2 mb-3">
-                    @if (item.VenueName != null)
-                    {
-                        <div>
-                            <i class="bi bi-geo-alt"></i> @item.VenueName
-                            @if (item.RentStartTime != null)
+                        @* ── 系統資訊 ── *@
+                        <div class="small text-muted border-top pt-2 mb-3">
+                            @if (item.VenueName != null)
                             {
-                                <span class="ms-2">@item.RentStartTime.Value.ToString("M/d HH:mm") 使用</span>
+                                <div>
+                                    <i class="bi bi-geo-alt"></i> @item.VenueName
+                                    @if (item.RentStartTime != null)
+                                    {
+                                        <span class="ms-2">@item.RentStartTime.Value.ToString("M/d HH:mm") 使用</span>
+                                    }
+                                </div>
+                            }
+                            @if (item.OrderNo != null)
+                            {
+                                <div><i class="bi bi-receipt"></i> 訂單 @item.OrderNo</div>
+                            }
+                            <div>評論時間 @item.CreatedAt.ToString("yyyy/M/d HH:mm")</div>
+                            @if (item.ReadAt != null)
+                            {
+                                <div>由 @(item.ReadByEmployeeName ?? "（查無員工）") 於 @item.ReadAt.Value.ToString("M/d HH:mm") 閱覽</div>
+                            }
+                            @if (item.IsAutoPublished)
+                            {
+                                <div class="text-danger">
+                                    <i class="bi bi-exclamation-triangle"></i> 已超過 @ReviewPolicy.PublicBufferDays 天，這則評論已經公開在評論專區
+                                </div>
                             }
                         </div>
-                    }
-                    @if (item.OrderNo != null)
-                    {
-                        <div><i class="bi bi-receipt"></i> 訂單 @item.OrderNo</div>
-                    }
-                    <div>評論時間 @item.CreatedAt.ToString("yyyy/M/d HH:mm")</div>
-                    @if (item.ReadAt != null)
-                    {
-                        <div>由 @(item.ReadByEmployeeName ?? "（查無員工）") 於 @item.ReadAt.Value.ToString("M/d HH:mm") 閱覽</div>
-                    }
-                    @if (item.IsAutoPublished)
-                    {
-                        <div class="text-danger">
-                            <i class="bi bi-exclamation-triangle"></i> 已超過 @ReviewPolicy.PublicBufferDays 天，這則評論已經公開在評論專區
-                        </div>
-                    }
-                </div>
 
-                @* ── 依清單不同，能做的事不同 ── *@
-                @if (Model.Tab == QueueTab.Pending)
-                {
-                    @* asp-action + method="post" 會自動插入防偽 token 的 hidden，
+                        @* ── 依清單不同，能做的事不同 ── *@
+                        @if (Model.Tab == QueueTab.Pending)
+                        {
+                            @* asp-action + method="post" 會自動插入防偽 token 的 hidden，
                        JS 把整張表單的內容送出，token 就一起帶上了。 *@
-                    <form class="js-reply-form" method="post"
-                          asp-action="Reply" asp-route-id="@item.ReviewId">
+                            <form class="js-reply-form" method="post"
+                                  asp-action="Reply" asp-route-id="@item.ReviewId">
 
-                        <div class="d-flex flex-wrap gap-1 mb-2">
-                            @foreach (var canned in Model.CannedReplies)
-                            {
-                                <button type="button"
-                                        class="btn btn-sm btn-outline-secondary rounded-pill js-canned"
-                                        data-text="@canned.Text" title="@canned.Text">
-                                    @canned.Label
-                                </button>
-                            }
-                        </div>
+                                <div class="d-flex flex-wrap gap-1 mb-2">
+                                    @foreach (var canned in Model.CannedReplies)
+                                    {
+                                        <button type="button"
+                                                class="btn btn-sm btn-outline-secondary rounded-pill js-canned"
+                                                data-text="@canned.Text" title="@canned.Text">
+                                            @canned.Label
+                                        </button>
+                                    }
+                                </div>
 
-                        <textarea name="content" class="form-control js-reply-text" rows="3"
-                                  maxlength="@ReviewPolicy.ReplyMaxLength"
-                                  placeholder="輸入回覆內容"></textarea>
-                        <div class="form-text text-end">
-                            <span class="js-count">0</span> / @ReviewPolicy.ReplyMaxLength
-                        </div>
+                                <textarea name="content" class="form-control js-reply-text" rows="3"
+                                          maxlength="@ReviewPolicy.ReplyMaxLength"
+                                          placeholder="輸入回覆內容"></textarea>
+                                <div class="form-text text-end">
+                                    <span class="js-count">0</span> / @ReviewPolicy.ReplyMaxLength
+                                </div>
 
-                        <div class="js-error text-danger small mb-2"></div>
+                                <div class="js-error text-danger small mb-2"></div>
 
-                        <div class="d-flex justify-content-between">
-                            <button type="button" class="btn btn-outline-danger btn-sm js-spam-open"
-                                    data-url="@Url.Action("MarkSpam", new { id = item.ReviewId })">
-                                <i class="bi bi-trash"></i> 標記垃圾
-                            </button>
-                            <button type="submit" class="btn btn-primary btn-sm">
-                                <i class="bi bi-send"></i> 送出回覆
-                            </button>
-                        </div>
-                    </form>
-                }
-                else if (Model.Tab == QueueTab.Spam)
-                {
-                    <div class="alert alert-secondary small mb-0">
-                        <div>理由：<span class="badge rounded-pill text-bg-dark">@item.SpamReasonText</span></div>
-                        <div class="mt-1">
-                            由 @(item.SpamMarkedByEmployeeName ?? "（查無員工）")
-                            於 @(item.SpamMarkedAt?.ToString("yyyy/M/d HH:mm")) 標記
-                        </div>
+                                <div class="d-flex justify-content-between">
+                                    <button type="button" class="btn btn-outline-danger btn-sm js-spam-open"
+                                            data-url="@Url.Action("MarkSpam", new { id = item.ReviewId })">
+                                        <i class="bi bi-trash"></i> 標記垃圾
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-sm">
+                                        <i class="bi bi-send"></i> 送出回覆
+                                    </button>
+                                </div>
+                            </form>
+                        }
+                        else if (Model.Tab == QueueTab.Spam)
+                        {
+                            <div class="alert alert-secondary small mb-0">
+                                <div>理由：<span class="badge rounded-pill text-bg-dark">@item.SpamReasonText</span></div>
+                                <div class="mt-1">
+                                    由 @(item.SpamMarkedByEmployeeName ?? "（查無員工）")
+                                    於 @(item.SpamMarkedAt?.ToString("yyyy/M/d HH:mm")) 標記
+                                </div>
+                            </div>
+                        }
                     </div>
-                }
+                </div>
             </div>
-        </div>
+        }
     </div>
-}
-</div>
 }

@@ -1,0 +1,178 @@
+﻿@*
+    步驟 2：選擇場地。
+
+    版面骨架與 SelectMember.cshtml 完全相同，只換中間那張卡片的內容：
+      步驟進度條 → _ReservationWizardSteps.cshtml
+      場地卡片   → _VenueCards.cshtml + _Pager.cshtml
+      右側摘要   → ReservationSummaryViewComponent
+    步驟 3~5 可以直接複製這個檔案再換內容。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.SelectVenueViewModel
+
+@{
+    ViewData["Title"] = "新增預約";
+    var currentStep = (int)(ViewData["CurrentStep"] ?? 2);
+}
+
+<nav aria-label="麵包屑">
+    <ol class="breadcrumb small">
+        <li class="breadcrumb-item">
+            <a asp-controller="Reservation" asp-action="Index">預約管理</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">新增預約</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-1">新增預約</h1>
+<p class="text-secondary">由管理員代客建立預約，請依序完成以下步驟。</p>
+
+@await Html.PartialAsync("_ReservationWizardSteps", currentStep)
+
+<form id="cancelForm" asp-action="Cancel" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 mb-1">步驟 2：選擇場地</h2>
+                <p class="text-secondary small mb-3">
+                    請選擇本次預約的場地，可依運動類型或場地名稱快速篩選。
+                </p>
+
+                @*
+                    已選會員的資訊條。
+                    設計稿在步驟 3、4 才有這一條，但步驟 2 也加上是刻意的：
+                    管理員在挑場地時需要確認「我正在幫誰訂」，
+                    尤其櫃檯常同時處理好幾位客人。
+                *@
+                @if (!string.IsNullOrWhiteSpace(Model.MemberName))
+                {
+                    <div class="d-flex align-items-center gap-2 bg-primary-subtle rounded p-3 mb-3">
+                        <i class="bi bi-person text-primary"></i>
+                        <div class="small">
+                            <span class="text-secondary">會員</span>
+                            <span class="fw-semibold ms-2">@Model.MemberName</span>
+                            @if (!string.IsNullOrWhiteSpace(Model.MemberPhone))
+                            {
+                                <span class="text-secondary ms-2">／ 手機：@Model.MemberPhone</span>
+                            }
+                        </div>
+                    </div>
+                }
+
+                @* ── 篩選（GET，條件留在網址上，可重新整理、可加書籤） ── *@
+                <form asp-action="SelectVenue" method="get" class="mb-3">
+                    <div class="row g-2 align-items-center">
+                        <div class="col-auto">
+                            <label class="form-label mb-0 small text-secondary" for="sportTypeId">
+                                運動類型
+                            </label>
+                        </div>
+                        <div class="col-auto">
+                            <select class="form-select" id="sportTypeId" name="sportTypeId">
+                                <option value="">全部</option>
+                                @foreach (var sportType in Model.SportTypes)
+                                {
+                                    <option value="@sportType.SportTypeId"
+                                            selected="@(Model.Criteria.SportTypeId == sportType.SportTypeId)">
+                                        @sportType.SportName
+                                    </option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col">
+                            <div class="input-group">
+                                <span class="input-group-text bg-white border-end-0">
+                                    <i class="bi bi-search text-secondary"></i>
+                                </span>
+                                <input asp-for="Criteria.Keyword"
+                                       name="keyword"
+                                       class="form-control border-start-0 ps-0"
+                                       placeholder="輸入場地名稱搜尋..."
+                                       autocomplete="off">
+                                <button type="submit" class="btn btn-primary">搜尋</button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+
+                <partial name="_ValidationSummary" />
+
+                @* ── 選擇（POST） ── *@
+                <form id="selectVenueForm"
+                      asp-action="SelectVenue"
+                      asp-all-route-data="Model.Criteria.ToRouteValues()"
+                      method="post">
+                    @Html.AntiForgeryToken()
+                    <partial name="_VenueCards" model="Model" />
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        @await Component.InvokeAsync("ReservationSummary", new { currentStep })
+    </div>
+</div>
+
+<div class="d-flex justify-content-end gap-2 border-top mt-4 pt-3">
+    <button type="submit" form="cancelForm" class="btn btn-outline-secondary">取消</button>
+
+    @*
+        上一步用連結而非表單送出：暫存資料在 Session，
+        回到步驟 1 不需要提交任何東西，已選的會員會自動保持勾選。
+    *@
+    <a asp-action="SelectMember" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>上一步：選擇會員
+    </a>
+
+    <button type="submit" form="selectVenueForm" class="btn btn-primary" id="nextStepButton">
+        下一步：選擇日期
+        <i class="bi bi-arrow-right ms-1"></i>
+    </button>
+</div>
+
+@section Scripts {
+    <script>
+        // 與步驟 1 相同的漸進增強做法：
+        // 沒有 JavaScript 時仍可送出，由後端回傳錯誤訊息；
+        // 有 JavaScript 時在前端先擋下來並標示選取的卡片。
+        (function() {
+            const form = document.getElementById('selectVenueForm');
+            const nextButton = document.getElementById('nextStepButton');
+            if (!form || !nextButton) return;
+
+            const radios = form.querySelectorAll('input[name="venueId"]');
+
+            function syncState() {
+                const selected = form.querySelector('input[name="venueId"]:checked');
+                nextButton.disabled = !selected;
+
+                radios.forEach(radio => {
+                    const card = radio.closest('.venue-card');
+                    if (card) card.classList.toggle('is-selected', radio.checked);
+                });
+            }
+
+            radios.forEach(radio => radio.addEventListener('change', syncState));
+
+            // 卡片任一處皆可點選。
+            // 排除 label 與 input，避免點按鈕時觸發兩次而互相抵銷。
+            form.querySelectorAll('.venue-card').forEach(card => {
+                card.addEventListener('click', event => {
+                    if (event.target.closest('label, input, a, button')) return;
+
+                    const radio = card.querySelector('input[name="venueId"]:not([disabled])');
+                    if (!radio) return;
+
+                    radio.checked = true;
+                    radio.dispatchEvent(new Event('change', { bubbles: true }));
+                });
+            });
+
+            syncState();
+        })();
+    </script>
+}

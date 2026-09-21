@@ -6,17 +6,17 @@ namespace VenueGo.ViewModels.ReviewVM
     public static class QueueTab
     {
         public const string All = "all";
-        public const string Unread  = "unread";
+        public const string Unread = "unread";
         public const string Pending = "pending";
         public const string Completed = "completed";
-        public const string Spam    = "spam";
+        public const string Spam = "spam";
     }
 
     /// <summary>評論來源篩選。</summary>
     public static class QueueSource
     {
-        public const string All     = "all";
-        public const string Visit   = "visit";
+        public const string All = "all";
+        public const string Visit = "visit";
         public const string Booking = "booking";
     }
 
@@ -31,15 +31,15 @@ namespace VenueGo.ViewModels.ReviewVM
     /// <summary>館方評論清單的整頁資料。Index 與 QueueList 共用同一份。</summary>
     public class ReviewQueueVM
     {
-        public string Tab    { get; init; } = QueueTab.Unread;
+        public string Tab { get; init; } = QueueTab.Unread;
         public string Source { get; init; } = QueueSource.All;
 
         public List<ReviewQueueItemVM> Items { get; init; } = new();
 
         // 分頁標籤上的數字（會跟著來源篩選變）
-        public int UnreadCount  { get; init; }
+        public int UnreadCount { get; init; }
         public int PendingCount { get; init; }
-        public int SpamCount    { get; init; }
+        public int SpamCount { get; init; }
 
         /// <summary>已經打亂順序的罐頭回覆，整頁共用一組。</summary>
         public List<CannedReply> CannedReplies { get; init; } = new();

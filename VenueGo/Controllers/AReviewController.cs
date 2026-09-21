@@ -46,15 +46,15 @@ namespace VenueGo.Controllers
             QueueTab.All => QueueTab.All,
             QueueTab.Pending => QueueTab.Pending,
             QueueTab.Completed => QueueTab.Completed,
-            QueueTab.Spam    => QueueTab.Spam,
-            _                => QueueTab.Unread
+            QueueTab.Spam => QueueTab.Spam,
+            _ => QueueTab.Unread
         };
 
         private static string NormalizeSource(string? source) => source switch
         {
-            QueueSource.Visit   => QueueSource.Visit,
+            QueueSource.Visit => QueueSource.Visit,
             QueueSource.Booking => QueueSource.Booking,
-            _                   => QueueSource.All
+            _ => QueueSource.All
         };
 
         /// <summary>
@@ -92,9 +92,9 @@ namespace VenueGo.Controllers
 
         private static IQueryable<ReviewMain> ApplySource(IQueryable<ReviewMain> q, string source) => source switch
         {
-            QueueSource.Visit   => q.Where(r => r.ReviewPerVisitId != null),
+            QueueSource.Visit => q.Where(r => r.ReviewPerVisitId != null),
             QueueSource.Booking => q.Where(r => r.ReviewPerBookingId != null),
-            _                   => q
+            _ => q
         };
 
         /// <summary>
@@ -105,16 +105,16 @@ namespace VenueGo.Controllers
         /// </summary>
         private static IQueryable<ReviewMain> ApplyTab(IQueryable<ReviewMain> q, string tab) => tab switch
         {
-            QueueTab.All     => q.OrderByDescending(r => r.IsPinned)
+            QueueTab.All => q.OrderByDescending(r => r.IsPinned)
                                  .ThenBy(r => r.CreatedAt),
             QueueTab.Pending => q.Where(PendingRule)
                                  .OrderByDescending(r => r.IsPinned)
                                  .ThenBy(r => r.CreatedAt),
             QueueTab.Completed => q.Where(r => r.RepliedAt != null)
                                  .OrderBy(r => r.CreatedAt),
-            QueueTab.Spam    => q.Where(SpamRule)
+            QueueTab.Spam => q.Where(SpamRule)
                                  .OrderByDescending(r => r.SpamMarkedAt),
-            _                => q.Where(UnreadRule)
+            _ => q.Where(UnreadRule)
                                  .OrderBy(r => r.CreatedAt)
         };
 
@@ -124,7 +124,7 @@ namespace VenueGo.Controllers
 
             var age = now - r.CreatedAt;
             if (age >= TimeSpan.FromDays(ReviewPolicy.PublicBufferDays)) return OverdueLevel.Overdue;
-            if (age >= TimeSpan.FromDays(ReviewPolicy.OverdueWarnDays))  return OverdueLevel.Soon;
+            if (age >= TimeSpan.FromDays(ReviewPolicy.OverdueWarnDays)) return OverdueLevel.Soon;
             return OverdueLevel.None;
         }
 
@@ -211,28 +211,28 @@ namespace VenueGo.Controllers
 
             return new ReviewQueueItemVM
             {
-                ReviewId      = r.ReviewId,
-                StarRating    = r.StarRating,
-                CreatedAt     = r.CreatedAt,
-                DisplayName   = displayName,
-                IsAnonymous   = r.IsAnonymous,
-                IsPublic      = r.IsPublic,
-                Content       = r.ReviewContent,
+                ReviewId = r.ReviewId,
+                StarRating = r.StarRating,
+                CreatedAt = r.CreatedAt,
+                DisplayName = displayName,
+                IsAnonymous = r.IsAnonymous,
+                IsPublic = r.IsPublic,
+                Content = r.ReviewContent,
                 MentionsVenue = r.MentionsVenue,
                 MentionsStaff = r.MentionsStaff,
 
                 IsBookingReview = r.ReviewPerBookingId != null,
-                VenueName       = visit != null ? lk.VenueNames.GetValueOrDefault(visit.VenueId) : null,
-                RentStartTime   = visit?.RentStartTime,
-                OrderNo         = booking != null ? lk.OrderNos.GetValueOrDefault(booking.OrderId) : null,
+                VenueName = visit != null ? lk.VenueNames.GetValueOrDefault(visit.VenueId) : null,
+                RentStartTime = visit?.RentStartTime,
+                OrderNo = booking != null ? lk.OrderNos.GetValueOrDefault(booking.OrderId) : null,
 
-                ReadAt             = r.ReadAt,
+                ReadAt = r.ReadAt,
                 ReadByEmployeeName = r.ReadByEmployeeId is int rid
                                      ? lk.EmployeeNames.GetValueOrDefault(rid) : null,
-                IsPinned           = r.IsPinned,
+                IsPinned = r.IsPinned,
 
-                SpamMarkedAt             = r.SpamMarkedAt,
-                SpamReasonText           = r.SpamMarkedAt != null ? ReviewPolicy.SpamReasonText(r.SpamReason) : null,
+                SpamMarkedAt = r.SpamMarkedAt,
+                SpamReasonText = r.SpamMarkedAt != null ? ReviewPolicy.SpamReasonText(r.SpamReason) : null,
                 SpamMarkedByEmployeeName = r.SpamMarkedByEmployeeId is int sid
                                            ? lk.EmployeeNames.GetValueOrDefault(sid) : null,
 
@@ -255,13 +255,13 @@ namespace VenueGo.Controllers
 
             return new ReviewQueueVM
             {
-                Tab    = t,
+                Tab = t,
                 Source = s,
-                Items  = reviews.Select(r => BuildItem(r, lookups, now)).ToList(),
+                Items = reviews.Select(r => BuildItem(r, lookups, now)).ToList(),
 
-                UnreadCount  = bySource.Count(UnreadRule),
+                UnreadCount = bySource.Count(UnreadRule),
                 PendingCount = bySource.Count(PendingRule),
-                SpamCount    = bySource.Count(SpamRule),
+                SpamCount = bySource.Count(SpamRule),
 
                 // 每次載入順序不同，員工比較不會永遠點第一個
                 CannedReplies = ReviewPolicy.CannedReplies

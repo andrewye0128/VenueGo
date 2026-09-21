@@ -1,0 +1,219 @@
+﻿@*
+    月曆格線。獨立成 Partial View 的理由與 _MemberTable、_VenueCards 相同。
+
+    Model：SelectDateViewModel。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.SelectDateViewModel
+
+@using VenueGo.ViewModels.ReservationViewModels
+
+<div class="calendar border rounded">
+    <div class="calendar-header d-flex justify-content-between align-items-center p-2 border-bottom">
+        @if (Model.Calendar.PreviousMonth is { } previousMonth)
+        {
+            <a class="btn btn-sm btn-outline-secondary"
+               asp-action="SelectDate"
+               asp-route-year="@previousMonth.Year"
+               asp-route-month="@previousMonth.Month"
+               aria-label="上個月">
+                <i class="bi bi-chevron-left"></i>
+            </a>
+        }
+        else
+        {
+            @* 超出可預約範圍時停用而非隱藏，避免按鈕位置跳動 *@
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled aria-hidden="true">
+                <i class="bi bi-chevron-left"></i>
+            </button>
+        }
+
+        <span class="fw-semibold">@Model.Calendar.MonthText</span>
+
+        @if (Model.Calendar.NextMonth is { } nextMonth)
+        {
+            <a class="btn btn-sm btn-outline-secondary"
+               asp-action="SelectDate"
+               asp-route-year="@nextMonth.Year"
+               asp-route-month="@nextMonth.Month"
+               aria-label="下個月">
+                <i class="bi bi-chevron-right"></i>
+            </a>
+        }
+        else
+        {
+            <button type="button" class="btn btn-sm btn-outline-secondary" disabled aria-hidden="true">
+                <i class="bi bi-chevron-right"></i>
+            </button>
+        }
+    </div>
+
+    <table class="calendar-table table table-bordered mb-0">
+        <caption class="visually-hidden">
+            @Model.Calendar.MonthText 的可預約日期，選擇一天以繼續
+        </caption>
+        <thead>
+            <tr>
+                @foreach (var header in CalendarViewModel.WeekdayHeaders)
+                {
+                    <th scope="col" class="text-center small fw-normal text-secondary">@header</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var week in Model.Calendar.Weeks)
+            {
+                <tr>
+                    @foreach (var day in week)
+                    {
+                        var inputId = $"date-{day.Date:yyyyMMdd}";
+                        var isChecked = Model.SelectedDate == day.Date;
+
+                        <td class="calendar-cell p-0
+                            @(day.IsInDisplayMonth ? null : "calendar-cell-outside")
+                            @(day.IsToday ? "calendar-cell-today" : null)"
+                            title="@day.TooltipText">
+
+                            @if (day.IsSelectable)
+                            {
+                                @* radio 隱藏但保留鍵盤可聚焦；label 覆蓋整格，整格皆可點 *@
+                                <input class="visually-hidden calendar-radio"
+                                       type="radio"
+                                       name="date"
+                                       id="@inputId"
+                                       value="@day.Date.ToString("yyyy-MM-dd")"
+                                       checked="@isChecked"
+                                       aria-label="@day.Date.ToString("yyyy年M月d日") @day.StatusText">
+
+                                <label class="calendar-day" for="@inputId">
+                                    <span class="calendar-day-number">@day.DayNumber</span>
+                                    <span class="calendar-day-status @day.StatusTextClass">@day.StatusText</span>
+                                </label>
+                            }
+                            else
+                            {
+                                <div class="calendar-day calendar-day-disabled">
+                                    <span class="calendar-day-number">@day.DayNumber</span>
+                                    @if (day.StatusText is not null)
+                                    {
+                                        <span class="calendar-day-status @day.StatusTextClass">@day.StatusText</span>
+                                    }
+                                </div>
+                            }
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+<div class="alert alert-light border d-flex gap-2 mt-3 mb-0 py-2 px-3 small" role="note">
+    <i class="bi bi-info-circle flex-shrink-0 mt-1"></i>
+    <div>
+        <div>@Model.RangeHintText</div>
+        <div class="text-secondary">
+            營業時間內每小時為一個時段。灰色日期不可預約，
+            「額滿」表示該場地當天所有時段皆已被預約或維護中。
+        </div>
+    </div>
+</div>
+
+<style>
+    .calendar-table {
+        table-layout: fixed;
+    }
+
+    .calendar-cell {
+        height: 4rem;
+        vertical-align: middle;
+    }
+
+    .calendar-cell-outside {
+        background-color: var(--bs-tertiary-bg);
+    }
+
+    .calendar-cell-today .calendar-day-number {
+        text-decoration: underline;
+        text-underline-offset: .2rem;
+    }
+
+    /* label 與 div 共用同一個外觀，只有可選的那些才有 hover 與 cursor */
+    .calendar-day {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: .125rem;
+        width: 100%;
+        height: 100%;
+        padding: .25rem;
+        margin: 0;
+        cursor: pointer;
+        transition: background-color .1s ease-in-out;
+    }
+
+        .calendar-day:hover {
+            background-color: var(--bs-primary-bg-subtle);
+        }
+
+    .calendar-day-disabled {
+        cursor: default;
+        color: var(--bs-secondary-color);
+    }
+
+        .calendar-day-disabled:hover {
+            background-color: transparent;
+        }
+
+    .calendar-day-number {
+        font-size: .9375rem;
+        line-height: 1.2;
+    }
+
+    .calendar-day-status {
+        font-size: .6875rem;
+        line-height: 1.2;
+    }
+
+    /*
+            選取狀態的兩種判斷方式並列，與步驟 1、2 相同：
+              :has()       純 CSS，JavaScript 失效時仍有效
+              .is-selected 由 SelectDate.cshtml 的 JavaScript 加上，涵蓋不支援 :has() 的瀏覽器
+        */
+    .calendar-cell:has(.calendar-radio:checked),
+    .calendar-cell.is-selected {
+        background-color: var(--bs-primary);
+    }
+
+        .calendar-cell:has(.calendar-radio:checked) .calendar-day,
+        .calendar-cell.is-selected .calendar-day {
+            color: #fff;
+        }
+
+            .calendar-cell:has(.calendar-radio:checked) .calendar-day:hover,
+            .calendar-cell.is-selected .calendar-day:hover {
+                background-color: transparent;
+            }
+
+        /* 選取後狀態文字改為白色，覆蓋原本的 text-success 等色彩類別 */
+        .calendar-cell:has(.calendar-radio:checked) .calendar-day-status,
+        .calendar-cell.is-selected .calendar-day-status {
+            color: #fff !important;
+        }
+
+    /* 鍵盤聚焦時給整格外框，因為 radio 本身是隱藏的 */
+    .calendar-cell:has(.calendar-radio:focus-visible) {
+        outline: 2px solid var(--bs-primary);
+        outline-offset: -2px;
+    }
+
+    @@media (max-width: 575.98px) {
+        .calendar-cell {
+            height: 3.25rem;
+        }
+
+        .calendar-day-status {
+            font-size: .625rem;
+        }
+    }
+</style>

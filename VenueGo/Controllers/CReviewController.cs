@@ -334,6 +334,7 @@ namespace VenueGo.Controllers
 
         private static IQueryable<ReviewMain> ApplyCardSort(IQueryable<ReviewMain> q, string sort) => sort switch
         {
+            ReviewSort.Newest  => q.OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.StarRating),
             ReviewSort.Highest => q.OrderByDescending(r => r.StarRating).ThenByDescending(r => r.CreatedAt),
             ReviewSort.Lowest  => q.OrderBy(r => r.StarRating).ThenByDescending(r => r.CreatedAt),
             _                  => q.OrderByDescending(r => r.CreatedAt)
@@ -349,6 +350,7 @@ namespace VenueGo.Controllers
 
         private static string NormalizeSort(string? sort) => sort switch
         {
+            ReviewSort.Newest  => ReviewSort.Newest,
             ReviewSort.Highest => ReviewSort.Highest,
             ReviewSort.Lowest  => ReviewSort.Lowest,
             _                  => ReviewSort.Default

@@ -15,6 +15,7 @@ using VenueGo.ViewModels.ReservationViewModels;
 namespace VenueGo.Controllers
 {
 
+    //[Authorize(Roles = RoleNames.Member]
     public class ReservationController : Controller
     {
         private readonly dbVenueContext _db;

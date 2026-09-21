@@ -1,0 +1,65 @@
+﻿@*
+    通用分頁列。任何列表頁都可以使用，不限於新增預約。
+
+    用法：
+        @await Html.PartialAsync("_Pager", Model.Pager)
+
+    Model：PagerViewModel。頁數只有一頁時本元件不會輸出任何內容。
+*@
+@model VenueGo.ViewModels.Shared.PagerViewModel
+
+@if (Model.ShouldRender)
+{
+    <nav aria-label="分頁導覽">
+        <ul class="pagination pagination-sm mb-0">
+            <li class="page-item @(Model.Page <= 1 ? "disabled" : null)">
+                @if (Model.Page <= 1)
+                {
+                    <span class="page-link" aria-hidden="true">&laquo;</span>
+                }
+                else
+                {
+                    <a class="page-link"
+                       asp-action="@Model.Action"
+                       asp-controller="@Model.Controller"
+                       asp-all-route-data="Model.RouteValuesForPage(Model.Page - 1)"
+                       aria-label="上一頁">&laquo;</a>
+                }
+            </li>
+
+            @for (var pageNumber = Model.FirstVisiblePage; pageNumber <= Model.LastVisiblePage; pageNumber++)
+            {
+                var isCurrent = pageNumber == Model.Page;
+                <li class="page-item @(isCurrent ? "active" : null)">
+                    @if (isCurrent)
+                    {
+                        <span class="page-link" aria-current="page">@pageNumber </span>
+                    }
+                    else
+                    {
+                        <a class="page-link"
+                           asp-action="@Model.Action"
+                           asp-controller="@Model.Controller"
+                           asp-all-route-data="Model.RouteValuesForPage(pageNumber)"
+                           aria-label="第 @pageNumber  頁">@pageNumber </a>
+                    }
+                </li>
+            }
+
+            <li class="page-item @(Model.Page >= Model.TotalPages ? "disabled" : null)">
+                @if (Model.Page >= Model.TotalPages)
+                {
+                    <span class="page-link" aria-hidden="true">&raquo;</span>
+                }
+                else
+                {
+                    <a class="page-link"
+                       asp-action="@Model.Action"
+                       asp-controller="@Model.Controller"
+                       asp-all-route-data="Model.RouteValuesForPage(Model.Page + 1)"
+                       aria-label="下一頁">&raquo;</a>
+                }
+            </li>
+        </ul>
+    </nav>
+}

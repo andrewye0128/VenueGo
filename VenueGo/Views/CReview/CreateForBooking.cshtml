@@ -1,0 +1,182 @@
+﻿@model VenueGo.ViewModels.ReviewVM.ReviewCreateForBookingVM
+
+@{
+    ViewData["Title"] = "CreateForBooking";
+}
+
+@*
+    ⚠️ 假設 .star-input 的 CSS 已經放在 site.css（現場版的星星能動就代表在）。
+       如果它其實是寫在 CreateForVisit.cshtml 的 <style> 裡，
+       請搬到 site.css，不然這一頁的星星會變成一排裸露的 radio。
+
+    ⚠️ Controller 的 POST 簽章預期是：
+         CreateForBooking(ReviewCreateForBookingVM vm, int? id)
+       表單用 asp-route-id 把識別碼帶在網址上，與現場版的 token 同樣道理。
+*@
+
+<style>
+    /* 只推表單內區塊的上下間距，不影響外層佈局 */
+    form .form-group {
+        margin-top: 15px;
+    }
+</style>
+
+<h1>顧客填寫評論頁（預約流程）</h1>
+<hr />
+
+<div class="row justify-content-center">
+    <div class="col-md-6">
+
+        <form id="reviewForm" asp-action="CreateForBooking" method="post"
+              asp-route-id="@Model.ReviewPerBookingId"
+              onsubmit="return confirm('確定要送出評論嗎？\n送出後無法修改呦')">
+
+            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+
+            <input type="hidden" asp-for="ReviewPerBookingId" />
+
+            @* ── 確認區塊：你正在評哪一筆 ──────────────────
+               ContextPrimary／ContextSecondary 由子類別決定內容，
+               這段與現場版完全相同，之後可以一起抽成 partial。 *@
+            @if (Model.ContextPrimary != null)
+            {
+                <div class="border rounded p-3 mb-3">
+                    <div class="fw-semibold">
+                        <i class="bi bi-receipt me-1"></i>@Model.ContextPrimary
+                    </div>
+                    <div class="small text-muted">@Model.ContextSecondary</div>
+                </div>
+            }
+
+            @* ── 星等 ────────────────────────────────── *@
+            <div class="form-group">
+                <label asp-for="StarRating" class="control-label d-block">
+                    @Html.DisplayNameFor(model => model.StarRating)
+                </label>
+
+                <div class="star-input">
+                    @for (byte i = 5; i >= 1; i--)
+                    {
+                        <input type="radio" asp-for="StarRating" value="@i" id="star@(i)"
+                               checked="@(Model.StarRating == i)" />
+                        <label for="star@(i)"><i class="bi bi-star-fill"></i></label>
+                    }
+                </div>
+                <span asp-validation-for="StarRating" class="text-danger"></span>
+            </div>
+
+            @* ── 評論內容 ────────────────────────────── *@
+            <div class="form-group">
+                <label asp-for="ReviewContent" class="control-label"></label>
+                <textarea asp-for="ReviewContent" class="form-control" rows="12"
+                          maxlength="1000"
+                          placeholder="訂位流程、付款方式、通知是否清楚，都可以暢所欲言"></textarea>
+                <div class="d-flex justify-content-end">
+                    <small id="charCount" class="text-muted">0 / 1000</small>
+                </div>
+                <span asp-validation-for="ReviewContent" class="text-danger"></span>
+            </div>
+
+            @* ── 提及標籤 ────────────────────────────── *@
+                  <input type="hidden" asp-for="MentionsVenue" />
+                  <input type="hidden" asp-for="MentionsStaff" />
+            @* <div class="form-group mb-3 d-inline-block me-2">
+                <input type="checkbox" class="btn-check" id="mv"
+                       asp-for="MentionsVenue" autocomplete="off">
+                <label class="btn btn-sm btn-outline-success rounded-pill px-3" for="mv">
+                    <i class="bi bi-hash"></i> @Html.DisplayNameFor(model => model.MentionsVenue)
+                </label>
+            </div>
+
+            <div class="form-group mb-3 d-inline-block">
+                <input type="checkbox" class="btn-check" id="ms"
+                       asp-for="MentionsStaff" autocomplete="off">
+                <label class="btn btn-sm btn-outline-success rounded-pill px-3" for="ms">
+                    <i class="bi bi-hash"></i> @Html.DisplayNameFor(model => model.MentionsStaff)
+                </label>
+            </div> *@
+
+            @* ── 匿名 ────────────────────────────────
+               預約評論的評論者一定是登入會員，所以這個開關永遠可以動。
+               仍然用 CanChooseAnonymous 判斷而不寫死，是為了與現場版
+               共用同一段標記，日後抽 partial 時不必改。 *@
+                  <input type="hidden" asp-for="IsAnonymous" />
+            @* <div class="col-md-6 mb-3">
+                <label asp-for="IsAnonymous" class="form-label fw-bold"></label>
+                <div class="form-check form-switch mt-2">
+                    <input asp-for="IsAnonymous" class="form-check-input" type="checkbox"
+                           id="toggleAnonymous" disabled="@(!Model.CanChooseAnonymous)" />
+                    <label class="form-check-label" for="toggleAnonymous">是否匿名</label>
+                </div>
+                <div class="form-text">勾選後會以系統給的隨機暱稱顯示，不會出現你的姓名。</div>
+            </div> *@
+
+            @* ── 公開 ────────────────────────────────── *@
+                  <input type="hidden" asp-for="IsPublic" />
+            @* <div class="col-md-6 mb-3">
+                <label asp-for="IsPublic" class="form-label fw-bold"></label>
+                <div class="form-check form-switch mt-2">
+                    <input asp-for="IsPublic" class="form-check-input" type="checkbox"
+                           id="togglePublic" />
+                    <label class="form-check-label" for="togglePublic">公開此評論</label>
+                </div>
+                <div class="form-text">送出後仍可隨時在評論頁切換。</div>
+            </div> *@
+
+            @* ── 送出與草稿 ──────────────────────────── *@
+            <div class="form-group">
+                <input type="submit" value="送出" class="btn btn-primary" />
+                <button type="button" id="btnSaveDraft" class="btn btn-outline-secondary">
+                    <i class="bi bi-floppy"></i> 儲存草稿
+                </button>
+                <div class="mt-2"><small id="draftTimeHint" class="text-muted"></small></div>
+            </div>
+
+            <div class="mt-3">
+                <a asp-action="Index" class="btn btn-outline-secondary">返回前頁</a>
+            </div>
+
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
+
+    <script>
+        // ⚠️ 這段必須在 DraftBox.init 之前。
+        // 草稿還原時會補發 input 事件，計數器要先掛上去才收得到。
+        (function () {
+            var box  = document.querySelector('textarea[name="ReviewContent"]');
+            var hint = document.getElementById('charCount');
+            if (!box || !hint) return;
+
+            function update() {
+                var n = box.value.length;
+                hint.textContent = n + ' / 1000';
+                hint.classList.toggle('text-danger', n >= 900);
+                hint.classList.toggle('text-muted',  n <  900);
+            }
+            box.addEventListener('input', update);
+            update();
+        })();
+    </script>
+
+    <script src="~/js/draft-box.js" asp-append-version="true"></script>
+    <script>
+        DraftBox.init({
+            // 草稿的 key 必須跟現場版分開，否則同一個人先寫了現場評論
+            // 再來寫預約評論，會把上一份草稿代進來。
+            key: 'review-draft:booking:@Model.ReviewPerBookingId',
+            form: '#reviewForm',
+            fields: ['StarRating', 'ReviewContent'], // 簡化為只保留這兩個欄位
+            saveButton: '#btnSaveDraft',
+            timeHint: '#draftTimeHint'
+        });
+        /* fields: @Html.Raw(Model.CanChooseAnonymous
+                ? "['StarRating','ReviewContent','MentionsVenue','MentionsStaff','IsAnonymous','IsPublic']"
+                : "['StarRating','ReviewContent','MentionsVenue','MentionsStaff','IsPublic']") */
+    </script>
+}

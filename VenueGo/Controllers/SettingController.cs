@@ -343,7 +343,7 @@ namespace VenueGo.Controllers
         // GET: Setting/ConvertToEmployee/5
         public async Task<IActionResult> ConvertToEmployee(int id)
         {
-            
+
             var user = await _db.Users.FindAsync(id);
             if (user == null) return NotFound();
 

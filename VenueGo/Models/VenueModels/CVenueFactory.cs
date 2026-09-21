@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using VenueGo.Data;
 using VenueGo.Models.Entities;
-using VenueGo.ViewModels;
+using VenueGo.ViewModels.VenueViewModels;
 
 namespace VenueGo.Models.VenueModels
 {
@@ -87,8 +87,8 @@ namespace VenueGo.Models.VenueModels
             {
                 //依照vm傳來的id查找對應Venue物件
                 var VenueDb = db.Venues.FirstOrDefault(p => p.VenueId == vm.VenueId);
-                    //驗證是否找到資料
-                    if (VenueDb != null)
+                //驗證是否找到資料
+                if (VenueDb != null)
                 {
                     //將vm內部資料覆蓋掉VenueDb原有資料
                     VenueDb.VenueName = vm.VenueName;

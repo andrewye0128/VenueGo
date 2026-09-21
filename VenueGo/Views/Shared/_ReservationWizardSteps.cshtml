@@ -1,0 +1,128 @@
+﻿@*
+    新增預約的步驟進度條。五個步驟的頁面都會用到。
+
+    用法：
+        @await Html.PartialAsync("_ReservationWizardSteps", 1)
+
+    這裡用 Partial View 而不是 ViewComponent，因為它不需要自己去取資料，
+    只是把傳進來的步驟編號畫成版面。
+
+    Model：目前步驟編號（1~5）。
+*@
+@model int
+
+@{
+    var stepNames = new[] { "選擇會員", "選擇場地", "選擇日期", "選擇時段", "確認資料" };
+}
+
+<nav class="wizard mb-4" aria-label="新增預約步驟">
+    <ol class="wizard-steps">
+        @for (var step = 1; step <= stepNames.Length; step++)
+        {
+            var isDone = step < Model;
+            var isCurrent = step == Model;
+            var stateClass = isDone ? "is-done" : isCurrent ? "is-current" : "is-todo";
+
+            <li class="wizard-step @stateClass" @(isCurrent ? Html.Raw("aria-current=\"step\"") : null)>
+                <span class="wizard-marker" aria-hidden="true">
+                    @if (isDone)
+                    {
+                        <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                            <path d="M13.5 3.5 6 11 2.5 7.5 3.9 6.1 6 8.2l6.1-6.1z" />
+                        </svg>
+                    }
+                    else
+                    {
+                        @step
+                    }
+                </span>
+                <span class="wizard-label">@stepNames[step - 1]</span>
+                @* 已完成的步驟才顯示可讀的狀態，供螢幕閱讀器使用 *@
+                @if (isDone)
+                {
+                    <span class="visually-hidden">（已完成）</span>
+                }
+            </li>
+        }
+    </ol>
+</nav>
+
+@*
+    樣式建議搬到 wwwroot/css/site.css，避免每次載入頁面都重複輸出。
+    暫時放在這裡是為了讓這個元件可以單獨複製使用、不漏樣式。
+*@
+<style>
+    .wizard-steps {
+        display: flex;
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        counter-reset: none;
+    }
+
+    .wizard-step {
+        position: relative;
+        flex: 1 1 0;
+        text-align: center;
+        min-width: 0;
+    }
+
+    /* 步驟之間的連接線，畫在圓圈的垂直中心 */
+    .wizard-step:not(:last-child)::after {
+        content: "";
+        position: absolute;
+        top: 1rem;
+        left: calc(50% + 1.25rem);
+        width: calc(100% - 2.5rem);
+        height: 2px;
+        background-color: var(--bs-border-color);
+    }
+
+    .wizard-step.is-done::after {
+        background-color: var(--bs-primary);
+    }
+
+    .wizard-marker {
+        position: relative;
+        z-index: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        border-radius: 50%;
+        font-size: .875rem;
+        font-weight: 600;
+        background-color: var(--bs-secondary-bg);
+        color: var(--bs-secondary-color);
+    }
+
+    .wizard-step.is-current .wizard-marker,
+    .wizard-step.is-done .wizard-marker {
+        background-color: var(--bs-primary);
+        color: #fff;
+    }
+
+    .wizard-label {
+        display: block;
+        margin-top: .5rem;
+        font-size: .8125rem;
+        color: var(--bs-secondary-color);
+    }
+
+    .wizard-step.is-current .wizard-label {
+        color: var(--bs-primary);
+        font-weight: 600;
+    }
+
+    .wizard-step.is-done .wizard-label {
+        color: var(--bs-primary);
+    }
+
+    /* 窄螢幕只留目前步驟的文字，避免五個標籤互相重疊 */
+    @@media (max-width: 575.98px) {
+        .wizard-step:not(.is-current) .wizard-label {
+            display: none;
+        }
+    }
+</style>

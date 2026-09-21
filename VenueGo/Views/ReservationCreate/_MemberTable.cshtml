@@ -1,0 +1,120 @@
+﻿@*
+    會員清單表格。獨立成 Partial View 的原因有兩個：
+    1. 讓 SelectMember.cshtml 保持在可一眼讀完的長度。
+    2. 日後若要改成 AJAX 搜尋（不整頁重載），只需在 Controller 增加一個
+       回傳 PartialView("_MemberTable", viewModel) 的 Action，前端替換這一塊即可，
+       不必重寫畫面。
+
+    Model：SelectMemberViewModel（同時需要清單資料與搜尋條件，
+    因為分頁連結要帶上搜尋條件）。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.SelectMemberViewModel
+
+@if (Model.Members.IsEmpty)
+{
+    <div class="text-center text-secondary border rounded py-5">
+        <p class="mb-1">找不到符合條件的會員。</p>
+        <p class="mb-0 small">
+            可以換個關鍵字，或勾選「顯示停權或鎖定中的會員」確認對方是否已被停權。
+        </p>
+    </div>
+}
+else
+{
+    <div class="table-responsive border rounded">
+        <table class="table table-hover align-middle mb-0">
+            <caption class="visually-hidden">會員清單，選擇一位會員以建立預約</caption>
+            <thead class="table-light">
+                <tr>
+                    <th scope="col" style="width:3rem;"><span class="visually-hidden">選擇</span></th>
+                    <th scope="col">會員編號</th>
+                    <th scope="col">姓名</th>
+                    <th scope="col">手機</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">狀態</th>
+                    <th scope="col" class="text-end">操作</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var member in Model.Members.Items)
+                {
+                    var inputId = $"member-{member.UserId}";
+                    var isChecked = Model.SelectedUserId == member.UserId;
+
+                    <tr class="member-row @(member.IsSelectable ? null : "table-light text-secondary")">
+                        <td>
+                            @* 同一組 radio 的 name 必須與 Controller 的參數名 userId 一致 *@
+                            <input class="form-check-input m-0"
+                                   type="radio"
+                                   name="userId"
+                                   id="@inputId"
+                                   value="@member.UserId"
+                                   checked="@isChecked"
+                                   disabled="@(!member.IsSelectable)"
+                                   aria-label="選擇 @member.Name">
+                        </td>
+                        <td class="font-monospace">@member.MemberNo</td>
+                        <td>@member.Name</td>
+                        <td>@member.Phone</td>
+                        <td class="text-break">@member.Email</td>
+                        <td>
+                            <span class="badge @member.StatusBadgeClass">@member.StatusText</span>
+                            @if (!member.IsSelectable && member.UnselectableReason is not null)
+                            {
+                                <div class="small text-secondary mt-1">@member.UnselectableReason</div>
+                            }
+                        </td>
+                        <td class="text-end">
+                            @if (member.IsSelectable)
+                            {
+                                @* label 的 for 指向同列的 radio，
+                                   因此不需要 JavaScript 也能點選，鍵盤操作亦可用 *@
+                                <label class="btn btn-sm btn-outline-primary member-select-btn" for="@inputId">選擇</label>
+                            }
+                            else
+                            {
+                                <button type="button" class="btn btn-sm btn-outline-secondary" disabled>
+                                    無法選擇
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mt-3">
+        <span class="text-secondary small">
+            顯示 @Model.Members.FirstItemNumber - @Model.Members.LastItemNumber
+            / 共 @Model.Members.TotalCount 筆
+        </span>
+        @await Html.PartialAsync("_Pager", Model.Pager)
+    </div>
+}
+
+<style>
+    /*
+            選取狀態下「選擇」按鈕改為實心藍底白字。
+
+            兩組選擇器並列的原因：
+              :has()       純 CSS 方案，JavaScript 失效時仍有效
+              .is-selected 由 SelectMember.cshtml 的 JavaScript 加上，涵蓋不支援 :has() 的舊瀏覽器
+            兩者樣式相同，同時命中不會衝突。
+        */
+    .member-row:has(input[name="userId"]:checked) .member-select-btn,
+    .member-row.is-selected .member-select-btn {
+        background-color: var(--bs-primary);
+        border-color: var(--bs-primary);
+        color: #fff;
+    }
+
+        /* 選取後滑鼠移入也維持實心，不要閃回外框樣式 */
+        .member-row:has(input[name="userId"]:checked) .member-select-btn:hover,
+        .member-row.is-selected .member-select-btn:hover {
+            background-color: var(--bs-primary);
+            border-color: var(--bs-primary);
+            color: #fff;
+            filter: brightness(.95);
+        }
+</style>

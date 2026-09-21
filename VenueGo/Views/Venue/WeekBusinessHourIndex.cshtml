@@ -1,0 +1,169 @@
+@model VenueGo.ViewModels.VenueViewModels.WeekBusinessHourEditViewModel
+
+@{
+    ViewData["Title"] = "營業時間管理";
+}
+
+<!-- 功能頁籤 -->
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "VenueIndex" || ViewContext.RouteData.Values["action"]?.ToString() == "VenueCreate" || ViewContext.RouteData.Values["action"]?.ToString() == "VenueEdit" ? "active" : "")"
+           asp-controller="Venue" asp-action="VenueIndex">
+            <i class="bi bi-geo-alt me-1"></i>場地管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "SportTypeIndex" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypeCreate" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypeEdit" ? "active" : "")"
+           asp-controller="Venue" asp-action="SportTypeIndex">
+            <i class="bi bi-tags me-1"></i>運動類型管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "SportTypePriceRuleIndex" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypePriceRuleCreate" || ViewContext.RouteData.Values["action"]?.ToString() == "SportTypePriceRuleEdit" ? "active" : "")"
+           asp-controller="Venue" asp-action="SportTypePriceRuleIndex">
+            <i class="bi bi-cash-coin me-1"></i>價格規則管理
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "WeekBusinessHourIndex" ? "active" : "")"
+           asp-controller="Venue" asp-action="WeekBusinessHourIndex">
+            <i class="bi bi-clock me-1"></i>營業時間管理
+        </a>
+    </li>
+</ul>
+
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-clock me-2 text-primary"></i>每週固定營業時間</h5>
+    </div>
+    <div class="card-body">
+        <form asp-action="WeekBusinessHourIndex" method="POST">
+            @Html.AntiForgeryToken()
+
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4" role="alert"></div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 15%;">星期</th>
+                            <th style="width: 15%;">是否營業</th>
+                            <th style="width: 25%;">開始營業時間</th>
+                            <th style="width: 25%;">結束營業時間</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (int i = 0; i < Model.Days.Count; i++)
+                        {
+                            <tr>
+                                <td class="fw-bold">
+                                    <input type="hidden" asp-for="Days[i].BusinessHoursId" />
+                                    <input type="hidden" asp-for="Days[i].DayOfWeek" />
+                                    @Model.Days[i].DayName
+                                </td>
+                                <td>
+                                    <div class="form-check form-switch">
+                                        <input asp-for="Days[i].IsOpen" class="form-check-input day-isopen" role="switch" />
+                                    </div>
+                                </td>
+                                <td>
+                                    <select asp-for="Days[i].OpenTime" class="form-select day-time">
+                                        <option value="">請選擇時間</option>
+                                        @foreach (var item in Model.TimeOptions)
+                                        {
+                                            //不用asp-items讓框架自動比對「目前值」去標記selected,
+                                            //因為TimeOnly?的自動字串轉換格式跟我們產生選項用的"HH:mm"對不上,
+                                            //改成自己迴圈逐項比對手動標記selected,結果才可靠(跟SportTypePriceRule的尖峰時間下拉選單同一套做法)
+                                            bool isSelected = Model.Days[i].OpenTime.HasValue && item.Value == Model.Days[i].OpenTime.Value.ToString("HH:mm");
+                                            if (isSelected)
+                                            {
+                                                <option value="@item.Value" selected="selected">@item.Text</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@item.Value">@item.Text</option>
+                                            }
+                                        }
+                                    </select>
+                                    <span asp-validation-for="Days[i].OpenTime" class="text-danger small"></span>
+                                </td>
+                                <td>
+                                    <select asp-for="Days[i].CloseTime" class="form-select day-time">
+                                        <option value="">請選擇時間</option>
+                                        @foreach (var item in Model.TimeOptions)
+                                        {
+                                            bool isSelected = Model.Days[i].CloseTime.HasValue && item.Value == Model.Days[i].CloseTime.Value.ToString("HH:mm");
+                                            if (isSelected)
+                                            {
+                                                <option value="@item.Value" selected="selected">@item.Text</option>
+                                            }
+                                            else
+                                            {
+                                                <option value="@item.Value">@item.Text</option>
+                                            }
+                                        }
+                                    </select>
+                                    <span asp-validation-for="Days[i].CloseTime" class="text-danger small"></span>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="mt-4 pt-3 border-top text-end">
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-check-lg me-1"></i>儲存設定
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script>
+        //IsOpen關閉時,把這一列的開始/結束營業時間下拉選單disable掉
+        //disabled的欄位送出表單時不會夾帶值,後端收到的就是null,剛好符合"沒開就不該有時間值"的邏輯
+        (function () {
+            function toggleRow(checkbox) {
+                var row = checkbox.closest('tr');
+                var selects = row.querySelectorAll('select.day-time');
+
+                selects.forEach(function (select) {
+                    if (checkbox.checked) {
+                        select.disabled = false;
+                    }
+                    else {
+                        select.disabled = true;
+                    }
+                });
+            }
+
+            var checkboxes = document.querySelectorAll('.day-isopen');
+
+            checkboxes.forEach(function (checkbox) {
+                toggleRow(checkbox);
+
+                checkbox.addEventListener('change', function () {
+                    toggleRow(checkbox);
+                });
+            });
+        })();
+    </script>
+}

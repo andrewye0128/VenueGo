@@ -1,0 +1,123 @@
+﻿@*
+    步驟 3：選擇日期。
+
+    版面骨架與 SelectMember、SelectVenue 相同，只換中間卡片的內容：
+      步驟進度條 → _ReservationWizardSteps.cshtml
+      月曆       → _Calendar.cshtml
+      右側摘要   → ReservationSummaryViewComponent
+*@
+@model VenueGo.ViewModels.ReservationViewModels.SelectDateViewModel
+
+@{
+    ViewData["Title"] = "新增預約";
+    var currentStep = (int)(ViewData["CurrentStep"] ?? 3);
+}
+
+<nav aria-label="麵包屑">
+    <ol class="breadcrumb small">
+        <li class="breadcrumb-item">
+            <a asp-controller="Reservation" asp-action="Index">預約管理</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">新增預約</li>
+    </ol>
+</nav>
+
+<h1 class="h3 mb-1">新增預約</h1>
+<p class="text-secondary">由管理員代客建立預約，請依序完成以下步驟。</p>
+
+@await Html.PartialAsync("_ReservationWizardSteps", currentStep)
+
+<form id="cancelForm" asp-action="Cancel" method="post" class="d-none">
+    @Html.AntiForgeryToken()
+</form>
+
+<div class="row g-4">
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h2 class="h5 mb-1">步驟 3：選擇日期</h2>
+                <p class="text-secondary small mb-3">
+                    請選擇要預約的使用日期，僅可選擇可預約區間內且尚有時段的日期。
+                </p>
+
+                @* 已選會員與場地的資訊條 *@
+                <div class="row g-2 mb-3">
+                    <div class="col-sm-6">
+                        <div class="d-flex align-items-center gap-2 bg-primary-subtle rounded p-3 h-100">
+                            <i class="bi bi-person text-primary"></i>
+                            <div class="small">
+                                <div class="text-secondary">會員</div>
+                                <div class="fw-semibold">@Model.MemberName</div>
+                                @if (!string.IsNullOrWhiteSpace(Model.MemberPhone))
+                                {
+                                    <div class="text-secondary">手機：@Model.MemberPhone</div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6">
+                        <div class="d-flex align-items-center gap-2 bg-primary-subtle rounded p-3 h-100">
+                            <i class="bi bi-house text-primary"></i>
+                            <div class="small">
+                                <div class="text-secondary">場地</div>
+                                <div class="fw-semibold">@Model.VenueName</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <partial name="_ValidationSummary" />
+
+                @* ── 選擇日期（POST）── *@
+                <form id="selectDateForm" asp-action="SelectDate" method="post">
+                    @Html.AntiForgeryToken()
+                    <partial name="_Calendar" model="Model" />
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4">
+        @await Component.InvokeAsync("ReservationSummary", new { currentStep })
+    </div>
+</div>
+
+<div class="d-flex justify-content-end gap-2 border-top mt-4 pt-3">
+    <button type="submit" form="cancelForm" class="btn btn-outline-secondary">取消</button>
+
+    <a asp-action="SelectVenue" class="btn btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>上一步：選擇場地
+    </a>
+
+    <button type="submit" form="selectDateForm" class="btn btn-primary" id="nextStepButton">
+        下一步：選擇時段
+        <i class="bi bi-arrow-right ms-1"></i>
+    </button>
+</div>
+
+@section Scripts {
+    <script>
+        // 與步驟 1、2 相同的漸進增強做法。
+        // 月份切換用的是連結（GET），不影響這個表單。
+        (function() {
+            const form = document.getElementById('selectDateForm');
+            const nextButton = document.getElementById('nextStepButton');
+            if (!form || !nextButton) return;
+
+            const radios = form.querySelectorAll('input[name="date"]');
+
+            function syncState() {
+                const selected = form.querySelector('input[name="date"]:checked');
+                nextButton.disabled = !selected;
+
+                radios.forEach(radio => {
+                    const cell = radio.closest('.calendar-cell');
+                    if (cell) cell.classList.toggle('is-selected', radio.checked);
+                });
+            }
+
+            radios.forEach(radio => radio.addEventListener('change', syncState));
+            syncState();
+        })();
+    </script>
+}

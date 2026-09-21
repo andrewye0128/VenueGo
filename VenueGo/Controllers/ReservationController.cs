@@ -3,6 +3,7 @@ using VenueGo.Data;
 using VenueGo.Models.Entities;
 using VenueGo.Models.ReservationModels;
 using VenueGo.ViewModels;
+using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Controllers
 {
@@ -48,10 +49,5 @@ namespace VenueGo.Controllers
             return View(datas);
         }
 
-
-        public IActionResult Create() 
-        {
-            return View();
-        }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace VenueGo.ViewModels
+﻿namespace VenueGo.ViewModels.MemberViewModels
 {
     public class UserListViewModel
     {

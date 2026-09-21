@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -7,10 +8,11 @@ using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models;
 using VenueGo.Models.Entities;
-using VenueGo.ViewModels;
+using VenueGo.ViewModels.MemberViewModels;
 
 namespace VenueGo.Controllers
 {
+    [AllowAnonymous] // 確保登入控制器完全公開，不觸發任何攔截
     public class AccountController : Controller
     {
         private readonly dbVenueContext _db;

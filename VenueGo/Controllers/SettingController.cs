@@ -5,9 +5,11 @@ using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Entities;
 using VenueGo.ViewModels;
+using VenueGo.ViewModels.MemberViewModels;
 
 namespace VenueGo.Controllers
 {
+    [EmployeeAuthorize("Admin")] // 特定功能要求 Admin 角色
     public class SettingController : Controller
     {
         private readonly dbVenueContext _db;
@@ -58,7 +60,7 @@ namespace VenueGo.Controllers
 
             return View(model);
         }
-
+      
         // 2. 編輯角色權限 (GET)
         public async Task<IActionResult> EditRole(int id)
         {
@@ -233,7 +235,11 @@ namespace VenueGo.Controllers
             var model = new RegisterUserViewModel
             {
                 AvailableRoles = await GetAvailableRolesAsync(),
-                EmployeeNo = await GenerateNextEmployeeNoAsync()
+                EmployeeNo = await GenerateNextEmployeeNoAsync(),
+                // ------------------------------------------------------------------------
+                // 👈 【修改點 1】新增此行：預設出生日期為今天 (格式為 DateOnly 或 DateTime)
+                // ------------------------------------------------------------------------
+        Birth = DateOnly.FromDateTime(DateTime.Now) // 若 Birth 的型別是 DateTime 則改用 DateTime.Now.Date
             };
 
             return View(model);

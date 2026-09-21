@@ -1,7 +1,11 @@
-﻿@model VenueGo.ViewModels.RoleEditViewModel
-
+﻿@model VenueGo.ViewModels.MemberViewModels.RoleEditViewModel
+@using VenueGo.Helpers
+@using VenueGo.Data
+@inject dbVenueContext Db
 @{
     ViewData["Title"] = "編輯角色權限";
+    // 檢查目前登入者是否為 Admin 角色
+    bool isAdmin = await AuthHelper.HasRoleAsync(User, Db, "Admin", "SystemAdmin");
 }
 
 <div class="mb-3">

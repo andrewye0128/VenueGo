@@ -9,19 +9,29 @@ namespace VenueGo.Controllers
 {
     public class TicketController : Controller
     {
-        public IActionResult Index(string? txtKeyword)
+        public IActionResult Index(string? txtKeyword, DateOnly? selectedDate, int? venueId, int? status)
         {
-            List<EntryTicketListViewModel> datas = new List<EntryTicketListViewModel>();
-            string keyWord = txtKeyword ?? string.Empty;
-            if (string.IsNullOrEmpty(keyWord))
+
+            // 沒有選擇日期時，預設使用今天的日期, 第一次進入頁面時，selectedDate 為 null傳入今天
+            // ViewBag傳到頁面是今天, 前一天為今天 - 1, 後一天為今天 + 1
+            // 有選擇日期時，使用選擇的日期, selectedDate 為選擇的日期
+            // ViewBag傳到頁面是選擇的日期, 前一天為選擇的日期 - 1, 後一天為選擇的日期 + 1
+
+            //防呆
+            DateOnly targetDate = selectedDate ?? DateOnly.FromDateTime(DateTime.Now);
+
+            var vm = new TicketIndexViewModel
             {
-                datas = (new CTicketViewModelFactory()).TodayAllTicketList();
-            }
-            else
-            {
-                datas = (new CTicketViewModelFactory()).SearchByKeyword(keyWord);
-            }
-            return View(datas);
+                SelectedDate = targetDate,
+                Keyword = txtKeyword,
+                SelectedVenueId = venueId,
+                SelectedStatus = status,
+                // 使用<SelectListItem>接收下拉選單內容並用asp-items綁定了CTicketViewModelFactory裡搜尋場地的結果
+                AvailableVenues = (new CTicketViewModelFactory()).GetVenueOptions(),
+                Tickets = (new CTicketViewModelFactory()).SearchTickets(targetDate, txtKeyword, venueId, status)
+            };
+
+            return View(vm);
         }
 
         // 快速報到:只處理 Valid(1) → Used(2)

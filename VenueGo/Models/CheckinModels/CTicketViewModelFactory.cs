@@ -1,4 +1,5 @@
-﻿using VenueGo.Data;
+﻿using Microsoft.AspNetCore.Mvc.Rendering;
+using VenueGo.Data;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
 using VenueGo.ViewModels.CheckinViewModels;
@@ -8,56 +9,90 @@ namespace VenueGo.Models.CheckinModels
     public class CTicketViewModelFactory
     {
         DateOnly today = DateOnly.FromDateTime(DateTime.Now);
-        public List<EntryTicketListViewModel> TodayAllTicketList()
+        //public List<EntryTicketListViewModel> AllTicketListByDay(DateOnly date)
+        //{
+        //    //List<EntryTicketListViewModel> list = new List<EntryTicketListViewModel>();
+        //    dbVenueContext db = new dbVenueContext();
+        //    var datas = from t in db.EntryTickets
+        //                join o in db.Orders on t.OrderId equals o.OrderId
+        //                join u in db.Users on o.UserId equals u.UserId
+        //                join r in db.Reservations on o.ReservationId equals r.ReservationId
+        //                join v in db.Venues on r.VenueId equals v.VenueId
+        //                where r.BookingDate == date
+        //                orderby r.StartTime
+        //                select new EntryTicketListViewModel
+        //                {
+        //                    TicketId = t.TicketId,
+        //                    Qrtoken = t.Qrtoken,
+        //                    UserName = u.Name,
+        //                    VenueName = v.VenueName,
+        //                    BookingDate = r.BookingDate,
+        //                    StartTime = r.StartTime,
+        //                    EndTime = r.EndTime,
+        //                    Status = t.Status
+        //                };
+
+        //    return datas.ToList();
+        //}
+
+        public List<EntryTicketListViewModel> SearchTickets(DateOnly date, string? keyword, int? venueId, int? status)
         {
-            //List<EntryTicketListViewModel> list = new List<EntryTicketListViewModel>();
             dbVenueContext db = new dbVenueContext();
-            var datas = from t in db.EntryTickets
+            var query = from t in db.EntryTickets
                         join o in db.Orders on t.OrderId equals o.OrderId
                         join u in db.Users on o.UserId equals u.UserId
                         join r in db.Reservations on o.ReservationId equals r.ReservationId
                         join v in db.Venues on r.VenueId equals v.VenueId
-                        where r.BookingDate == today
-                        orderby r.StartTime
-                        select new EntryTicketListViewModel
-                        {
-                            TicketId = t.TicketId,
-                            Qrtoken = t.Qrtoken,
-                            UserName = u.Name,
-                            VenueName = v.VenueName,
-                            BookingDate = r.BookingDate,
-                            StartTime = r.StartTime,
-                            EndTime = r.EndTime,
-                            Status = t.Status
-                        };
+                        where r.BookingDate == date
+                        select new { t, o, u, r, v };
+
+            if (!string.IsNullOrWhiteSpace(keyword))
+            {
+                query = query.Where(x => x.u.Name.Contains(keyword)
+                                       || x.u.Phone.Contains(keyword)
+                                       || x.t.Qrtoken.Contains(keyword));
+            }
+
+            if (venueId.HasValue)
+            {
+                query = query.Where(x => x.v.VenueId == venueId.Value);
+            }
+
+            if (status.HasValue)
+            {
+                byte statusByte = (byte)status.Value;
+                query = query.Where(x => x.t.Status == statusByte);
+            }
+
+            var datas = query
+                .OrderBy(x => x.r.StartTime)
+                .Select(x => new EntryTicketListViewModel
+                {
+                    TicketId = x.t.TicketId,
+                    Qrtoken = x.t.Qrtoken,
+                    UserName = x.u.Name,
+                    VenueName = x.v.VenueName,
+                    BookingDate = x.r.BookingDate,
+                    StartTime = x.r.StartTime,
+                    EndTime = x.r.EndTime,
+                    Status = x.t.Status
+                });
 
             return datas.ToList();
         }
 
-        public List<EntryTicketListViewModel> SearchByKeyword(string keyword)
+        public List<SelectListItem> GetVenueOptions()
         {
             dbVenueContext db = new dbVenueContext();
-            var datas = from t in db.EntryTickets
-                        join o in db.Orders on t.OrderId equals o.OrderId
-                        join u in db.Users on o.UserId equals u.UserId
-                        join r in db.Reservations on o.ReservationId equals r.ReservationId
-                        join v in db.Venues on r.VenueId equals v.VenueId
-                        where r.BookingDate == today && (u.Name.Contains(keyword) || u.Phone.Contains(keyword)) || t.Qrtoken.Contains(keyword) || v.VenueName.Contains(keyword)
-                        orderby r.StartTime
-                        select new EntryTicketListViewModel
-                        {
-                            TicketId = t.TicketId,
-                            Qrtoken = t.Qrtoken,
-                            UserName = u.Name,
-                            VenueName = v.VenueName,
-                            BookingDate = r.BookingDate,
-                            StartTime = r.StartTime,
-                            EndTime = r.EndTime,
-                            Status = t.Status
-                        };
-            return datas.ToList();
+            return db.Venues
+                .OrderBy(v => v.VenueName)
+                .Select(v => new SelectListItem
+                {
+                    Value = v.VenueId.ToString(),
+                    Text = v.VenueName
+                })
+                .ToList();
         }
-
 
         public void UpdateTicketStatus(int ticketId)
         {

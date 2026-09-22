@@ -1,16 +1,37 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Helpers;
+using VenueGo.Models.ReviewModels;
 using VenueGo.Models.Entities;
 using VenueGo.Services;
 using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
-    public class CReviewController(dbVenueContext db, ICurrentUser currentUser) : Controller
+    public class CReviewController(dbVenueContext db, ICurrentUser currentUser, IVisitReviewTicketFactory factory, ITimeService timeService) : Controller
     {
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUser _currentUser = currentUser;
+        // 只注入「現場評論」那個介面：這支 Controller 的補償邏輯只會用到
+        // CreateReviewPerVisitAsync，不該看得到預約評論的方法。
+        private readonly IVisitReviewTicketFactory _reviewTicketFactory = factory;
+        private readonly ITimeService _timeService = timeService;
+
+        // ════════════════════════════════════════════════════════
+        //  關於 async：為什麼整支改成非同步
+        //
+        //  async 不會讓「一個請求」變快——查資料庫要 50 毫秒就是 50 毫秒。
+        //  它做的是：等資料庫回應的那段時間，把執行緒還給執行緒池去服務
+        //  別的請求，而不是呆站在那裡等。換到的是「同時很多人用時能撐住
+        //  多少人」，不是「一個人用時有多快」。
+        //
+        //  ⚠️ Action 方法的名字「不要」加 Async 結尾。
+        //     路由是用方法名字對應網址的，而 RedirectToAction(nameof(X))
+        //     會把方法名原樣當成 action 名。加了 Async 之後兩邊會對不上，
+        //     而且是執行時才壞、編譯不會報錯。私有方法沒有這個問題，
+        //     所以下面的私有方法照慣例加了 Async。
+        // ════════════════════════════════════════════════════════
 
         // ════════════════════════════════════════════════════════
         //  第一區：資格判定
@@ -32,22 +53,36 @@ namespace VenueGo.Controllers
             ReviewMain? ExistingReview);
 
         /// <summary>現場評論：用 QRToken 判定資格。</summary>
-        private VisitTicket ResolveVisitTicket(string? token)
+        private async Task<VisitTicket> ResolveVisitTicketAsync(string? token)
         {
             if (string.IsNullOrWhiteSpace(token))
                 return new(EligState.NotFound, null, null);          // 未輸入 ❌
 
-            var ticket = _db.ReviewPerVisits
-                            .FirstOrDefault(v => v.Qrtoken == token.Trim());
+            string qrToken = token.Trim();
+            var ticket = await _db.ReviewPerVisits
+                                  .FirstOrDefaultAsync(v => v.Qrtoken == qrToken);
             if (ticket == null)
-                return new(EligState.NotFound, null, null);          // 查無憑證 ❌
+            {
+                // 補償：報到系統可能漏了呼叫工廠。這張票如果確實已經報到過，
+                // 就在這裡當場補建憑證，顧客不會因為上游漏呼叫而評不了論。
+                if (await _reviewTicketFactory.CreateReviewPerVisitAsync(qrToken))
+                {
+                    ticket = await _db.ReviewPerVisits.FirstOrDefaultAsync(v => v.Qrtoken == qrToken);
+                    if (ticket == null) 
+                        return new(EligState.NotFound, null, null);      // 憑證補建失敗 ❌
+                }
+                else
+                {
+                    return new(EligState.NotFound, null, null);          // 查無憑證 ❌
+                }
+            }
 
-            var existing = _db.ReviewMains
-                              .FirstOrDefault(r => r.ReviewPerVisitId == ticket.ReviewPerVisitId);
+            var existing = await _db.ReviewMains
+                                    .FirstOrDefaultAsync(r => r.ReviewPerVisitId == ticket.ReviewPerVisitId);
             if (existing != null)
                 return new(EligState.AlreadyReviewed, ticket, existing);  // 已評過 📋
 
-            if (DateTime.Now >= ticket.ExpiredAt)
+            if (_timeService.Now >= ticket.ExpiredAt)
                 return new(EligState.Expired, ticket, null);         // 已逾期 ❌
 
             return new(EligState.Ok, ticket, null);                  // 可以評論 👌
@@ -60,13 +95,13 @@ namespace VenueGo.Controllers
         /// ⚠️ 不是本人時回傳 NotFound 而不是另開一個「無權限」狀態——
         ///    不要讓人從錯誤訊息分辨出「這張憑證存在但不是你的」。
         /// </summary>
-        private BookingTicket ResolveBookingTicket(int? id)
+        private async Task<BookingTicket> ResolveBookingTicketAsync(int? id)
         {
             if (id == null || id <= 0)
                 return new(EligState.NotFound, null, null);          // 無效輸入 ❌
 
-            var ticket = _db.ReviewPerBookings
-                            .FirstOrDefault(b => b.ReviewPerBookingId == id);
+            var ticket = await _db.ReviewPerBookings
+                                  .FirstOrDefaultAsync(b => b.ReviewPerBookingId == id);
             if (ticket == null)
                 return new(EligState.NotFound, null, null);          // 查無憑證 ❌
 
@@ -74,12 +109,12 @@ namespace VenueGo.Controllers
             if (_currentUser.MemberId != ticket.UserId)
                 return new(EligState.NotFound, null, null);          // 不是你的 ❌
 
-            var existing = _db.ReviewMains
-                              .FirstOrDefault(r => r.ReviewPerBookingId == ticket.ReviewPerBookingId);
+            var existing = await _db.ReviewMains
+                                    .FirstOrDefaultAsync(r => r.ReviewPerBookingId == ticket.ReviewPerBookingId);
             if (existing != null)
                 return new(EligState.AlreadyReviewed, ticket, existing);  // 已評過 📋
 
-            if (DateTime.Now >= ticket.ExpiredAt)
+            if (_timeService.Now >= ticket.ExpiredAt)
                 return new(EligState.Expired, ticket, null);         // 已逾期 ❌
 
             return new(EligState.Ok, ticket, null);                  // 可以評論 👌
@@ -95,6 +130,9 @@ namespace VenueGo.Controllers
         //  兩種憑證各寫一個，是因為「已評過」要轉去的網址參數不同，
         //  而且 Ticket 的型別不一樣。內容雖然像，但硬合成一個要用泛型
         //  或委派，讀起來比現在難懂，不划算。
+        //
+        //  這兩個不碰資料庫，所以維持同步——不是所有方法都要跟著變 async，
+        //  只有真的在等 I/O 的才需要。
 
         private IActionResult? RejectIfNotOk(VisitTicket r)
         {
@@ -143,9 +181,9 @@ namespace VenueGo.Controllers
         //  這一區只負責把實體翻譯成畫面要的東西，不做判斷、不寫資料。
         // ════════════════════════════════════════════════════════
 
-        private ReviewCreateForVisitVM BuildCreateVm(ReviewPerVisit perVisit)
+        private async Task<ReviewCreateForVisitVM> BuildCreateVmAsync(ReviewPerVisit perVisit)
         {
-            var venue = _db.Venues.FirstOrDefault(v => v.VenueId == perVisit.VenueId);
+            var venue = await _db.Venues.FirstOrDefaultAsync(v => v.VenueId == perVisit.VenueId);
 
             return new ReviewCreateForVisitVM
             {
@@ -164,9 +202,9 @@ namespace VenueGo.Controllers
             };
         }
 
-        private ReviewCreateForBookingVM BuildCreateVm(ReviewPerBooking perBooking)
+        private async Task<ReviewCreateForBookingVM> BuildCreateVmAsync(ReviewPerBooking perBooking)
         {
-            var order = _db.Orders.FirstOrDefault(o => o.OrderId == perBooking.OrderId);
+            var order = await _db.Orders.FirstOrDefaultAsync(o => o.OrderId == perBooking.OrderId);
 
             return new ReviewCreateForBookingVM
             {
@@ -192,12 +230,12 @@ namespace VenueGo.Controllers
         /// 顯示名稱：匿名用暱稱，實名查會員姓名。
         /// 兩種評論共用。
         /// </summary>
-        private string ResolveDisplayName(ReviewMain review)
+        private async Task<string> ResolveDisplayNameAsync(ReviewMain review)
         {
             if (review.IsAnonymous)
                 return review.AnonymousNickname ?? "匿名使用者";
 
-            var user = _db.Users.FirstOrDefault(u => u.UserId == review.UserId);
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == review.UserId);
             return user?.Name ?? "已停用的帳號";
         }
 
@@ -205,7 +243,7 @@ namespace VenueGo.Controllers
         /// 檢視頁的 VM。兩種評論共用同一個版面，差別只在
         /// 「用什麼識別自己」與「頁尾顯示什麼」。
         /// </summary>
-        private MyReviewPageVM BuildMyReviewVm(
+        private async Task<MyReviewPageVM> BuildMyReviewVmAsync(
             ReviewMain review,
             string? token,          // 現場評論才有
             int? bookingId,         // 預約評論才有
@@ -226,7 +264,7 @@ namespace VenueGo.Controllers
                 MentionsVenue = review.MentionsVenue,
                 MentionsStaff = review.MentionsStaff,
                 CreatedAt = review.CreatedAt,
-                DisplayName = ResolveDisplayName(review),
+                DisplayName = await ResolveDisplayNameAsync(review),
 
                 VenueName = venueName,
                 RentStartTime = rentStartTime,
@@ -240,6 +278,206 @@ namespace VenueGo.Controllers
             };
         }
 
+        // ── 評論專區（公開卡片）──────────────────────────
+
+        /// <summary>
+        /// 上架條件。這是唯一一份，別的地方要用就呼叫它，不要重打。
+        ///
+        ///   只有現場評論進顧客端（預約評論的 IsPublic 後端寫死 false）
+        ///   非垃圾
+        ///   顧客選了公開
+        ///   而且「已回覆」或「建立超過緩衝天數」
+        ///
+        /// 最後那條是刻意的設計：館方不作為的預設結果是公開，
+        /// 不能用「不回覆」來把負評壓著不讓它出現。
+        /// </summary>
+        private IQueryable<ReviewMain> PublishedReviews(DateTime now)
+        {
+            DateTime cutoff = now.AddDays(-ReviewPolicy.PublicBufferDays);
+
+            return _db.ReviewMains.Where(r =>
+                r.ReviewPerVisitId != null
+                && r.SpamMarkedAt == null
+                && r.IsPublic
+                && (r.RepliedAt != null || r.CreatedAt <= cutoff));
+        }
+
+        /// <summary>
+        /// 類型、時間範圍、有無內容三個篩選。
+        /// 星等篩選「不」放進來——分布圖要用這個結果去算，
+        /// 如果連星等也篩掉，點了 5 星之後分布圖就只剩一條了。
+        /// </summary>
+        private IQueryable<ReviewMain> ApplyCardFilters(
+            IQueryable<ReviewMain> q, int? sportTypeId, string range, bool hasContentOnly, DateTime todayStart)
+        {
+            if (sportTypeId is int st)
+            {
+                // 沒有導覽屬性，用子查詢接到憑證的運動類型。
+                // 保持 IQueryable，EF 會翻成 IN (SELECT …)，不會把資料抓回記憶體。
+                var visitIds = _db.ReviewPerVisits
+                                  .Where(v => v.SportTypeId == st)
+                                  .Select(v => v.ReviewPerVisitId);
+                q = q.Where(r => visitIds.Contains(r.ReviewPerVisitId!.Value));
+            }
+
+            int? days = ReviewRange.DaysOf(range);
+            if (days != null)
+            {
+                DateTime from = todayStart.AddDays(-days.Value);
+                q = q.Where(r => r.CreatedAt >= from);
+            }
+
+            if (hasContentOnly)
+                q = q.Where(r => r.ReviewContent != null && r.ReviewContent != "");
+
+            return q;
+        }
+
+        private static IQueryable<ReviewMain> ApplyCardSort(IQueryable<ReviewMain> q, string sort) => sort switch
+        {
+            ReviewSort.Newest  => q.OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.StarRating),
+            ReviewSort.Highest => q.OrderByDescending(r => r.StarRating).ThenByDescending(r => r.CreatedAt),
+            ReviewSort.Lowest  => q.OrderBy(r => r.StarRating).ThenByDescending(r => r.CreatedAt),
+            _                  => q.OrderByDescending(r => r.CreatedAt)
+        };
+
+        private static string NormalizeRange(string? range) => range switch
+        {
+            ReviewRange.Week  => ReviewRange.Week,
+            ReviewRange.Month => ReviewRange.Month,
+            ReviewRange.All   => ReviewRange.All,
+            _                 => ReviewRange.Default
+        };
+
+        private static string NormalizeSort(string? sort) => sort switch
+        {
+            ReviewSort.Newest  => ReviewSort.Newest,
+            ReviewSort.Highest => ReviewSort.Highest,
+            ReviewSort.Lowest  => ReviewSort.Lowest,
+            _                  => ReviewSort.Default
+        };
+
+        /// <summary>不認得的星等一律當成「不篩選」。</summary>
+        private static int? NormalizeStar(int? star)
+            => star is >= 1 and <= 5 ? star : null;
+
+        /// <summary>
+        /// 把評論翻譯成卡片。
+        /// 沒有導覽屬性，所以照館方清單那套做法：先把評論查出來，
+        /// 收集 id，每張表查一次放進 Dictionary，組 VM 時用 id 取。
+        /// 不管幾筆，每張表都只查一次。
+        /// </summary>
+        private async Task<List<ReviewCardVM>> BuildCardsAsync(List<ReviewMain> reviews)
+        {
+            if (reviews.Count == 0) return new List<ReviewCardVM>();
+
+            // 現場憑證 → 場地名稱
+            var visitIds = reviews.Where(r => r.ReviewPerVisitId != null)
+                                  .Select(r => r.ReviewPerVisitId!.Value)
+                                  .Distinct().ToList();
+            var visits = await _db.ReviewPerVisits
+                                  .Where(v => visitIds.Contains(v.ReviewPerVisitId))
+                                  .ToDictionaryAsync(v => v.ReviewPerVisitId);
+
+            var venueIds = visits.Values.Select(v => v.VenueId).Distinct().ToList();
+            var venueNames = await _db.Venues
+                                      .Where(v => venueIds.Contains(v.VenueId))
+                                      .ToDictionaryAsync(v => v.VenueId, v => v.VenueName);
+
+            // 實名評論的會員姓名
+            var userIds = reviews.Where(r => !r.IsAnonymous && r.UserId != null)
+                                 .Select(r => r.UserId!.Value)
+                                 .Distinct().ToList();
+            var userNames = await _db.Users
+                                     .Where(u => userIds.Contains(u.UserId))
+                                     .ToDictionaryAsync(u => u.UserId, u => u.Name);
+
+            return reviews.Select(r =>
+            {
+                ReviewPerVisit? visit = r.ReviewPerVisitId is int vid
+                                        ? visits.GetValueOrDefault(vid) : null;
+
+                return new ReviewCardVM
+                {
+                    ReviewId      = r.ReviewId,
+                    StarRating    = r.StarRating,
+                    Content       = r.ReviewContent,
+                    CreatedAt     = r.CreatedAt,
+                    MentionsVenue = r.MentionsVenue,
+                    MentionsStaff = r.MentionsStaff,
+                    VenueName     = visit != null ? venueNames.GetValueOrDefault(visit.VenueId) : null,
+
+                    // 已經在記憶體裡了，可以放心用這個 static 方法——
+                    // 寫在 LINQ 的 select 裡才會害 EF 改成客戶端評估。
+                    DisplayName   = ReviewCardVM.ResolveDisplayName(
+                                        r.IsAnonymous, r.AnonymousNickname,
+                                        r.UserId is int uid ? userNames.GetValueOrDefault(uid) : null),
+
+                    ReplyContent  = r.ReplyContent,
+                    RepliedAt     = r.RepliedAt
+                };
+            }).ToList();
+        }
+
+        private async Task<ReviewIndexVM> BuildIndexVmAsync(
+            int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort)
+        {
+            string rg = NormalizeRange(range);
+            string so = NormalizeSort(sort);
+            int? st = NormalizeStar(star);
+
+            DateTime now = _timeService.Now;
+            DateTime todayStart = _timeService.Today;   // 原本：DateTime.Today;
+
+            // 分頁列：啟用中的運動類型，前面加一個「全部」
+            var sportTabs = new List<SportTabVM> { new(null, "全部") };
+            sportTabs.AddRange(await _db.SportTypes
+                                        .Where(s => s.IsActive)
+                                        .OrderBy(s => s.SportTypeId)
+                                        .Select(s => new SportTabVM(s.SportTypeId, s.SportName))
+                                        .ToListAsync());
+
+            // 星等篩選之前的結果：分布圖與平均分數用這一份算
+            var beforeStar = ApplyCardFilters(PublishedReviews(now), sportTypeId, rg, hasContentOnly, todayStart);
+
+            var counts = await beforeStar
+                .GroupBy(r => r.StarRating)
+                .Select(g => new { Star = g.Key, Count = g.Count() })
+                .ToListAsync();
+
+            int CountOf(int n) => counts.FirstOrDefault(c => c.Star == n)?.Count ?? 0;
+
+            var distribution = new StarDistributionVM
+            {
+                Star5 = CountOf(5),
+                Star4 = CountOf(4),
+                Star3 = CountOf(3),
+                Star2 = CountOf(2),
+                Star1 = CountOf(1)
+            };
+
+            // 清單才套用星等篩選
+            var listQuery = beforeStar;
+            if (st is int s)
+                listQuery = listQuery.Where(r => r.StarRating == s);
+
+            // ⚠️ 期中沒有分頁。資料量變大之後要補 Skip / Take。
+            var reviews = await ApplyCardSort(listQuery, so).ToListAsync();
+
+            return new ReviewIndexVM
+            {
+                SportTypeId    = sportTypeId,
+                TimeRange      = rg,
+                Star           = st,
+                HasContentOnly = hasContentOnly,
+                Sort           = so,
+
+                SportTabs    = sportTabs,
+                Distribution = distribution,
+                Items        = await BuildCardsAsync(reviews)
+            };
+        }
+
         // ════════════════════════════════════════════════════════
         //  第三區：寫入
         // ════════════════════════════════════════════════════════
@@ -247,6 +485,7 @@ namespace VenueGo.Controllers
         /// <summary>
         /// 由輸入 VM 組出要存的評論實體。兩種評論共用。
         /// visitId 與 bookingId 一定只有一個有值（XOR 約束）。
+        /// 純計算、不碰資料庫，所以維持同步。
         /// </summary>
         private ReviewMain BuildNewReview(
             ReviewCreateInputVM vm, int? visitId, int? bookingId, int? userId)
@@ -268,7 +507,7 @@ namespace VenueGo.Controllers
                 MentionsVenue = vm.MentionsVenue,
                 MentionsStaff = vm.MentionsStaff,
                 AnonymousNickname = nickname,
-                CreatedAt = DateTime.Now
+                CreatedAt = _timeService.Now
             };
         }
 
@@ -277,13 +516,14 @@ namespace VenueGo.Controllers
         /// ⚠️ 只在「有回覆且尚未記錄」時寫，否則每次重新整理都會蓋掉原本的時間。
         ///    約束 ReplyViewed_Logic 也要求 RepliedAt 不為 null 且 ReplyViewedAt >= RepliedAt。
         /// </summary>
-        private void MarkReplyViewedIfNeeded(ReviewMain review)
+        private async Task MarkReplyViewedIfNeededAsync(ReviewMain review)
         {
+            // 取時間挪到兩個 early return 之後：不需要寫入的情況連問都不必問。
             if (review.RepliedAt == null) return;
             if (review.ReplyViewedAt != null) return;
 
-            review.ReplyViewedAt = DateTime.Now;
-            _db.SaveChanges();
+            review.ReplyViewedAt = _timeService.Now;
+            await _db.SaveChangesAsync();
         }
 
         // ════════════════════════════════════════════════════════
@@ -291,30 +531,37 @@ namespace VenueGo.Controllers
         //  到這裡每個 Action 都只剩「接參數 → 呼叫 → 決定回什麼畫面」。
         // ════════════════════════════════════════════════════════
 
+        /// <summary>
+        /// 評論專區：任何人都看得到的公開評論列表。
+        ///
+        /// 篩選用一般連結整頁載入，不用 axios——顧客端的網址要能分享、
+        /// 能加書籤、能按上一頁。館方清單是內部工具才適合局部更新。
+        /// </summary>
         [HttpGet]
-        public IActionResult Index()            // 評論專區
+        public async Task<IActionResult> Index(
+            int? sportTypeId, string? range, int? star, bool hasContentOnly = false, string? sort = null)
         {
-            return View();
+            return View(await BuildIndexVmAsync(sportTypeId, range, star, hasContentOnly, sort));
         }
 
         // ── 現場評論撰寫 ────────────────────────────────────
 
         [HttpGet]
-        public IActionResult CreateForVisit(string? token)
+        public async Task<IActionResult> CreateForVisit(string? token)
         {
-            var r = ResolveVisitTicket(token);
+            var r = await ResolveVisitTicketAsync(token);
             var reject = RejectIfNotOk(r);
             if (reject != null) return reject;
 
-            return View(BuildCreateVm(r.Ticket!));
+            return View(await BuildCreateVmAsync(r.Ticket!));
         }
 
-        [HttpPost]
-        public IActionResult CreateForVisit(ReviewCreateForVisitVM vm, string? token)
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateForVisit(ReviewCreateForVisitVM vm, string? token)
         {
             // ⚠️ 資格要重驗一次。表單可能停在頁面上好幾天，
             //    也可能有人繞過畫面直接送請求。
-            var r = ResolveVisitTicket(token);
+            var r = await ResolveVisitTicketAsync(token);
             var reject = RejectIfNotOk(r);
             if (reject != null) return reject;
 
@@ -329,7 +576,7 @@ namespace VenueGo.Controllers
             {
                 // 驗證失敗回原頁：顯示欄位是從表單繫結來的，可能已經空了，
                 // 用憑證重建一次再回去，確認區塊才不會變空白。
-                var redo = BuildCreateVm(r.Ticket);
+                var redo = await BuildCreateVmAsync(r.Ticket);
                 redo.StarRating = vm.StarRating;
                 redo.ReviewContent = vm.ReviewContent;
                 redo.MentionsVenue = vm.MentionsVenue;
@@ -346,7 +593,7 @@ namespace VenueGo.Controllers
             var newReview = BuildNewReview(vm, r.Ticket.ReviewPerVisitId, null, userId);
 
             _db.ReviewMains.Add(newReview);
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
 
             return RedirectToAction(nameof(ShowMyReviewPage),
                                     new { token = r.Ticket.Qrtoken });
@@ -355,19 +602,19 @@ namespace VenueGo.Controllers
         // ── 預約評論撰寫 ────────────────────────────────────
 
         [HttpGet]
-        public IActionResult CreateForBooking(int? id)
+        public async Task<IActionResult> CreateForBooking(int? id)
         {
-            var r = ResolveBookingTicket(id);
+            var r = await ResolveBookingTicketAsync(id);
             var reject = RejectIfNotOk(r);
             if (reject != null) return reject;
 
-            return View(BuildCreateVm(r.Ticket!));
+            return View(await BuildCreateVmAsync(r.Ticket!));
         }
 
-        [HttpPost]
-        public IActionResult CreateForBooking(ReviewCreateForBookingVM vm, int? id)
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> CreateForBooking(ReviewCreateForBookingVM vm, int? id)
         {
-            var r = ResolveBookingTicket(id);
+            var r = await ResolveBookingTicketAsync(id);
             var reject = RejectIfNotOk(r);
             if (reject != null) return reject;
 
@@ -379,7 +626,7 @@ namespace VenueGo.Controllers
 
             if (!ModelState.IsValid)
             {
-                var redo = BuildCreateVm(r.Ticket);
+                var redo = await BuildCreateVmAsync(r.Ticket);
                 redo.StarRating = vm.StarRating;
                 redo.ReviewContent = vm.ReviewContent;
                 redo.MentionsVenue = vm.MentionsVenue;
@@ -395,7 +642,7 @@ namespace VenueGo.Controllers
                                            _currentUser.MemberId);
 
             _db.ReviewMains.Add(newReview);
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
 
             return RedirectToAction(nameof(ShowMyReviewPage),
                                     new { bookingId = r.Ticket.ReviewPerBookingId });
@@ -407,21 +654,21 @@ namespace VenueGo.Controllers
         /// 兩種評論共用一個頁面。token 有值走現場、bookingId 有值走預約。
         /// </summary>
         [HttpGet]
-        public IActionResult ShowMyReviewPage(string? token, int? bookingId)
+        public async Task<IActionResult> ShowMyReviewPage(string? token, int? bookingId)
         {
             if (!string.IsNullOrWhiteSpace(token))
-                return ShowVisitReview(token);
+                return await ShowVisitReviewAsync(token);
 
             if (bookingId != null)
-                return ShowBookingReview(bookingId);
+                return await ShowBookingReviewAsync(bookingId);
 
             TempData[CDictionary.TK_MSG_Input錯誤] = "載入時發生異常，請重試";
             return RedirectToAction(nameof(Index));
         }
 
-        private IActionResult ShowVisitReview(string token)
+        private async Task<IActionResult> ShowVisitReviewAsync(string token)
         {
-            var r = ResolveVisitTicket(token);
+            var r = await ResolveVisitTicketAsync(token);
 
             // 這一頁要的是「已經評過」，跟撰寫頁剛好相反，所以不能用 RejectIfNotOk
             if (r.State != EligState.AlreadyReviewed)
@@ -431,11 +678,11 @@ namespace VenueGo.Controllers
             }
 
             var review = r.ExistingReview!;
-            MarkReplyViewedIfNeeded(review);
+            await MarkReplyViewedIfNeededAsync(review);
 
-            var venue = _db.Venues.FirstOrDefault(v => v.VenueId == r.Ticket!.VenueId);
+            var venue = await _db.Venues.FirstOrDefaultAsync(v => v.VenueId == r.Ticket!.VenueId);
 
-            var vm = BuildMyReviewVm(review,
+            var vm = await BuildMyReviewVmAsync(review,
                                      token: r.Ticket!.Qrtoken,
                                      bookingId: null,
                                      venueName: venue?.VenueName,
@@ -444,9 +691,9 @@ namespace VenueGo.Controllers
             return View(nameof(ShowMyReviewPage), vm);
         }
 
-        private IActionResult ShowBookingReview(int? bookingId)
+        private async Task<IActionResult> ShowBookingReviewAsync(int? bookingId)
         {
-            var r = ResolveBookingTicket(bookingId);
+            var r = await ResolveBookingTicketAsync(bookingId);
 
             if (r.State != EligState.AlreadyReviewed)
             {
@@ -455,11 +702,11 @@ namespace VenueGo.Controllers
             }
 
             var review = r.ExistingReview!;
-            MarkReplyViewedIfNeeded(review);
+            await MarkReplyViewedIfNeededAsync(review);
 
-            var order = _db.Orders.FirstOrDefault(o => o.OrderId == r.Ticket!.OrderId);
+            var order = await _db.Orders.FirstOrDefaultAsync(o => o.OrderId == r.Ticket!.OrderId);
 
-            var vm = BuildMyReviewVm(review,
+            var vm = await BuildMyReviewVmAsync(review,
                                      token: null,
                                      bookingId: r.Ticket!.ReviewPerBookingId,
                                      venueName: null,
@@ -474,10 +721,10 @@ namespace VenueGo.Controllers
         /// 切換公開狀態。只有現場評論做得到——預約評論一律不公開。
         /// token 從表單的 hidden 欄位帶上來（模型繫結會從表單本體找）。
         /// </summary>
-        [HttpPost]
-        public IActionResult SetVisibility(string? token, bool isPublic)
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> SetVisibility(string? token, bool isPublic)
         {
-            var r = ResolveVisitTicket(token);
+            var r = await ResolveVisitTicketAsync(token);
             if (r.State != EligState.AlreadyReviewed)
             {
                 TempData[CDictionary.TK_MSG_找不到指定物件] = "查無指定評論";
@@ -492,7 +739,7 @@ namespace VenueGo.Controllers
                                         new { token = r.Ticket!.Qrtoken });
 
             review.IsPublic = isPublic;
-            _db.SaveChanges();
+            await _db.SaveChangesAsync();
 
             return RedirectToAction(nameof(ShowMyReviewPage),
                                     new { token = r.Ticket!.Qrtoken });
@@ -501,10 +748,10 @@ namespace VenueGo.Controllers
         /// <summary>
         /// 對館方回覆表態。0 不滿意 / 1 普通 / 2 滿意。
         /// ⚠️ 約束 ReplySatisfaction_Logic 要求 ReplyViewedAt 不為 null，
-        ///    而進入檢視頁時 MarkReplyViewedIfNeeded 已經記過了。
+        ///    而進入檢視頁時 MarkReplyViewedIfNeededAsync 已經記過了。
         /// </summary>
-        [HttpPost]
-        public IActionResult SetSatisfaction(string? token, int? bookingId, byte satisfaction)
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> SetSatisfaction(string? token, int? bookingId, byte satisfaction)
         {
             if (satisfaction > 2)
             {
@@ -517,7 +764,7 @@ namespace VenueGo.Controllers
 
             if (!string.IsNullOrWhiteSpace(token))
             {
-                var r = ResolveVisitTicket(token);
+                var r = await ResolveVisitTicketAsync(token);
                 if (r.State != EligState.AlreadyReviewed)
                     return RedirectToAction(nameof(Index));
                 review = r.ExistingReview;
@@ -525,7 +772,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                var r = ResolveBookingTicket(bookingId);
+                var r = await ResolveBookingTicketAsync(bookingId);
                 if (r.State != EligState.AlreadyReviewed)
                     return RedirectToAction(nameof(Index));
                 review = r.ExistingReview;
@@ -535,16 +782,16 @@ namespace VenueGo.Controllers
             // 沒有回覆就沒有滿意度可言；已表態過不給改（按鈕本來就不會出現）
             if (review!.RepliedAt != null && review.ReplySatisfaction == null)
             {
-                review.ReplyViewedAt ??= DateTime.Now;   // 保險，正常已經有值
+                review.ReplyViewedAt ??= _timeService.Now;   // 保險，正常已經有值
                 review.ReplySatisfaction = satisfaction;
-                _db.SaveChanges();
+                await _db.SaveChangesAsync();
             }
 
             return RedirectToAction(nameof(ShowMyReviewPage), routeValues);
         }
 
         // MarkReplyViewed 不再需要獨立的 Action——
-        // 進入檢視頁時 MarkReplyViewedIfNeeded 就記錄了。
+        // 進入檢視頁時 MarkReplyViewedIfNeededAsync 就記錄了。
         // 之後若改成 AJAX 局部載入，再把它拿出來當端點。
 
         [HttpGet]

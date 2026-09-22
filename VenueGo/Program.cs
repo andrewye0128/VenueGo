@@ -1,14 +1,15 @@
 using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Models.Options;
 using VenueGo.Services;
+using VenueGo.Models.ReviewModels;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
 using VenueGo.Services.Orders;
 using VenueGo.Services.Reservations;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
+using VenueGo.Models.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,16 +44,7 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
     });
 
 // 註冊 Session
-//builder.Services.AddSession();
-builder.Services.AddSession(options =>
-{
-    options.IdleTimeout = TimeSpan.FromMinutes(30);
-    options.Cookie.HttpOnly = true;
-    options.Cookie.IsEssential = true;
-});
-
-
-builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
+builder.Services.AddSession();
 
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
@@ -84,8 +76,6 @@ builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();
 // 註冊關於預約建立的服務：介面 → 實作
 builder.Services.AddScoped<IReservationCreationService, ReservationCreationService>();
 
-// 註冊關於目前登入者的服務：介面 → 實作
-builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 // 註冊關於預約查詢與指令的服務：介面 → 實作
 builder.Services.AddScoped<IReservationQueryService, ReservationQueryService>();
 // 註冊關於預約指令的服務：介面 → 實作
@@ -96,7 +86,18 @@ builder.Services.Configure<ReservationRulesOptions>(
     builder.Configuration.GetSection(ReservationRulesOptions.SectionName));
 
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
-builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
+
+// 評論系統使用
+builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+
+builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
+builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
+builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
+// 自動校時使用
+builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 CreateClient()
+builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddSingleton<ITimeService, TimeService>();
+builder.Services.AddHostedService<TimeSyncHostedService>();
 
 var app = builder.Build();
 
@@ -125,7 +126,6 @@ app.MapStaticAssets();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")
-    //pattern: "{controller=CReview}/{action=Index}/{id?}")
     .WithStaticAssets();
 
 

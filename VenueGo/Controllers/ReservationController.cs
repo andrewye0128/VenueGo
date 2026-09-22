@@ -7,6 +7,7 @@ using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
+using VenueGo.Models.Enums;
 using VenueGo.Models.ReservationModels;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Reservations;
@@ -78,7 +79,7 @@ namespace VenueGo.Controllers
                                                     join p in _db.Payments
                                                         on o.OrderId equals p.OrderId
                                                     where o.ReservationId == r.ReservationId
-                                                    select (byte?)p.PaymentStatus)
+                                                    select (PaymentStatus?)p.PaymentStatus)
                                                    .FirstOrDefault()
                                })
                               .ToListAsync(cancellationToken);

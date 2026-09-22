@@ -122,84 +122,88 @@
                                 <td class="small text-muted">@user.CreatedAt.ToString("yyyy/MM/dd HH:mm")</td>
                                 <td class="text-end pe-3">
                                     <div class="btn-group btn-group-sm">
-                                        <!-- 檢視詳情按鈕 -->
+                                        <!-- 檢視詳情按鈕（Manager 與 Admin 皆可使用） -->
                                         <button type="button" class="btn btn-outline-info" onclick="openDetailModal(@user.UserId)" title="檢視詳細資料與消費紀錄">
                                             <i class="bi bi-eye"></i> 詳情
                                         </button>
 
-                                        <!-- 👈 關鍵修正：根據是否已具備員工身分判斷顯示按鈕 -->
-                                        @if (user.IsEmployee)
+                                        <!-- 🔒 限制：僅限 Admin 才能看到的管理操作 -->
+                                        @if (User.IsInRole("Admin"))
                                         {
-                                            <a asp-controller="Setting" asp-action="EditUser" asp-route-id="@user.UserId"
-                                               class="btn btn-outline-secondary" title="該使用者已是員工，點擊前往後台編輯權限與職稱">
-                                                <i class="bi bi-gear me-1"></i>員工設定
-                                            </a>
-                                        }
-                                        else
-                                        {
-                                            <a asp-controller="Member" asp-action="ConvertToEmployee" asp-route-id="@user.UserId"
-                                               class="btn btn-outline-primary" title="將此會員升格為後台員工">
-                                                <i class="bi bi-person-badge me-1"></i>轉為員工
-                                            </a>
-                                        }
-
-                                        <!-- 下拉選單：狀態與密碼管理 -->
-                                        <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-                                            狀態與密碼
-                                        </button>
-                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm small">
-                                            @if (isLocked)
+                                            <!-- 根據是否已具備員工身分判斷顯示按鈕 -->
+                                            @if (user.IsEmployee)
                                             {
-                                                <li>
-                                                    <form asp-controller="Member" asp-action="UnlockAccount" method="post">
-                                                        @Html.AntiForgeryToken()
-                                                        <input type="hidden" name="userId" value="@user.UserId" />
-                                                        <button type="submit" class="dropdown-item text-primary fw-bold">
-                                                            <i class="bi bi-unlock-fill me-2"></i>解鎖帳號 (密碼錯鎖定)
-                                                        </button>
-                                                    </form>
-                                                </li>
+                                                <a asp-controller="Setting" asp-action="EditUser" asp-route-id="@user.UserId"
+                                                   class="btn btn-outline-secondary" title="該使用者已是員工，點擊前往後台編輯權限與職稱">
+                                                    <i class="bi bi-gear me-1"></i>員工設定
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <a asp-controller="Member" asp-action="ConvertToEmployee" asp-route-id="@user.UserId"
+                                                   class="btn btn-outline-primary" title="將此會員升格為後台員工">
+                                                    <i class="bi bi-person-badge me-1"></i>轉為員工
+                                                </a>
+                                            }
+
+                                            <!-- 下拉選單：狀態與密碼管理 -->
+                                            <button type="button" class="btn btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+                                                狀態與密碼
+                                            </button>
+                                            <ul class="dropdown-menu dropdown-menu-end shadow-sm small">
+                                                @if (isLocked)
+                                                {
+                                                    <li>
+                                                        <form asp-controller="Member" asp-action="UnlockAccount" method="post">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="userId" value="@user.UserId" />
+                                                            <button type="submit" class="dropdown-item text-primary fw-bold">
+                                                                <i class="bi bi-unlock-fill me-2"></i>解鎖帳號 (密碼錯鎖定)
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                }
+
+                                                @if (user.Status != "Active")
+                                                {
+                                                    <li>
+                                                        <form asp-controller="Member" asp-action="UpdateMemberStatus" method="post">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="userId" value="@user.UserId" />
+                                                            <input type="hidden" name="status" value="Active" />
+                                                            <button type="submit" class="dropdown-item text-success">
+                                                                <i class="bi bi-check-circle me-2"></i>設為 正常啟用
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                }
+                                                @if (user.Status != "Suspended")
+                                                {
+                                                    <li>
+                                                        <form asp-controller="Member" asp-action="UpdateMemberStatus" method="post">
+                                                            @Html.AntiForgeryToken()
+                                                            <input type="hidden" name="userId" value="@user.UserId" />
+                                                            <input type="hidden" name="status" value="Suspended" />
+                                                            <button type="submit" class="dropdown-item text-danger">
+                                                                <i class="bi bi-slash-circle me-2"></i>設為 帳號停權
+                                                            </button>
+                                                        </form>
+                                                    </li>
+                                                }
+
                                                 <li><hr class="dropdown-divider"></li>
-                                            }
-
-                                            @if (user.Status != "Active")
-                                            {
                                                 <li>
-                                                    <form asp-controller="Member" asp-action="UpdateMemberStatus" method="post">
+                                                    <form asp-controller="Member" asp-action="ResetMemberPassword" method="post" onsubmit="return confirm('確定要將此會員的密碼重置為預設密碼 Pass@1234 嗎？');">
                                                         @Html.AntiForgeryToken()
                                                         <input type="hidden" name="userId" value="@user.UserId" />
-                                                        <input type="hidden" name="status" value="Active" />
-                                                        <button type="submit" class="dropdown-item text-success">
-                                                            <i class="bi bi-check-circle me-2"></i>設為 正常啟用
+                                                        <button type="submit" class="dropdown-item text-warning">
+                                                            <i class="bi bi-key me-2"></i>重置密碼 (Pass@1234)
                                                         </button>
                                                     </form>
                                                 </li>
-                                            }
-                                            @if (user.Status != "Suspended")
-                                            {
-                                                <li>
-                                                    <form asp-controller="Member" asp-action="UpdateMemberStatus" method="post">
-                                                        @Html.AntiForgeryToken()
-                                                        <input type="hidden" name="userId" value="@user.UserId" />
-                                                        <input type="hidden" name="status" value="Suspended" />
-                                                        <button type="submit" class="dropdown-item text-danger">
-                                                            <i class="bi bi-slash-circle me-2"></i>設為 帳號停權
-                                                        </button>
-                                                    </form>
-                                                </li>
-                                            }
-
-                                            <li><hr class="dropdown-divider"></li>
-                                            <li>
-                                                <form asp-controller="Member" asp-action="ResetMemberPassword" method="post" onsubmit="return confirm('確定要將此會員的密碼重置為預設密碼 Pass@1234 嗎？');">
-                                                    @Html.AntiForgeryToken()
-                                                    <input type="hidden" name="userId" value="@user.UserId" />
-                                                    <button type="submit" class="dropdown-item text-warning">
-                                                        <i class="bi bi-key me-2"></i>重置密碼 (Pass@1234)
-                                                    </button>
-                                                </form>
-                                            </li>
-                                        </ul>
+                                            </ul>
+                                        }
                                     </div>
                                 </td>
                             </tr>
@@ -217,6 +221,60 @@
             </table>
         </div>
     </div>
+</div>
+
+<!-- 分頁導覽區塊 -->
+<div class="d-flex justify-content-between align-items-center mt-3 px-2">
+    <!-- 左側：筆數統計資訊 (永遠顯示) -->
+    <div class="text-muted small">
+        @if (Model.TotalCount > 0)
+        {
+            <span>顯示第 <strong>@(((Model.CurrentPage - 1) * 10) + 1)</strong> 至 <strong>@(Math.Min(Model.CurrentPage * 10, Model.TotalCount))</strong> 筆，共 <strong>@Model.TotalCount</strong> 筆資料</span>
+        }
+        else
+        {
+            <span>共 <strong>0</strong> 筆資料</span>
+        }
+    </div>
+
+    <!-- 右側：頁碼控制按鈕 (當總頁數大於 1 時才顯示) -->
+    @if (Model.TotalPages > 1)
+    {
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <!-- 上一頁 -->
+                <li class="page-item @(Model.CurrentPage == 1 ? "disabled" : "")">
+                    <a class="page-link" asp-controller="Member" asp-action="Index"
+                       asp-route-keyword="@Model.Keyword"
+                       asp-route-status="@Model.SelectedStatus"
+                       asp-route-page="@(Model.CurrentPage - 1)">
+                        <i class="bi bi-chevron-left"></i> 上一頁
+                    </a>
+                </li>
+
+                <!-- 頁碼 -->
+                @for (int i = 1; i <= Model.TotalPages; i++)
+                {
+                    <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
+                        <a class="page-link" asp-controller="Member" asp-action="Index"
+                           asp-route-keyword="@Model.Keyword"
+                           asp-route-status="@Model.SelectedStatus"
+                           asp-route-page="@i">@i</a>
+                    </li>
+                }
+
+                <!-- 下一頁 -->
+                <li class="page-item @(Model.CurrentPage == Model.TotalPages ? "disabled" : "")">
+                    <a class="page-link" asp-controller="Member" asp-action="Index"
+                       asp-route-keyword="@Model.Keyword"
+                       asp-route-status="@Model.SelectedStatus"
+                       asp-route-page="@(Model.CurrentPage + 1)">
+                        下一頁 <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    }
 </div>
 
 <!-- 會員詳細資料彈窗 (Modal) -->

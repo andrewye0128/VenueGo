@@ -68,7 +68,7 @@ namespace VenueGo.ViewModels.MemberViewModels
 
     public class LoginViewModel
     {
-        [Required(ErrorMessage = "請輸入 Email 或帳號")]
+        [Required(ErrorMessage = "請輸入 Email 帳號")]
         [EmailAddress(ErrorMessage = "請輸入正確的 Email 格式")]
         public string Email { get; set; } = string.Empty;
 
@@ -96,9 +96,15 @@ namespace VenueGo.ViewModels.MemberViewModels
         [Required]
         public string Email { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "請輸入新密碼")]
-        [MinLength(6, ErrorMessage = "密碼長度至少需要 6 個字元")]
+        //[Required(ErrorMessage = "請輸入新密碼")]
+        //[MinLength(6, ErrorMessage = "密碼長度至少需要 6 個字元")]
+        [Required(ErrorMessage = "請輸入密碼")]
+        [StringLength(100, MinimumLength = 8, ErrorMessage = "密碼長度至少需為 8 個字")]
+        // 正則表達式：必須包含「至少一個大寫字母、一個小寫字母、一個數字」
+        [RegularExpression(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).+$",
+          ErrorMessage = "密碼必須包含至少一個大寫英文字母、一個小寫英文字母與一個數字")]
         [DataType(DataType.Password)]
+        [Display(Name = "密碼")]
         public string Password { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "請再次輸入新密碼")]

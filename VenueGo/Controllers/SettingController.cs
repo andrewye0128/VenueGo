@@ -9,7 +9,7 @@
 
 //namespace VenueGo.Controllers
 //{
-//    [EmployeeAuthorize("Admin")] // 特定功能要求 Admin 角色
+//    [EmployeeAuthorize("Admin")] // 僅限管理員存取
 //    public class SettingController : Controller
 //    {
 //        private readonly dbVenueContext _db;
@@ -19,26 +19,24 @@
 //            _db = db;
 //        }
 
-//        // 預設首頁：直接導向角色權限管理
 //        public IActionResult Index()
 //        {
 //            return RedirectToAction(nameof(Roles));
 //        }
 
-//        // 1. 角色權限列表頁面 (已優化：解決 N+1 查詢)
+//        #region 1. 角色權限管理 (Roles)
+
 //        public async Task<IActionResult> Roles()
 //        {
 //            var roles = await _db.Roles.AsNoTracking().ToListAsync();
 //            var roleIds = roles.Select(r => r.RoleId).ToList();
 
-//            // 批次取得各角色的使用者數量
 //            var userCounts = await _db.UserRoles
 //                .Where(ur => roleIds.Contains(ur.RoleId))
 //                .GroupBy(ur => ur.RoleId)
 //                .Select(g => new { RoleId = g.Key, Count = g.Count() })
 //                .ToDictionaryAsync(x => x.RoleId, x => x.Count);
 
-//            // 批次取得各角色的有效權限名稱
 //            var rolePermissionsMap = await (from rp in _db.RolePermissions
 //                                            join p in _db.Permissions on rp.PermissionId equals p.PermissionId
 //                                            where roleIds.Contains(rp.RoleId) && rp.Status && p.Status
@@ -61,7 +59,6 @@
 //            return View(model);
 //        }
 
-//        // 2. 編輯角色權限 (GET)
 //        public async Task<IActionResult> EditRole(int id)
 //        {
 //            var role = await _db.Roles.FindAsync(id);
@@ -72,8 +69,6 @@
 //                .Select(rp => rp.PermissionId)
 //                .ToListAsync();
 
-//            var allPermissions = await GetAvailablePermissionsAsync();
-
 //            var model = new RoleEditViewModel
 //            {
 //                RoleId = role.RoleId,
@@ -81,13 +76,12 @@
 //                Description = role.Description,
 //                Status = role.Status,
 //                SelectedPermissionIds = selectedPermIds,
-//                AvailablePermissions = allPermissions
+//                AvailablePermissions = await GetAvailablePermissionsAsync()
 //            };
 
 //            return View(model);
 //        }
 
-//        // 3. 儲存角色權限設定 (POST)
 //        [HttpPost]
 //        [ValidateAntiForgeryToken]
 //        public async Task<IActionResult> EditRole(RoleEditViewModel model)
@@ -108,7 +102,6 @@
 //            role.Status = model.Status;
 //            role.UpdatedAt = DateTime.Now;
 
-//            // 處理 RolePermission 關聯表
 //            var existingRPs = await _db.RolePermissions.Where(rp => rp.RoleId == model.RoleId).ToListAsync();
 //            _db.RolePermissions.RemoveRange(existingRPs);
 
@@ -127,7 +120,6 @@
 //                }
 //            }
 
-//            // 紀錄操作日誌
 //            _db.AuditLogs.Add(new AuditLog
 //            {
 //                UserId = currentUserId,
@@ -144,7 +136,6 @@
 //            return RedirectToAction(nameof(Roles));
 //        }
 
-//        // GET: Setting/CreateRole
 //        public async Task<IActionResult> CreateRole()
 //        {
 //            var model = new RoleCreateViewModel
@@ -155,7 +146,6 @@
 //            return View(model);
 //        }
 
-//        // POST: Setting/CreateRole
 //        [HttpPost]
 //        [ValidateAntiForgeryToken]
 //        public async Task<IActionResult> CreateRole(RoleCreateViewModel model)
@@ -187,7 +177,7 @@
 //                };
 
 //                _db.Roles.Add(role);
-//                await _db.SaveChangesAsync(); // 取得 auto-increment 的 RoleId
+//                await _db.SaveChangesAsync();
 
 //                if (model.SelectedPermissionIds != null && model.SelectedPermissionIds.Any())
 //                {
@@ -229,281 +219,136 @@
 //            }
 //        }
 
-//        // GET: Setting/CreateUser
-//        public async Task<IActionResult> CreateUser()
-//        {
-//            var model = new RegisterUserViewModel
-//            {
-//                AvailableRoles = await GetAvailableRolesAsync(),
-//                EmployeeNo = await GenerateNextEmployeeNoAsync(),
-//                // ------------------------------------------------------------------------
-//                // 👈 【修改點 1】新增此行：預設出生日期為今天 (格式為 DateOnly 或 DateTime)
-//                // ------------------------------------------------------------------------
-//        Birth = DateOnly.FromDateTime(DateTime.Now) // 若 Birth 的型別是 DateTime 則改用 DateTime.Now.Date
-//            };
+//        #endregion
 
-//            return View(model);
-//        }
+//        #region 2. 員工管理 (Employee List & Operations)
 
-//        // POST: Setting/CreateUser
-//        [HttpPost]
-//        [ValidateAntiForgeryToken]
-//        public async Task<IActionResult> CreateUser(RegisterUserViewModel model)
-//        {
-//            int currentUserId = GetCurrentUserId();
+//        //// GET: Setting/UserList (純員工清單)
+//        //public async Task<IActionResult> UserList(string? keyword, int? roleId, string? status)
+//        //{
+//        //    var availableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
 
-//            if (await _db.Users.AnyAsync(u => u.Email == model.Email))
-//            {
-//                ModelState.AddModelError("Email", "此 Email 已被註冊使用");
-//            }
+//        //    // 只查詢 Employee 表格有紀錄的人
+//        //    var baseQuery = from e in _db.Employees
+//        //                    join u in _db.Users on e.UserId equals u.UserId
+//        //                    select new { Usr = u, Emp = e };
 
-//            if (!ModelState.IsValid)
-//            {
-//                model.AvailableRoles = await GetAvailableRolesAsync();
-//                return View(model);
-//            }
+//        //    if (!string.IsNullOrWhiteSpace(keyword))
+//        //    {
+//        //        var trimKeyword = keyword.Trim().ToLower();
+//        //        baseQuery = baseQuery.Where(x =>
+//        //            x.Usr.Name.ToLower().Contains(trimKeyword) ||
+//        //            x.Usr.Email.ToLower().Contains(trimKeyword) ||
+//        //            x.Emp.EmployeeNo.ToLower().Contains(trimKeyword)
+//        //        );
+//        //    }
 
-//            using var transaction = await _db.Database.BeginTransactionAsync();
+//        //    if (roleId.HasValue && roleId.Value > 0)
+//        //    {
+//        //        baseQuery = baseQuery.Where(x => _db.UserRoles.Any(ur => ur.UserId == x.Usr.UserId && ur.RoleId == roleId.Value));
+//        //    }
 
-//            try
-//            {
-//                var user = new User
-//                {
-//                    Email = model.Email,
-//                    PasswordHash = PasswordHelper.HashPassword(model.Password),
-//                    Name = model.Name,
-//                    Phone = model.Phone,
-//                    Status = "Active",
-//                    Birth = model.Birth,
-//                    CumulativeConsumption = 0,
-//                    CumulativeVisitTime = 0,
-//                    FailedLoginCount = 0,
-//                    NoShowCount = 0,
-//                    CreatedAt = DateTime.Now,
-//                    UpdatedAt = DateTime.Now
-//                };
+//        //    if (!string.IsNullOrWhiteSpace(status))
+//        //    {
+//        //        baseQuery = baseQuery.Where(x => x.Emp.Status == status);
+//        //    }
 
-//                _db.Users.Add(user);
-//                await _db.SaveChangesAsync();
+//        //    var rawList = await baseQuery
+//        //        .OrderBy(x => x.Emp.EmployeeNo)
+//        //        .Select(x => new
+//        //        {
+//        //            x.Usr.UserId,
+//        //            x.Usr.Name,
+//        //            x.Usr.Email,
+//        //            x.Usr.Phone,
+//        //            x.Emp.EmployeeNo,
+//        //            x.Emp.JobTitle,
+//        //            Status = x.Emp.Status,
+//        //            x.Usr.CreatedAt
+//        //        }).ToListAsync();
 
-//                if (!string.IsNullOrEmpty(model.EmployeeNo))
-//                {
-//                    var emp = new Employee
-//                    {
-//                        UserId = user.UserId,
-//                        EmployeeNo = model.EmployeeNo,
-//                        JobTitle = model.JobTitle?.Trim(),
-//                        HireDate = DateOnly.FromDateTime(DateTime.Now),
-//                        Status = "Active",
-//                        CreatedAt = DateTime.Now,
-//                        UpdatedAt = DateTime.Now
-//                    };
-//                    _db.Employees.Add(emp);
-//                }
+//        //    var userIds = rawList.Select(u => u.UserId).ToList();
+//        //    var userRolesMap = await (from ur in _db.UserRoles
+//        //                              join r in _db.Roles on ur.RoleId equals r.RoleId
+//        //                              where userIds.Contains(ur.UserId)
+//        //                              select new { ur.UserId, r.RoleName })
+//        //                             .ToListAsync();
 
-//                if (model.SelectedRoleIds != null && model.SelectedRoleIds.Any())
-//                {
-//                    foreach (var roleId in model.SelectedRoleIds)
-//                    {
-//                        _db.UserRoles.Add(new UserRole
-//                        {
-//                            UserId = user.UserId,
-//                            RoleId = roleId,
-//                            AssignedBy = currentUserId,
-//                            AssignedAt = DateTime.Now
-//                        });
-//                    }
-//                }
+//        //    var usersList = rawList.Select(u => new UserListItemDto
+//        //    {
+//        //        UserId = u.UserId,
+//        //        Name = u.Name,
+//        //        Email = u.Email,
+//        //        Phone = u.Phone ?? "未提供",
+//        //        EmployeeNo = u.EmployeeNo,
+//        //        JobTitle = u.JobTitle ?? "無",
+//        //        IsEmployee = true,
+//        //        Status = u.Status,
+//        //        CreatedAt = u.CreatedAt,
+//        //        Roles = userRolesMap.Where(ur => ur.UserId == u.UserId).Select(ur => ur.RoleName).ToList()
+//        //    }).ToList();
 
-//                _db.AuditLogs.Add(new AuditLog
-//                {
-//                    UserId = currentUserId,
-//                    Action = "CreateUser",
-//                    EntityType = "User",
-//                    EntityId = user.UserId.ToString(),
-//                    NewValue = $"Created user: {user.Email}",
-//                    CreatedAt = DateTime.Now
-//                });
+//        //    var model = new UserListViewModel
+//        //    {
+//        //        Keyword = keyword,
+//        //        SelectedRoleId = roleId,
+//        //        SelectedStatus = status,
+//        //        SelectedUserType = "employee",
+//        //        AvailableRoles = availableRoles,
+//        //        Users = usersList
+//        //    };
 
-//                await _db.SaveChangesAsync();
-//                await transaction.CommitAsync();
-
-//                TempData["SuccessMessage"] = $"成功建立帳號：{user.Name} ({user.Email})";
-//                return RedirectToAction(nameof(Roles));
-//            }
-//            catch (Exception)
-//            {
-//                await transaction.RollbackAsync();
-//                ModelState.AddModelError("", "建立帳號過程發生錯誤，請稍後再試。");
-//                model.AvailableRoles = await GetAvailableRolesAsync();
-//                return View(model);
-//            }
-//        }
-
-//        // GET: Setting/ConvertToEmployee/5
-//        public async Task<IActionResult> ConvertToEmployee(int id)
-//        {
-
-//            var user = await _db.Users.FindAsync(id);
-//            if (user == null) return NotFound();
-
-//            bool isEmployee = await _db.Employees.AnyAsync(e => e.UserId == id);
-//            if (isEmployee)
-//            {
-//                TempData["ErrorMessage"] = "該會員已經是員工，無法重複轉變。";
-//                return RedirectToAction(nameof(UserList));
-//            }
-
-//            var model = new ConvertEmployeeViewModel
-//            {
-//                UserId = user.UserId,
-//                Name = user.Name,
-//                Email = user.Email,
-//                EmployeeNo = await GenerateNextEmployeeNoAsync(),
-//                AvailableRoles = await GetAvailableRolesAsync()
-//            };
-
-//            return View(model);
-//        }
-
-//        // POST: Setting/ConvertToEmployee
-//        [HttpPost]
-//        [ValidateAntiForgeryToken]
-//        public async Task<IActionResult> ConvertToEmployee(ConvertEmployeeViewModel model)
-//        {
-//            int currentUserId = GetCurrentUserId();
-
-//            if (!string.IsNullOrEmpty(model.EmployeeNo) &&
-//                await _db.Employees.AnyAsync(e => e.EmployeeNo == model.EmployeeNo))
-//            {
-//                ModelState.AddModelError(nameof(model.EmployeeNo), "此員工編號已存在，請重新整理取得新編號");
-//            }
-
-//            if (!ModelState.IsValid)
-//            {
-//                model.AvailableRoles = await GetAvailableRolesAsync();
-//                return View(model);
-//            }
-
-//            using var transaction = await _db.Database.BeginTransactionAsync();
-
-//            try
-//            {
-//                var emp = new Employee
-//                {
-//                    UserId = model.UserId,
-//                    EmployeeNo = model.EmployeeNo.Trim(),
-//                    JobTitle = model.JobTitle?.Trim(),
-//                    HireDate = DateOnly.FromDateTime(DateTime.Now),
-//                    Status = "Active",
-//                    CreatedAt = DateTime.Now,
-//                    UpdatedAt = DateTime.Now
-//                };
-//                _db.Employees.Add(emp);
-
-//                if (model.SelectedRoleIds != null && model.SelectedRoleIds.Any())
-//                {
-//                    foreach (var roleId in model.SelectedRoleIds)
-//                    {
-//                        if (!await _db.UserRoles.AnyAsync(ur => ur.UserId == model.UserId && ur.RoleId == roleId))
-//                        {
-//                            _db.UserRoles.Add(new UserRole
-//                            {
-//                                UserId = model.UserId,
-//                                RoleId = roleId,
-//                                AssignedBy = currentUserId,
-//                                AssignedAt = DateTime.Now
-//                            });
-//                        }
-//                    }
-//                }
-
-//                _db.AuditLogs.Add(new AuditLog
-//                {
-//                    UserId = currentUserId,
-//                    Action = "ConvertToEmployee",
-//                    EntityType = "User",
-//                    EntityId = model.UserId.ToString(),
-//                    NewValue = $"Converted user {model.Email} to employee ({model.EmployeeNo})",
-//                    CreatedAt = DateTime.Now
-//                });
-
-//                await _db.SaveChangesAsync();
-//                await transaction.CommitAsync();
-
-//                TempData["SuccessMessage"] = $"成功將會員 {model.Name} 轉換為員工！";
-//                return RedirectToAction(nameof(UserList));
-//            }
-//            catch (Exception)
-//            {
-//                await transaction.RollbackAsync();
-//                ModelState.AddModelError(string.Empty, "轉變員工過程發生錯誤，請稍後再試。");
-//                model.AvailableRoles = await GetAvailableRolesAsync();
-//                return View(model);
-//            }
-//        }
-
-
-
+//        //    return View(model);
+//        //}
 //        // GET: Setting/UserList
-//        public async Task<IActionResult> UserList(string? keyword, int? roleId, string? status, string? userType = "all")
+//        public async Task<IActionResult> UserList(string? keyword, int? roleId, string? status, int page = 1, int pageSize = 10)
 //        {
-//            var availableRoles = await GetAvailableRolesAsync(excludeMemberRoles: false);
+//            var availableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
 
-//            // 1. 基本查詢：從 Users 出發，Left Join 到 Employees
-//            var baseQuery = from u in _db.Users
-//                            join e in _db.Employees on u.UserId equals e.UserId into empGroup
-//                            from e in empGroup.DefaultIfEmpty()
+//            var baseQuery = from e in _db.Employees
+//                            join u in _db.Users on e.UserId equals u.UserId
 //                            select new { Usr = u, Emp = e };
 
-//            // 2. 類型篩選 (employee: 僅員工, member: 僅一般會員, all: 全部)
-//            if (userType == "employee")
-//            {
-//                baseQuery = baseQuery.Where(x => x.Emp != null);
-//            }
-//            else if (userType == "member")
-//            {
-//                baseQuery = baseQuery.Where(x => x.Emp == null);
-//            }
-
-//            // 3. 關鍵字搜尋
 //            if (!string.IsNullOrWhiteSpace(keyword))
 //            {
 //                var trimKeyword = keyword.Trim().ToLower();
 //                baseQuery = baseQuery.Where(x =>
 //                    x.Usr.Name.ToLower().Contains(trimKeyword) ||
 //                    x.Usr.Email.ToLower().Contains(trimKeyword) ||
-//                    (x.Emp != null && x.Emp.EmployeeNo.ToLower().Contains(trimKeyword))
+//                    x.Emp.EmployeeNo.ToLower().Contains(trimKeyword)
 //                );
 //            }
 
-//            // 4. 角色篩選
 //            if (roleId.HasValue && roleId.Value > 0)
 //            {
 //                baseQuery = baseQuery.Where(x => _db.UserRoles.Any(ur => ur.UserId == x.Usr.UserId && ur.RoleId == roleId.Value));
 //            }
 
-//            // 5. 狀態篩選 (核心修正：若為員工優先比對 Emp.Status，若非員工則比對 Usr.Status)
 //            if (!string.IsNullOrWhiteSpace(status))
 //            {
-//                baseQuery = baseQuery.Where(x => (x.Emp != null ? x.Emp.Status : x.Usr.Status) == status);
+//                baseQuery = baseQuery.Where(x => x.Emp.Status == status);
 //            }
 
-//            // 6. 資料投射 (核心修正：狀態欄位優先取用員工狀態)
+//            // 1. 計算總筆數與總頁數
+//            var totalCount = await baseQuery.CountAsync();
+//            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+//            page = Math.Max(1, page); // 防止傳入小於 1 的頁碼
+
+//            // 2. 加入排序與分頁 Skip/Take
 //            var rawList = await baseQuery
-//                .OrderByDescending(x => x.Usr.CreatedAt)
+//                .OrderBy(x => x.Emp.EmployeeNo)
+//                .Skip((page - 1) * pageSize)
+//                .Take(pageSize)
 //                .Select(x => new
 //                {
-//                    UserId = x.Usr.UserId,
-//                    Name = x.Usr.Name,
-//                    Email = x.Usr.Email,
-//                    Phone = x.Usr.Phone,
-//                    EmployeeNo = x.Emp != null ? x.Emp.EmployeeNo : null,
-//                    JobTitle = x.Emp != null ? x.Emp.JobTitle : null,
-//                    IsEmployee = x.Emp != null,
-//                    // 優先顯示員工狀態 (Active/OnLeave/Resigned)；若非員工則顯示帳號狀態
-//                    DisplayStatus = x.Emp != null ? x.Emp.Status : x.Usr.Status,
-//                    CreatedAt = x.Usr.CreatedAt
+//                    x.Usr.UserId,
+//                    x.Usr.Name,
+//                    x.Usr.Email,
+//                    x.Usr.Phone,
+//                    x.Emp.EmployeeNo,
+//                    x.Emp.JobTitle,
+//                    Status = x.Emp.Status,
+//                    x.Usr.CreatedAt
 //                }).ToListAsync();
 
 //            var userIds = rawList.Select(u => u.UserId).ToList();
@@ -519,10 +364,10 @@
 //                Name = u.Name,
 //                Email = u.Email,
 //                Phone = u.Phone ?? "未提供",
-//                EmployeeNo = u.EmployeeNo ?? "無 (一般會員)",
+//                EmployeeNo = u.EmployeeNo,
 //                JobTitle = u.JobTitle ?? "無",
-//                IsEmployee = u.IsEmployee,
-//                Status = u.DisplayStatus, // 給予判斷後的正確狀態
+//                IsEmployee = true,
+//                Status = u.Status,
 //                CreatedAt = u.CreatedAt,
 //                Roles = userRolesMap.Where(ur => ur.UserId == u.UserId).Select(ur => ur.RoleName).ToList()
 //            }).ToList();
@@ -532,12 +377,148 @@
 //                Keyword = keyword,
 //                SelectedRoleId = roleId,
 //                SelectedStatus = status,
-//                SelectedUserType = userType,
+//                SelectedUserType = "employee",
 //                AvailableRoles = availableRoles,
-//                Users = usersList
+//                Users = usersList,
+//                // 新增分頁資訊至 ViewModel
+//                CurrentPage = page,
+//                TotalPages = totalPages,
+//                TotalCount = totalCount
 //            };
 
 //            return View(model);
+//        }
+
+//        [HttpGet]
+//        public async Task<IActionResult> CreateUser()
+//        {
+//            var model = new RegisterUserViewModel
+//            {
+//                AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true),
+//                EmployeeNo = await GenerateNextEmployeeNoAsync(),
+//                Birth = DateOnly.FromDateTime(DateTime.Now)
+//            };
+
+//            return View(model);
+//        }
+
+//        [HttpPost]
+//        [ValidateAntiForgeryToken]
+//        public async Task<IActionResult> CreateUser(RegisterUserViewModel model)
+//        {
+//            int currentUserId = GetCurrentUserId();
+
+//            // 1. 檢查 Email 是否重複
+//            if (await _db.Users.AnyAsync(u => u.Email == model.Email))
+//            {
+//                ModelState.AddModelError("Email", "此 Email 已被註冊使用");
+//            }
+
+//            // 2. 檢查/重新產生 EmployeeNo 是否重複 (防止併發問題或手動輸入重複)
+//            string finalEmployeeNo = model.EmployeeNo;
+//            if (string.IsNullOrWhiteSpace(finalEmployeeNo) || await _db.Employees.AnyAsync(e => e.EmployeeNo == finalEmployeeNo))
+//            {
+//                finalEmployeeNo = await GenerateNextEmployeeNoAsync();
+//            }
+
+//            if (!ModelState.IsValid)
+//            {
+//                model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
+//                model.EmployeeNo = finalEmployeeNo; // 帶回最新的編號
+//                return View(model);
+//            }
+
+//            using var transaction = await _db.Database.BeginTransactionAsync();
+
+//            try
+//            {
+//                // 3. 新增 User 主表資料
+//                var user = new User
+//                {
+//                    Email = model.Email.Trim(),
+//                    PasswordHash = PasswordHelper.HashPassword(model.Password),
+//                    Name = model.Name.Trim(),
+//                    Phone = model.Phone?.Trim(),
+//                    Status = "Active",
+//                    Birth = model.Birth,
+//                    CumulativeConsumption = 0,
+//                    CumulativeVisitTime = 0,
+//                    FailedLoginCount = 0,
+//                    NoShowCount = 0,
+//                    CreatedAt = DateTime.Now,
+//                    UpdatedAt = DateTime.Now
+//                };
+
+//                _db.Users.Add(user);
+//                await _db.SaveChangesAsync(); // 取得生成的 user.UserId
+
+//                // 4. 新增 Employee 員工副表資料
+//                var emp = new Employee
+//                {
+//                    UserId = user.UserId,
+//                    EmployeeNo = finalEmployeeNo,
+//                    JobTitle = model.JobTitle?.Trim(),
+//                    HireDate = DateOnly.FromDateTime(DateTime.Now),
+//                    Status = "Active",
+//                    CreatedAt = DateTime.Now,
+//                    UpdatedAt = DateTime.Now
+//                };
+//                _db.Employees.Add(emp);
+
+//                // 5. 準備角色清單 (自動強制包含 Member 基礎角色)
+//                var roleIdsToAssign = model.SelectedRoleIds != null
+//                    ? model.SelectedRoleIds.Distinct().ToList()
+//                    : new List<int>();
+
+//                // 自動取得並加入 Member 角色的 RoleId
+//                var memberRoleId = await _db.Roles
+//                    .Where(r => r.RoleName == "Member")
+//                    .Select(r => r.RoleId)
+//                    .FirstOrDefaultAsync();
+
+//                if (memberRoleId != 0 && !roleIdsToAssign.Contains(memberRoleId))
+//                {
+//                    roleIdsToAssign.Add(memberRoleId);
+//                }
+
+//                // 批次寫入 UserRoles
+//                foreach (var roleId in roleIdsToAssign)
+//                {
+//                    _db.UserRoles.Add(new UserRole
+//                    {
+//                        UserId = user.UserId,
+//                        RoleId = roleId,
+//                        AssignedBy = currentUserId,
+//                        AssignedAt = DateTime.Now
+//                    });
+//                }
+
+//                // 6. 寫入 AuditLog 審計日誌
+//                _db.AuditLogs.Add(new AuditLog
+//                {
+//                    UserId = currentUserId,
+//                    Action = "CreateUser",
+//                    EntityType = "User",
+//                    EntityId = user.UserId.ToString(),
+//                    NewValue = $"Created employee: {user.Email} ({finalEmployeeNo})",
+//                    CreatedAt = DateTime.Now
+//                });
+
+//                await _db.SaveChangesAsync();
+//                await transaction.CommitAsync();
+
+//                TempData["SuccessMessage"] = $"成功建立員工帳號：{user.Name} ({user.Email})，員工編號：{finalEmployeeNo}";
+//                return RedirectToAction(nameof(UserList));
+//            }
+//            catch (Exception ex)
+//            {
+//                await transaction.RollbackAsync();
+
+//                ModelState.AddModelError("", "建立帳號過程發生錯誤，請稍後再試。");
+//                model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
+//                model.EmployeeNo = finalEmployeeNo;
+//                return View(model);
+//            }
 //        }
 //        public async Task<IActionResult> EditUser(int id)
 //        {
@@ -566,7 +547,7 @@
 //                Name = userData.User.Name,
 //                Phone = userData.User.Phone,
 //                JobTitle = userData.Emp.JobTitle,
-//                Status = userData.User.Status,
+//                Status = userData.Emp.Status,
 //                SelectedRoleIds = currentRoleIds,
 //                AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true)
 //            };
@@ -574,15 +555,12 @@
 //            return View(model);
 //        }
 
-//        // POST: Setting/EditUser
-//        // POST: Setting/EditUser
 //        [HttpPost]
 //        [ValidateAntiForgeryToken]
 //        public async Task<IActionResult> EditUser(EditUserViewModel model)
 //        {
 //            int currentUserId = GetCurrentUserId();
 
-//            // 1. 驗證 Email 是否被其他 User 佔用
 //            if (await _db.Users.AnyAsync(u => u.Email == model.Email && u.UserId != model.UserId))
 //            {
 //                ModelState.AddModelError("Email", "此 Email 已被其他帳號使用");
@@ -601,25 +579,21 @@
 //                var user = await _db.Users.FindAsync(model.UserId);
 //                var emp = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == model.UserId);
 
-//                // 2. 嚴格驗證：必須同時存在 User 與 Employee 資料
 //                if (user == null || emp == null)
 //                {
-//                    TempData["ErrorMessage"] = "找不到該員工資料，或該使用者非員工。";
+//                    TempData["ErrorMessage"] = "找不到該員工資料。";
 //                    return RedirectToAction(nameof(UserList));
 //                }
 
-//                // 3. 更新 User 基礎聯絡資訊 (不修改 user.Status，維持會員帳號可用性)
 //                user.Name = model.Name?.Trim();
 //                user.Email = model.Email?.Trim();
 //                user.Phone = model.Phone?.Trim();
 //                user.UpdatedAt = DateTime.Now;
 
-//                // 4. 更新 Employee 員工資訊 (狀態改在 Employees 資料表更新)
 //                emp.JobTitle = model.JobTitle?.Trim();
-//                emp.Status = model.Status; // 例如: Active, OnLeave, Resigned
+//                emp.Status = model.Status;
 //                emp.UpdatedAt = DateTime.Now;
 
-//                // 5. 角色更新：採用「差集運算」防止 PK 重複衝突與錯誤覆蓋
 //                var currentRoles = await _db.UserRoles
 //                    .Where(ur => ur.UserId == model.UserId)
 //                    .ToListAsync();
@@ -627,21 +601,18 @@
 //                var currentRoleIds = currentRoles.Select(ur => ur.RoleId).ToList();
 //                var targetRoleIds = model.SelectedRoleIds ?? new List<int>();
 
-//                // 5a. 取得「僅限員工類型的角色 ID」（排除 Member / Customer 角色 ID）
 //                var staffRoleIds = (await GetAvailableRolesAsync(excludeMemberRoles: true))
 //                    .Select(r => r.RoleId)
 //                    .ToList();
 
-//                // 5b. 移除「未勾選且屬於員工類型」的角色 (保留原本的 Member 角色)
 //                var rolesToRemove = currentRoles
 //                    .Where(ur => staffRoleIds.Contains(ur.RoleId) && !targetRoleIds.Contains(ur.RoleId))
 //                    .ToList();
 
 //                _db.UserRoles.RemoveRange(rolesToRemove);
 
-//                // 5c. 僅新增「目前未擁有且這次有勾選」的角色
 //                var roleIdsToAdd = targetRoleIds
-//                    .Where(id => staffRoleIds.Contains(id)) // 安全防護：確保只新增員工角色
+//                    .Where(id => staffRoleIds.Contains(id))
 //                    .Except(currentRoleIds)
 //                    .ToList();
 
@@ -656,14 +627,13 @@
 //                    });
 //                }
 
-//                // 6. 紀錄稽核日誌
 //                _db.AuditLogs.Add(new AuditLog
 //                {
 //                    UserId = currentUserId,
 //                    Action = "EditUser",
 //                    EntityType = "Employee",
 //                    EntityId = emp.EmployeeId.ToString(),
-//                    NewValue = $"Updated employee: {user.Name} ({user.Email}), JobTitle: {emp.JobTitle}, EmpStatus: {emp.Status}",
+//                    NewValue = $"Updated employee: {user.Name} ({user.Email}), JobTitle: {emp.JobTitle}, Status: {emp.Status}",
 //                    CreatedAt = DateTime.Now
 //                });
 
@@ -682,7 +652,64 @@
 //            }
 //        }
 
-//        #region Private Helper Methods
+//        [HttpPost]
+//        [ValidateAntiForgeryToken]
+//        public async Task<IActionResult> UpdateEmployeeStatus(int userId, string status)
+//        {
+//            int currentUserId = GetCurrentUserId();
+
+//            var user = await _db.Users.FindAsync(userId);
+//            var emp = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+
+//            if (user == null || emp == null)
+//            {
+//                TempData["ErrorMessage"] = "找不到相關員工資料。";
+//                return RedirectToAction(nameof(UserList));
+//            }
+
+//            using var transaction = await _db.Database.BeginTransactionAsync();
+
+//            try
+//            {
+//                emp.Status = status;
+//                emp.UpdatedAt = DateTime.Now;
+
+//                if (status == "Resigned" || status == "OnLeave")
+//                {
+//                    var rolesToRemove = await (from ur in _db.UserRoles
+//                                               join r in _db.Roles on ur.RoleId equals r.RoleId
+//                                               where ur.UserId == userId && r.RoleName != "Member" && r.RoleName != "Customer"
+//                                               select ur).ToListAsync();
+//                    _db.UserRoles.RemoveRange(rolesToRemove);
+//                }
+
+//                _db.AuditLogs.Add(new AuditLog
+//                {
+//                    UserId = currentUserId,
+//                    Action = "UpdateEmployeeStatus",
+//                    EntityType = "Employee",
+//                    EntityId = emp.EmployeeId.ToString(),
+//                    NewValue = $"Updated employee {emp.EmployeeNo} status to '{status}'",
+//                    CreatedAt = DateTime.Now
+//                });
+
+//                await _db.SaveChangesAsync();
+//                await transaction.CommitAsync();
+
+//                TempData["SuccessMessage"] = $"已成功將 {user.Name} 的狀態變更為：{status}";
+//                return RedirectToAction(nameof(UserList));
+//            }
+//            catch (Exception)
+//            {
+//                await transaction.RollbackAsync();
+//                TempData["ErrorMessage"] = "狀態變更失敗，請稍後再試。";
+//                return RedirectToAction(nameof(UserList));
+//            }
+//        }
+
+//        #endregion
+
+//        #region Private Helpers
 
 //        private int GetCurrentUserId()
 //        {
@@ -693,7 +720,6 @@
 //        private async Task<string> GenerateNextEmployeeNoAsync()
 //        {
 //            const string prefix = "EMP";
-
 //            var lastEmpNo = await _db.Employees
 //                .Where(e => e.EmployeeNo.StartsWith(prefix))
 //                .OrderByDescending(e => e.EmployeeNo.Length)
@@ -701,10 +727,7 @@
 //                .Select(e => e.EmployeeNo)
 //                .FirstOrDefaultAsync();
 
-//            if (string.IsNullOrEmpty(lastEmpNo))
-//            {
-//                return $"{prefix}0001";
-//            }
+//            if (string.IsNullOrEmpty(lastEmpNo)) return $"{prefix}0001";
 
 //            var numberPart = lastEmpNo.Substring(prefix.Length);
 //            if (int.TryParse(numberPart, out int currentNum))
@@ -747,85 +770,10 @@
 //                    Status = p.Status
 //                }).ToListAsync();
 //        }
-//        public enum EmployeeStatus
-//        {
-//            Active = 1,     // 在職
-//            OnLeave = 2,    // 留職停薪 (如健康因素、育嬰等)
-//            Resigned = 3    // 離職 (軟刪除狀態)
-//        }
-//        // POST: Setting/UpdateEmployeeStatus
-//        [HttpPost]
-//        [ValidateAntiForgeryToken]
-//        public async Task<IActionResult> UpdateEmployeeStatus(int userId, string status)
-//        {
-//            int currentUserId = GetCurrentUserId();
-
-//            var user = await _db.Users.FindAsync(userId);
-//            var emp = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
-
-//            if (user == null || emp == null)
-//            {
-//                TempData["ErrorMessage"] = "找不到相關員工資料。";
-//                return RedirectToAction(nameof(UserList));
-//            }
-
-//            using var transaction = await _db.Database.BeginTransactionAsync();
-
-//            try
-//            {
-//                // 1. 更新 Employees 資料表中的狀態與更新時間
-//                emp.Status = status; // "Active", "OnLeave", 或 "Resigned"
-//                emp.UpdatedAt = DateTime.Now;
-
-//                // 2. 根據狀態調整系統角色權限 (UserRoles)
-//                if (status == "Resigned")
-//                {
-//                    // 離職：移除所有後台權限，退回普通會員
-//                    var rolesToRemove = await (from ur in _db.UserRoles
-//                                               join r in _db.Roles on ur.RoleId equals r.RoleId
-//                                               where ur.UserId == userId && r.RoleName != "Member" && r.RoleName != "Customer"
-//                                               select ur).ToListAsync();
-//                    _db.UserRoles.RemoveRange(rolesToRemove);
-//                }
-//                else if (status == "OnLeave")
-//                {
-//                    // 留職停薪：可選擇暫時停用後台管理角色（視業務需求調整）
-//                    var adminRoles = await (from ur in _db.UserRoles
-//                                            join r in _db.Roles on ur.RoleId equals r.RoleId
-//                                            where ur.UserId == userId && r.RoleName != "Member"
-//                                            select ur).ToListAsync();
-//                    _db.UserRoles.RemoveRange(adminRoles);
-//                }
-
-//                // 3. 紀錄操作日誌 (AuditLog)
-//                _db.AuditLogs.Add(new AuditLog
-//                {
-//                    UserId = currentUserId,
-//                    Action = "UpdateEmployeeStatus",
-//                    EntityType = "Employee",
-//                    EntityId = emp.EmployeeId.ToString(),
-//                    NewValue = $"Updated employee {emp.EmployeeNo} status to '{status}'",
-//                    CreatedAt = DateTime.Now
-//                });
-
-//                await _db.SaveChangesAsync();
-//                await transaction.CommitAsync();
-
-//                TempData["SuccessMessage"] = $"已成功將 {user.Name} 的狀態變更為：{status}";
-//                return RedirectToAction(nameof(UserList));
-//            }
-//            catch (Exception)
-//            {
-//                await transaction.RollbackAsync();
-//                TempData["ErrorMessage"] = "狀態變更失敗，請稍後再試。";
-//                return RedirectToAction(nameof(UserList));
-//            }
-//        }
 
 //        #endregion
 //    }
 //}
-
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -841,10 +789,29 @@ namespace VenueGo.Controllers
     public class SettingController : Controller
     {
         private readonly dbVenueContext _db;
+        private readonly ILogger<SettingController> _logger; // [4] 加入 Logger
 
-        public SettingController(dbVenueContext db)
+        // [5] 集中管理系統保留角色名稱，避免各處硬編碼字串散落
+        // 目前系統角色為：Member（一般會員）、Staff（員工）、Manager（場館營運管理者）、Admin（系統管理員）
+        // 其中 Member 與 Admin 有特殊邏輯（自動指派 / 不可被停用等），Staff、Manager 為一般員工角色。
+        private static readonly string[] ReservedRoleNames = { "Admin", "Member" };
+        private const string AdminRoleName = "Admin";
+        private const string MemberRoleName = "Member";
+
+        // [2] 員工狀態白名單，避免任意字串寫入
+        private static readonly HashSet<string> AllowedEmployeeStatuses = new(StringComparer.OrdinalIgnoreCase)
+        {
+            "Active", "Resigned", "OnLeave"
+        };
+
+        // [3] 分頁大小上下限
+        private const int MinPageSize = 1;
+        private const int MaxPageSize = 100;
+
+        public SettingController(dbVenueContext db, ILogger<SettingController> logger)
         {
             _db = db;
+            _logger = logger;
         }
 
         public IActionResult Index()
@@ -916,16 +883,52 @@ namespace VenueGo.Controllers
         {
             int currentUserId = GetCurrentUserId();
 
+            var role = await _db.Roles.FindAsync(model.RoleId);
+            if (role == null) return NotFound();
+
+            bool isReservedRole = ReservedRoleNames.Contains(role.RoleName, StringComparer.OrdinalIgnoreCase);
+
+            // [5] 禁止把系統保留角色改名，避免依賴角色名稱的邏輯悄悄失效
+            if (isReservedRole && !string.Equals(role.RoleName, model.RoleName?.Trim(), StringComparison.Ordinal))
+            {
+                ModelState.AddModelError("RoleName", $"系統角色「{role.RoleName}」的名稱不可修改。");
+            }
+
+            // [5] 禁止把其他角色改名成與保留角色相同的名稱
+            if (!isReservedRole && ReservedRoleNames.Contains(model.RoleName?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                ModelState.AddModelError("RoleName", "此名稱為系統保留角色名稱，請使用其他名稱。");
+            }
+
+            // [7] 禁止停用 Admin 角色本身，避免整個系統沒有人可以再進入後台
+            if (string.Equals(role.RoleName, AdminRoleName, StringComparison.OrdinalIgnoreCase) && !model.Status)
+            {
+                ModelState.AddModelError("", "系統管理員角色（Admin）不可被停用。");
+            }
+
+            // [7] 若目前登入者本身持有此角色，且移除權限後會導致自己失去管理員的所有權限，則擋下
+            if (ModelState.IsValid)
+            {
+                var currentUserHasThisRole = await _db.UserRoles
+                    .AnyAsync(ur => ur.UserId == currentUserId && ur.RoleId == model.RoleId);
+
+                if (currentUserHasThisRole && string.Equals(role.RoleName, AdminRoleName, StringComparison.OrdinalIgnoreCase))
+                {
+                    var willHaveAdminPermission = model.SelectedPermissionIds != null && model.SelectedPermissionIds.Any();
+                    if (!willHaveAdminPermission)
+                    {
+                        ModelState.AddModelError("", "不可將自己所屬的管理員角色權限全部移除，以免無法再存取設定頁面。");
+                    }
+                }
+            }
+
             if (!ModelState.IsValid)
             {
                 model.AvailablePermissions = await GetAvailablePermissionsAsync();
                 return View(model);
             }
 
-            var role = await _db.Roles.FindAsync(model.RoleId);
-            if (role == null) return NotFound();
-
-            role.RoleName = model.RoleName;
+            role.RoleName = model.RoleName.Trim();
             role.Description = model.Description;
             role.Status = model.Status;
             role.UpdatedAt = DateTime.Now;
@@ -958,7 +961,18 @@ namespace VenueGo.Controllers
                 CreatedAt = DateTime.Now
             });
 
-            await _db.SaveChangesAsync();
+            try
+            {
+                await _db.SaveChangesAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to update role permissions for RoleId {RoleId}", model.RoleId);
+                ModelState.AddModelError("", "更新角色權限時發生錯誤，請稍後再試。");
+                model.AvailablePermissions = await GetAvailablePermissionsAsync();
+                return View(model);
+            }
+
             TempData["SuccessMessage"] = "角色權限已成功更新！";
 
             return RedirectToAction(nameof(Roles));
@@ -983,6 +997,12 @@ namespace VenueGo.Controllers
             if (await _db.Roles.AnyAsync(r => r.RoleName == model.RoleName))
             {
                 ModelState.AddModelError("RoleName", "角色名稱已存在");
+            }
+
+            // [5] 新建角色也不可佔用系統保留名稱
+            if (ReservedRoleNames.Contains(model.RoleName?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                ModelState.AddModelError("RoleName", "此名稱為系統保留角色名稱，請使用其他名稱。");
             }
 
             if (!ModelState.IsValid)
@@ -1038,9 +1058,10 @@ namespace VenueGo.Controllers
                 TempData["SuccessMessage"] = $"成功建立新角色：{role.RoleName}";
                 return RedirectToAction(nameof(Roles));
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 await transaction.RollbackAsync();
+                _logger.LogError(ex, "Failed to create role {RoleName}", model.RoleName); // [4]
                 ModelState.AddModelError("", "新增角色失敗，請稍後再試。");
                 model.AvailablePermissions = await GetAvailablePermissionsAsync();
                 return View(model);
@@ -1051,12 +1072,15 @@ namespace VenueGo.Controllers
 
         #region 2. 員工管理 (Employee List & Operations)
 
-        // GET: Setting/UserList (純員工清單)
-        public async Task<IActionResult> UserList(string? keyword, int? roleId, string? status)
+        // GET: Setting/UserList
+        public async Task<IActionResult> UserList(string? keyword, int? roleId, string? status, int page = 1, int pageSize = 10)
         {
+            // [3] 限制 pageSize 範圍，避免一次撈出過大資料集
+            pageSize = Math.Clamp(pageSize, MinPageSize, MaxPageSize);
+            page = Math.Max(1, page);
+
             var availableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
 
-            // 只查詢 Employee 表格有紀錄的人
             var baseQuery = from e in _db.Employees
                             join u in _db.Users on e.UserId equals u.UserId
                             select new { Usr = u, Emp = e };
@@ -1081,8 +1105,15 @@ namespace VenueGo.Controllers
                 baseQuery = baseQuery.Where(x => x.Emp.Status == status);
             }
 
+            // 1. 計算總筆數與總頁數
+            var totalCount = await baseQuery.CountAsync();
+            var totalPages = totalCount == 0 ? 0 : (int)Math.Ceiling(totalCount / (double)pageSize);
+
+            // 2. 加入排序與分頁 Skip/Take
             var rawList = await baseQuery
-                .OrderByDescending(x => x.Usr.CreatedAt)
+                .OrderBy(x => x.Emp.EmployeeNo)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(x => new
                 {
                     x.Usr.UserId,
@@ -1123,12 +1154,17 @@ namespace VenueGo.Controllers
                 SelectedStatus = status,
                 SelectedUserType = "employee",
                 AvailableRoles = availableRoles,
-                Users = usersList
+                Users = usersList,
+                // 新增分頁資訊至 ViewModel
+                CurrentPage = page,
+                TotalPages = totalPages,
+                TotalCount = totalCount
             };
 
             return View(model);
         }
 
+        [HttpGet]
         public async Task<IActionResult> CreateUser()
         {
             var model = new RegisterUserViewModel
@@ -1147,55 +1183,81 @@ namespace VenueGo.Controllers
         {
             int currentUserId = GetCurrentUserId();
 
-            if (await _db.Users.AnyAsync(u => u.Email == model.Email))
+            // [6] Email 唯一性檢查改為不分大小寫，避免 A@b.com / a@b.com 視為不同帳號
+            var normalizedEmail = model.Email?.Trim().ToLowerInvariant();
+            if (await _db.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail))
             {
                 ModelState.AddModelError("Email", "此 Email 已被註冊使用");
+            }
+
+            string finalEmployeeNo = model.EmployeeNo;
+            if (string.IsNullOrWhiteSpace(finalEmployeeNo) || await _db.Employees.AnyAsync(e => e.EmployeeNo == finalEmployeeNo))
+            {
+                finalEmployeeNo = await GenerateNextEmployeeNoAsync();
             }
 
             if (!ModelState.IsValid)
             {
                 model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
+                model.EmployeeNo = finalEmployeeNo;
                 return View(model);
             }
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
-
-            try
+            // [1] 資料庫已對 EmployeeNo 設定 unique constraint，
+            // 這裡加上重試機制：若因併發衝突造成編號重複而寫入失敗，重新產生編號後再試一次。
+            const int maxRetries = 3;
+            for (int attempt = 1; attempt <= maxRetries; attempt++)
             {
-                var user = new User
-                {
-                    Email = model.Email,
-                    PasswordHash = PasswordHelper.HashPassword(model.Password),
-                    Name = model.Name,
-                    Phone = model.Phone,
-                    Status = "Active",
-                    Birth = model.Birth,
-                    CumulativeConsumption = 0,
-                    CumulativeVisitTime = 0,
-                    FailedLoginCount = 0,
-                    NoShowCount = 0,
-                    CreatedAt = DateTime.Now,
-                    UpdatedAt = DateTime.Now
-                };
+                using var transaction = await _db.Database.BeginTransactionAsync();
 
-                _db.Users.Add(user);
-                await _db.SaveChangesAsync();
-
-                var emp = new Employee
+                try
                 {
-                    UserId = user.UserId,
-                    EmployeeNo = model.EmployeeNo,
-                    JobTitle = model.JobTitle?.Trim(),
-                    HireDate = DateOnly.FromDateTime(DateTime.Now),
-                    Status = "Active",
-                    CreatedAt = DateTime.Now,
-                    UpdatedAt = DateTime.Now
-                };
-                _db.Employees.Add(emp);
+                    var user = new User
+                    {
+                        Email = normalizedEmail,
+                        PasswordHash = PasswordHelper.HashPassword(model.Password),
+                        Name = model.Name.Trim(),
+                        Phone = model.Phone?.Trim(),
+                        Status = "Active",
+                        Birth = model.Birth,
+                        CumulativeConsumption = 0,
+                        CumulativeVisitTime = 0,
+                        FailedLoginCount = 0,
+                        NoShowCount = 0,
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    };
 
-                if (model.SelectedRoleIds != null && model.SelectedRoleIds.Any())
-                {
-                    foreach (var roleId in model.SelectedRoleIds)
+                    _db.Users.Add(user);
+                    await _db.SaveChangesAsync();
+
+                    var emp = new Employee
+                    {
+                        UserId = user.UserId,
+                        EmployeeNo = finalEmployeeNo,
+                        JobTitle = model.JobTitle?.Trim(),
+                        HireDate = DateOnly.FromDateTime(DateTime.Now),
+                        Status = "Active",
+                        CreatedAt = DateTime.Now,
+                        UpdatedAt = DateTime.Now
+                    };
+                    _db.Employees.Add(emp);
+
+                    var roleIdsToAssign = model.SelectedRoleIds != null
+                        ? model.SelectedRoleIds.Distinct().ToList()
+                        : new List<int>();
+
+                    var memberRoleId = await _db.Roles
+                        .Where(r => r.RoleName == MemberRoleName)
+                        .Select(r => r.RoleId)
+                        .FirstOrDefaultAsync();
+
+                    if (memberRoleId != 0 && !roleIdsToAssign.Contains(memberRoleId))
+                    {
+                        roleIdsToAssign.Add(memberRoleId);
+                    }
+
+                    foreach (var roleId in roleIdsToAssign)
                     {
                         _db.UserRoles.Add(new UserRole
                         {
@@ -1205,31 +1267,49 @@ namespace VenueGo.Controllers
                             AssignedAt = DateTime.Now
                         });
                     }
+
+                    _db.AuditLogs.Add(new AuditLog
+                    {
+                        UserId = currentUserId,
+                        Action = "CreateUser",
+                        EntityType = "User",
+                        EntityId = user.UserId.ToString(),
+                        NewValue = $"Created employee: {user.Email} ({finalEmployeeNo})",
+                        CreatedAt = DateTime.Now
+                    });
+
+                    await _db.SaveChangesAsync();
+                    await transaction.CommitAsync();
+
+                    TempData["SuccessMessage"] = $"成功建立員工帳號：{user.Name} ({user.Email})，員工編號：{finalEmployeeNo}";
+                    return RedirectToAction(nameof(UserList));
                 }
-
-                _db.AuditLogs.Add(new AuditLog
+                catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex) && attempt < maxRetries)
                 {
-                    UserId = currentUserId,
-                    Action = "CreateUser",
-                    EntityType = "User",
-                    EntityId = user.UserId.ToString(),
-                    NewValue = $"Created employee: {user.Email}",
-                    CreatedAt = DateTime.Now
-                });
+                    // [1] 命中 EmployeeNo（或 Email）unique constraint 衝突，重新產生編號後重試
+                    await transaction.RollbackAsync();
+                    _logger.LogWarning(ex, "Unique constraint conflict on attempt {Attempt} while creating user, regenerating EmployeeNo", attempt);
+                    finalEmployeeNo = await GenerateNextEmployeeNoAsync();
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    await transaction.RollbackAsync();
+                    _logger.LogError(ex, "Failed to create user with Email {Email}", normalizedEmail); // [4]
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+                    ModelState.AddModelError("", "建立帳號過程發生錯誤，請稍後再試。");
+                    model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
+                    model.EmployeeNo = finalEmployeeNo;
+                    return View(model);
+                }
+            }
 
-                TempData["SuccessMessage"] = $"成功建立員工帳號：{user.Name} ({user.Email})";
-                return RedirectToAction(nameof(UserList));
-            }
-            catch (Exception)
-            {
-                await transaction.RollbackAsync();
-                ModelState.AddModelError("", "建立帳號過程發生錯誤，請稍後再試。");
-                model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
-                return View(model);
-            }
+            // 重試多次仍失敗
+            _logger.LogError("Failed to create user with Email {Email} after {MaxRetries} retries due to repeated unique constraint conflicts", normalizedEmail, maxRetries);
+            ModelState.AddModelError("", "建立帳號過程發生錯誤（編號衝突），請稍後再試。");
+            model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
+            model.EmployeeNo = await GenerateNextEmployeeNoAsync();
+            return View(model);
         }
 
         public async Task<IActionResult> EditUser(int id)
@@ -1273,9 +1353,36 @@ namespace VenueGo.Controllers
         {
             int currentUserId = GetCurrentUserId();
 
-            if (await _db.Users.AnyAsync(u => u.Email == model.Email && u.UserId != model.UserId))
+            // [6] Email 唯一性檢查改為不分大小寫
+            var normalizedEmail = model.Email?.Trim().ToLowerInvariant();
+            if (await _db.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail && u.UserId != model.UserId))
             {
                 ModelState.AddModelError("Email", "此 Email 已被其他帳號使用");
+            }
+
+            // [7] 禁止管理員把自己的在職狀態改為離職/留職停薪，避免自己被鎖在系統外
+            if (model.UserId == currentUserId && !string.Equals(model.Status, "Active", StringComparison.OrdinalIgnoreCase))
+            {
+                ModelState.AddModelError("", "不可將自己的帳號狀態變更為離職或留職停薪。");
+            }
+
+            // [7] 禁止管理員把自己身上的 Admin 角色移除，避免自己被鎖在系統外
+            if (model.UserId == currentUserId)
+            {
+                var adminRoleId = await _db.Roles
+                    .Where(r => r.RoleName == AdminRoleName)
+                    .Select(r => r.RoleId)
+                    .FirstOrDefaultAsync();
+
+                var currentlyHasAdmin = await _db.UserRoles
+                    .AnyAsync(ur => ur.UserId == currentUserId && ur.RoleId == adminRoleId);
+
+                var willKeepAdmin = adminRoleId != 0 && (model.SelectedRoleIds?.Contains(adminRoleId) ?? false);
+
+                if (currentlyHasAdmin && !willKeepAdmin)
+                {
+                    ModelState.AddModelError("", "不可移除自己帳號的管理員（Admin）角色，以免無法再存取設定頁面。");
+                }
             }
 
             if (!ModelState.IsValid)
@@ -1298,7 +1405,7 @@ namespace VenueGo.Controllers
                 }
 
                 user.Name = model.Name?.Trim();
-                user.Email = model.Email?.Trim();
+                user.Email = normalizedEmail;
                 user.Phone = model.Phone?.Trim();
                 user.UpdatedAt = DateTime.Now;
 
@@ -1355,9 +1462,10 @@ namespace VenueGo.Controllers
                 TempData["SuccessMessage"] = $"已成功修改員工資料：{user.Name}";
                 return RedirectToAction(nameof(UserList));
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 await transaction.RollbackAsync();
+                _logger.LogError(ex, "Failed to edit user {UserId}", model.UserId); // [4]
                 ModelState.AddModelError("", "更新員工資料時發生錯誤，請稍後再試。");
                 model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
                 return View(model);
@@ -1369,6 +1477,20 @@ namespace VenueGo.Controllers
         public async Task<IActionResult> UpdateEmployeeStatus(int userId, string status)
         {
             int currentUserId = GetCurrentUserId();
+
+            // [2] 白名單驗證 status 參數，避免寫入非預期的值
+            if (string.IsNullOrWhiteSpace(status) || !AllowedEmployeeStatuses.Contains(status))
+            {
+                TempData["ErrorMessage"] = "無效的狀態值。";
+                return RedirectToAction(nameof(UserList));
+            }
+
+            // [7] 禁止管理員把自己設為離職/留職停薪，避免自己被鎖在系統外
+            if (userId == currentUserId && !string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase))
+            {
+                TempData["ErrorMessage"] = "不可將自己的帳號狀態變更為離職或留職停薪。";
+                return RedirectToAction(nameof(UserList));
+            }
 
             var user = await _db.Users.FindAsync(userId);
             var emp = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
@@ -1386,11 +1508,12 @@ namespace VenueGo.Controllers
                 emp.Status = status;
                 emp.UpdatedAt = DateTime.Now;
 
-                if (status == "Resigned" || status == "OnLeave")
+                if (status.Equals("Resigned", StringComparison.OrdinalIgnoreCase) ||
+                    status.Equals("OnLeave", StringComparison.OrdinalIgnoreCase))
                 {
                     var rolesToRemove = await (from ur in _db.UserRoles
                                                join r in _db.Roles on ur.RoleId equals r.RoleId
-                                               where ur.UserId == userId && r.RoleName != "Member" && r.RoleName != "Customer"
+                                               where ur.UserId == userId && r.RoleName != MemberRoleName
                                                select ur).ToListAsync();
                     _db.UserRoles.RemoveRange(rolesToRemove);
                 }
@@ -1411,9 +1534,10 @@ namespace VenueGo.Controllers
                 TempData["SuccessMessage"] = $"已成功將 {user.Name} 的狀態變更為：{status}";
                 return RedirectToAction(nameof(UserList));
             }
-            catch (Exception)
+            catch (Exception ex)
             {
                 await transaction.RollbackAsync();
+                _logger.LogError(ex, "Failed to update employee status for UserId {UserId} to {Status}", userId, status); // [4]
                 TempData["ErrorMessage"] = "狀態變更失敗，請稍後再試。";
                 return RedirectToAction(nameof(UserList));
             }
@@ -1427,6 +1551,17 @@ namespace VenueGo.Controllers
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             return int.TryParse(userIdClaim, out int userId) ? userId : 0;
+        }
+
+        // [1] 判斷例外是否為 unique constraint 違反（SQL Server: 2601/2627，PostgreSQL: 23505）
+        private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+        {
+            var message = ex.InnerException?.Message ?? ex.Message;
+            return message.Contains("2601") ||
+                   message.Contains("2627") ||
+                   message.Contains("23505") ||
+                   message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+                   message.Contains("UNIQUE constraint", StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task<string> GenerateNextEmployeeNoAsync()
@@ -1457,7 +1592,7 @@ namespace VenueGo.Controllers
 
             if (excludeMemberRoles)
             {
-                query = query.Where(r => r.RoleName != "Member" && r.RoleName != "Customer");
+                query = query.Where(r => r.RoleName != MemberRoleName);
             }
 
             return await query

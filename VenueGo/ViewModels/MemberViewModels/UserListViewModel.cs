@@ -17,6 +17,9 @@ namespace VenueGo.ViewModels.MemberViewModels
 
         // 列表結果
         public List<UserListItemDto> Users { get; set; } = new();
+        public int CurrentPage { get; set; } = 1;
+        public int TotalPages { get; set; } = 1;
+        public int TotalCount { get; set; }
     }
 
     public class UserListItemDto

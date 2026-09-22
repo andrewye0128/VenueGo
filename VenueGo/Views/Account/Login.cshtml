@@ -50,7 +50,6 @@
                             </div>
 
                             <div class="mb-3">
-                                <!-- 👈 修改處：將標籤與「忘記密碼？」連結放在同一個彈性容器內 -->
                                 <div class="d-flex justify-content-between align-items-center mb-1">
                                     <label class="form-label small fw-bold mb-0">密碼</label>
                                     <a asp-controller="Account" asp-action="ForgotPassword" class="small text-decoration-none">
@@ -59,7 +58,11 @@
                                 </div>
                                 <div class="input-group">
                                     <span class="input-group-text bg-white"><i class="bi bi-key"></i></span>
-                                    <input asp-for="Password" class="form-control" placeholder="請輸入密碼" />
+                                    <input asp-for="Password" id="passwordInput" class="form-control" placeholder="請輸入密碼" />
+                                    <!-- 👈 新增：眼睛按鈕可切換顯示/隱藏密碼 -->
+                                    <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                        <i class="bi bi-eye" id="togglePasswordIcon"></i>
+                                    </button>
                                 </div>
                                 <span asp-validation-for="Password" class="text-danger small"></span>
                             </div>
@@ -78,5 +81,23 @@
             </div>
         </div>
     </div>
+
+    <!-- 腳本引入：密碼顯示切換互動邏輯 -->
+    <script>
+            document.getElementById('togglePassword')?.addEventListener('click', function() {
+                const passwordInput = document.getElementById('passwordInput');
+                const icon = document.getElementById('togglePasswordIcon');
+
+                if (passwordInput.type === 'password') {
+                    passwordInput.type = 'text';
+                    icon.classList.remove('bi-eye');
+                    icon.classList.add('bi-eye-slash');
+                } else {
+                    passwordInput.type = 'password';
+                    icon.classList.remove('bi-eye-slash');
+                    icon.classList.add('bi-eye');
+                }
+            });
+    </script>
 </body>
 </html>

@@ -1,0 +1,180 @@
+﻿@model VenueGo.ViewModels.MemberViewModels.UserProfileViewModel
+
+@{
+    ViewData["Title"] = "個人資料設定";
+}
+
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8 col-xl-7">
+            <!-- 成功訊息提示 -->
+            @if (TempData["SuccessMessage"] != null)
+            {
+                <div class="alert alert-success alert-dismissible fade show shadow-sm mb-4" role="alert">
+                    <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            }
+
+            <div class="card shadow-sm border-0 rounded-3">
+                <div class="card-header bg-white py-3 border-bottom-0">
+                    <div class="d-flex align-items-center">
+                        <div class="avatar-circle bg-primary text-white fs-4 fw-bold me-3 d-flex align-items-center justify-content-center rounded-circle" style="width: 48px; height: 48px;">
+                            @(string.IsNullOrEmpty(Model.Name) ? "U" : Model.Name.Substring(0, 1))
+                        </div>
+                        <div>
+                            <h5 class="card-title fw-bold mb-0">@Model.Name 的個人資料</h5>
+                            <small class="text-muted">檢視與更新您的個人帳號設定</small>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card-body p-4 pt-2">
+                    <form asp-controller="Member" asp-action="Profile" method="post">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="UserId" />
+
+                        <div asp-validation-summary="ModelOnly" class="alert alert-danger py-2 small mb-3" role="alert"></div>
+
+                        <!-- 唯讀資訊區塊 (系統賦予資訊) -->
+                        <div class="bg-light p-3 rounded-3 mb-4">
+                            <h6 class="fw-bold text-secondary mb-3"><i class="bi bi-info-circle me-1"></i> 系統識別資訊</h6>
+                            <div class="row g-3">
+                                <div class="col-md-4">
+                                    <label class="form-label small text-muted mb-1">員工編號</label>
+                                    <input type="text" class="form-control bg-white" value="@Model.EmployeeNo" readonly />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small text-muted mb-1">職稱</label>
+                                    <input type="text" class="form-control bg-white" value="@Model.JobTitle" readonly />
+                                </div>
+                                <div class="col-md-4">
+                                    <label class="form-label small text-muted mb-1">擁有權限角色</label>
+                                    <div class="pt-1">
+                                        @if (Model.Roles != null && Model.Roles.Any())
+                                        {
+                                            @foreach (var role in Model.Roles)
+                                            {
+                                                <span class="badge bg-primary me-1">@role</span>
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <span class="badge bg-secondary">無專屬角色</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 可編輯基本資料區塊 -->
+                        <h6 class="fw-bold text-dark mb-3"><i class="bi bi-person-lines-fill me-1"></i> 基本資料</h6>
+
+                        <div class="mb-3">
+                            <label asp-for="Email" class="form-label small fw-bold"></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light"><i class="bi bi-envelope"></i></span>
+                                <input asp-for="Email" class="form-control bg-light" readonly />
+                            </div>
+                            <small class="text-muted">如需變更 Email，請聯繫系統管理員。</small>
+                        </div>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="Name" class="form-label small fw-bold"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white"><i class="bi bi-person"></i></span>
+                                    <input asp-for="Name" class="form-control" placeholder="請輸入姓名" />
+                                </div>
+                                <span asp-validation-for="Name" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="Phone" class="form-label small fw-bold"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white"><i class="bi bi-telephone"></i></span>
+                                    <input asp-for="Phone" class="form-control" placeholder="請輸入連絡電話" />
+                                </div>
+                                <span asp-validation-for="Phone" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <hr class="my-4" />
+
+                        <!-- 修改密碼區塊 -->
+                        <h6 class="fw-bold text-dark mb-3">
+                            <i class="bi bi-shield-lock me-1"></i> 修改密碼
+                            <small class="text-muted fw-normal fs-7">(若無須變更請留空)</small>
+                        </h6>
+
+                        <div class="mb-3">
+                            <label asp-for="CurrentPassword" class="form-label small fw-bold"></label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-white"><i class="bi bi-key"></i></span>
+                                <input asp-for="CurrentPassword" id="currentPasswordInput" class="form-control" placeholder="請輸入原密碼" />
+                                <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('currentPasswordInput', 'currentPasswordIcon')">
+                                    <i class="bi bi-eye" id="currentPasswordIcon"></i>
+                                </button>
+                            </div>
+                            <span asp-validation-for="CurrentPassword" class="text-danger small"></span>
+                        </div>
+
+                        <div class="row g-3 mb-4">
+                            <div class="col-md-6">
+                                <label asp-for="NewPassword" class="form-label small fw-bold"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white"><i class="bi bi-lock"></i></span>
+                                    <input asp-for="NewPassword" id="newPasswordInput" class="form-control" placeholder="請輸入新密碼" />
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('newPasswordInput', 'newPasswordIcon')">
+                                        <i class="bi bi-eye" id="newPasswordIcon"></i>
+                                    </button>
+                                </div>
+                                <span asp-validation-for="NewPassword" class="text-danger small"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label asp-for="ConfirmNewPassword" class="form-label small fw-bold"></label>
+                                <div class="input-group">
+                                    <span class="input-group-text bg-white"><i class="bi bi-shield-check"></i></span>
+                                    <input asp-for="ConfirmNewPassword" id="confirmPasswordInput" class="form-control" placeholder="再次確認新密碼" />
+                                    <button class="btn btn-outline-secondary" type="button" onclick="togglePasswordVisibility('confirmPasswordInput', 'confirmPasswordIcon')">
+                                        <i class="bi bi-eye" id="confirmPasswordIcon"></i>
+                                    </button>
+                                </div>
+                                <span asp-validation-for="ConfirmNewPassword" class="text-danger small"></span>
+                            </div>
+                        </div>
+
+                        <div class="d-flex justify-content-end gap-2 pt-2">
+                            <button type="submit" class="btn btn-primary px-4 fw-bold">
+                                <i class="bi bi-check-lg me-1"></i>儲存變更
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+
+    <script>
+        // 切換密碼顯示/隱藏的通用 Function
+        function togglePasswordVisibility(inputId, iconId) {
+            const input = document.getElementById(inputId);
+            const icon = document.getElementById(iconId);
+
+            if (!input || !icon) return;
+
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.classList.remove('bi-eye');
+                icon.classList.add('bi-eye-slash');
+            } else {
+                input.type = 'password';
+                icon.classList.remove('bi-eye-slash');
+                icon.classList.add('bi-eye');
+            }
+        }
+    </script>
+}

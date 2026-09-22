@@ -162,3 +162,59 @@
         </div>
     </div>
 </div>
+<!-- 分頁導覽區塊 -->
+<div class="d-flex justify-content-between align-items-center mt-3 px-2">
+    <!-- 左側：筆數統計資訊 (永遠顯示) -->
+    <div class="text-muted small">
+        @if (Model.TotalCount > 0)
+        {
+            <span>顯示第 <strong>@(((Model.CurrentPage - 1) * 10) + 1)</strong> 至 <strong>@(Math.Min(Model.CurrentPage * 10, Model.TotalCount))</strong> 筆，共 <strong>@Model.TotalCount</strong> 筆資料</span>
+        }
+        else
+        {
+            <span>共 <strong>0</strong> 筆資料</span>
+        }
+    </div>
+
+    <!-- 右側：頁碼控制按鈕 (當總頁數大於 1 時才顯示) -->
+    @if (Model.TotalPages > 1)
+    {
+        <nav>
+            <ul class="pagination pagination-sm mb-0">
+                <!-- 上一頁 -->
+                <li class="page-item @(Model.CurrentPage == 1 ? "disabled" : "")">
+                    <a class="page-link" asp-controller="Setting" asp-action="UserList"
+                       asp-route-keyword="@Model.Keyword"
+                       asp-route-roleId="@Model.SelectedRoleId"
+                       asp-route-status="@Model.SelectedStatus"
+                       asp-route-page="@(Model.CurrentPage - 1)">
+                        <i class="bi bi-chevron-left"></i> 上一頁
+                    </a>
+                </li>
+
+                <!-- 頁碼 -->
+                @for (int i = 1; i <= Model.TotalPages; i++)
+                {
+                    <li class="page-item @(i == Model.CurrentPage ? "active" : "")">
+                        <a class="page-link" asp-controller="Setting" asp-action="UserList"
+                           asp-route-keyword="@Model.Keyword"
+                           asp-route-roleId="@Model.SelectedRoleId"
+                           asp-route-status="@Model.SelectedStatus"
+                           asp-route-page="@i">@i</a>
+                    </li>
+                }
+
+                <!-- 下一頁 -->
+                <li class="page-item @(Model.CurrentPage == Model.TotalPages ? "disabled" : "")">
+                    <a class="page-link" asp-controller="Setting" asp-action="UserList"
+                       asp-route-keyword="@Model.Keyword"
+                       asp-route-roleId="@Model.SelectedRoleId"
+                       asp-route-status="@Model.SelectedStatus"
+                       asp-route-page="@(Model.CurrentPage + 1)">
+                        下一頁 <i class="bi bi-chevron-right"></i>
+                    </a>
+                </li>
+            </ul>
+        </nav>
+    }
+</div>

@@ -1,7 +1,14 @@
 @model VenueGo.ViewModels.VenueViewModels.WeekBusinessHourEditViewModel
+@using VenueGo.Helpers
+@using VenueGo.Models.Constants
+@using VenueGo.Data
+@inject dbVenueContext Db
 
 @{
     ViewData["Title"] = "營業時間管理";
+
+    //是否有新增/編輯/刪除的權限,只有Admin跟Manager可以(這個頁面本身就只開放給他們,這裡是讓頁籤邏輯跟其他3個頁面一致)
+    bool canManage = await AuthHelper.HasRoleAsync(User, Db, RoleNames.Admin, RoleNames.Manager);
 }
 
 <!-- 功能頁籤 -->
@@ -24,25 +31,28 @@
             <i class="bi bi-cash-coin me-1"></i>價格規則管理
         </a>
     </li>
-    <li class="nav-item">
-        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "WeekBusinessHourIndex" ? "active" : "")"
-           asp-controller="Venue" asp-action="WeekBusinessHourIndex">
-            <i class="bi bi-clock me-1"></i>營業時間管理
-        </a>
-    </li>
+    @if (canManage)
+    {
+        <li class="nav-item">
+            <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "WeekBusinessHourIndex" ? "active" : "")"
+               asp-controller="Venue" asp-action="WeekBusinessHourIndex">
+                <i class="bi bi-clock me-1"></i>營業時間管理
+            </a>
+        </li>
+    }
 </ul>
 
-@if (TempData["SuccessMessage"] != null)
+@if (TempData["VenueSuccessMessage"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+        <i class="bi bi-check-circle-fill me-2"></i>@TempData["VenueSuccessMessage"]
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
-@if (TempData["ErrorMessage"] != null)
+@if (TempData["VenueErrorMessage"] != null)
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["VenueErrorMessage"]
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
@@ -142,8 +152,8 @@
         //disabled的欄位送出表單時不會夾帶值,後端收到的就是null,剛好符合"沒開就不該有時間值"的邏輯
         (function () {
             function toggleRow(checkbox) {
-                var row = checkbox.closest('tr');
-                var selects = row.querySelectorAll('select.day-time');
+                const row = checkbox.closest('tr');
+                const selects = row.querySelectorAll('select.day-time');
 
                 selects.forEach(function (select) {
                     if (checkbox.checked) {
@@ -155,7 +165,7 @@
                 });
             }
 
-            var checkboxes = document.querySelectorAll('.day-isopen');
+            const checkboxes = document.querySelectorAll('.day-isopen');
 
             checkboxes.forEach(function (checkbox) {
                 toggleRow(checkbox);

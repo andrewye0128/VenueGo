@@ -3,11 +3,14 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System.Net.WebSockets;
 using VenueGo.Data;
+using VenueGo.Helpers;
+using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;
 using VenueGo.ViewModels.VenueViewModels;
 
 namespace VenueGo.Controllers
 {
+    [EmployeeAuthorize(RoleNames.Admin,RoleNames.Manager,RoleNames.Staff)]
     public class VenueController : Controller
     {
         //取得照片路徑 >> 取得wwwroot的實際路徑(Controller建構子注入)
@@ -28,6 +31,7 @@ namespace VenueGo.Controllers
             return View(datas);
         }
 
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //新增運動類型 >> 頁面產生
         public IActionResult SportTypeCreate()
         {
@@ -35,6 +39,7 @@ namespace VenueGo.Controllers
         }
 
 
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //新增運動類型 >> 資料回傳存入DB
         [HttpPost]
         public IActionResult SportTypeCreate(CSportTypeWrap Wrap)
@@ -57,6 +62,7 @@ namespace VenueGo.Controllers
         }
 
 
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //運動類型編輯 >> 頁面產生
         public IActionResult SportTypeEdit(int? id)
         {
@@ -73,6 +79,7 @@ namespace VenueGo.Controllers
 
 
 
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //運動類型編輯 >> 參數送回
         [HttpPost]
         public IActionResult SportTypeEdit(CSportTypeWrap Wrap)
@@ -88,6 +95,8 @@ namespace VenueGo.Controllers
             return RedirectToAction("SportTypeIndex");
         }
 
+
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //運動類型刪除
         public IActionResult SportTypeDelete(int? id)
         {
@@ -105,20 +114,20 @@ namespace VenueGo.Controllers
 
 
         /*Venue*/
-        //列出所有場地
-        public IActionResult VenueIndex()
+        //列出所有場地,依運動類型分組顯示,並依分組換頁
+        public IActionResult VenueIndex(int page = 1)
         {
-            //撈出所有場地的資料
-            List<CVenueWrap> datas = new CVenueFactory().QueryAll();
+            //每頁顯示3種運動類型分組,固定寫死在這裡,之後要調整頁數大小改這個數字就好
+            int pageSize = 3;
 
-            //撈出運動類型表,傳到前端提供顯示運動類型分類
-            var sportTypeNames = new CVenueFactory().GetSportTypes().ToDictionary(x => int.Parse(x.Value), x => x.Text);
+            CVenueFactory venueFactory = new CVenueFactory();
+            VenueIndexViewModel vm = venueFactory.QueryGroupedBySportType(page, pageSize);
 
-            ViewBag.SportTypeNames = sportTypeNames;
-
-            return View(datas);
+            return View(vm);
         }
 
+
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //場地新增>> 頁面產生 
         public IActionResult VenueCreate()
         {
@@ -130,6 +139,8 @@ namespace VenueGo.Controllers
         }
 
 
+
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //場地新增 >> 資料回傳存入DB
         [HttpPost]
         public async Task<IActionResult> VenueCreate(VenueCreateViewModel vm)
@@ -188,6 +199,7 @@ namespace VenueGo.Controllers
 
 
 
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //場地編輯 >> 畫面產生
         public IActionResult VenueEdit(int? id)
         {
@@ -218,6 +230,7 @@ namespace VenueGo.Controllers
         }
 
 
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //場地編輯 >> 資料傳回
         [HttpPost]
         public async Task<IActionResult> VenueEdit(VenueEditViewModel vm)
@@ -268,6 +281,7 @@ namespace VenueGo.Controllers
         }
 
 
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //場地刪除
         public IActionResult VenueDelete(int? id)
         {
@@ -296,6 +310,7 @@ namespace VenueGo.Controllers
         }
 
 
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //價格規則新增 >> 頁面產生
         public IActionResult SportTypePriceRuleCreate()
         {
@@ -308,6 +323,8 @@ namespace VenueGo.Controllers
             return View(vm);
         }
 
+
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //價格規則新增 >> 資料回傳存入DB
         [HttpPost]
         public IActionResult SportTypePriceRuleCreate(SportTypePriceRuleCreateViewModel vm)
@@ -345,6 +362,13 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //尖峰起始時間沒填,代表不分尖峰/離峰,尖峰價格沒有意義,強制清成0
+            //不管前端有沒有正確disable掉輸入框,後端都要保證資料一致(跟WeekBusinessHour的IsOpen=false邏輯一樣)
+            if (!vm.PeakStartTime.HasValue)
+            {
+                vm.PeakPrice = 0;
+            }
+
             //回傳的資料存入Wrap
             CSportTypePriceRuleWrap Wrap = new CSportTypePriceRuleWrap();
             Wrap.SportTypeId = vm.SportTypeId;
@@ -359,7 +383,10 @@ namespace VenueGo.Controllers
             return RedirectToAction("SportTypePriceRuleIndex");
         }
 
+
+
         //價格規則編輯 >> 頁面產生
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         public IActionResult SportTypePriceRuleEdit(int? id)
         {
             //驗證id非null
@@ -380,6 +407,7 @@ namespace VenueGo.Controllers
         }
 
         //價格規則編輯 >> 參數送回
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         [HttpPost]
         public IActionResult SportTypePriceRuleEdit(SportTypePriceRuleEditViewModel vm)
         {
@@ -411,6 +439,13 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //尖峰起始時間沒填,代表不分尖峰/離峰,尖峰價格沒有意義,強制清成0
+            //不管前端有沒有正確disable掉輸入框,後端都要保證資料一致(跟WeekBusinessHour的IsOpen=false邏輯一樣)
+            if (!vm.PeakStartTime.HasValue)
+            {
+                vm.PeakPrice = 0;
+            }
+
             //回傳的資料存入Wrap
             CSportTypePriceRuleWrap EditWrap = new CSportTypePriceRuleWrap();
             EditWrap.SportTypePriceRuleId = vm.SportTypePriceRuleId;
@@ -426,6 +461,7 @@ namespace VenueGo.Controllers
         }
 
         //價格規則刪除 >> 真正的硬刪除,刪除前必須確認該運動類型底下沒有場地正在連動
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         public IActionResult SportTypePriceRuleDelete(int? id)
         {
             //驗證id非null
@@ -442,13 +478,13 @@ namespace VenueGo.Controllers
             //硬刪除前檢查 >> 該運動類型底下若還有場地在用,刪除規則會導致那些場地找不到對應價格,故擋下來
             if (SportTypePriceRuleFactory.HasLinkedVenues(data.SportTypeId))
             {
-                TempData["ErrorMessage"] = $"「{data.SportTypeName}」目前仍有場地使用中，無法刪除價格規則";
+                TempData["VenueErrorMessage"] = $"「{data.SportTypeName}」目前仍有場地使用中，無法刪除價格規則";
                 return RedirectToAction("SportTypePriceRuleIndex");
             }
 
             //檢查通過,執行硬刪除
             SportTypePriceRuleFactory.Delete((int)id);
-            TempData["SuccessMessage"] = $"已成功刪除「{data.SportTypeName}」的價格規則";
+            TempData["VenueSuccessMessage"] = $"已成功刪除「{data.SportTypeName}」的價格規則";
 
             return RedirectToAction("SportTypePriceRuleIndex");
         }
@@ -457,6 +493,7 @@ namespace VenueGo.Controllers
         /*WeekBusinessHour*/
 
         //場館營業時間管理 >> 頁面產生,一次顯示7天,星期一排最前面、星期日排最後面
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         public IActionResult WeekBusinessHourIndex()
         {
             CWeekBusinessHourFactory WeekBusinessHourFactory = new CWeekBusinessHourFactory();
@@ -497,6 +534,7 @@ namespace VenueGo.Controllers
         }
 
         //場館營業時間管理 >> 參數送回,一次驗證/儲存7天
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         [HttpPost]
         public IActionResult WeekBusinessHourIndex(WeekBusinessHourEditViewModel vm)
         {
@@ -562,7 +600,7 @@ namespace VenueGo.Controllers
             }
 
             WeekBusinessHourFactory.EditAll(wraps);
-            TempData["SuccessMessage"] = "營業時間設定已儲存";
+            TempData["VenueSuccessMessage"] = "營業時間設定已儲存";
 
             return RedirectToAction("WeekBusinessHourIndex");
         }
@@ -608,6 +646,7 @@ namespace VenueGo.Controllers
         /*VenueUnavailableSlot*/
 
         //場地不開放時段管理 >> 頁面產生,顯示某場地某天的所有時段按鈕
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager,RoleNames.Staff)]
         public IActionResult VenueUnavailableSlotManage(int venueId, DateOnly? date)
         {
             DateOnly today = DateOnly.FromDateTime(DateTime.Now);
@@ -705,6 +744,7 @@ namespace VenueGo.Controllers
 
         //場地不開放時段切換 >> 開放變不開放就新增一筆,不開放變開放就刪除那一筆
         //完全不信任前端傳來的「目前是開放還是不開放」,每次都自己用FindByKey重新查一次DB決定
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
         [HttpPost]
         public IActionResult VenueUnavailableSlotToggle(int venueId, DateOnly date, TimeOnly time, string? reason)
         {
@@ -714,7 +754,7 @@ namespace VenueGo.Controllers
             //防呆 >> 不能對過去的日期時間做切換,不管前端有沒有正確把按鈕disable掉
             if (date < today || (date == today && time <= now))
             {
-                TempData["ErrorMessage"] = "已經過去的時段無法設定";
+                TempData["VenueErrorMessage"] = "已經過去的時段無法設定";
                 return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
             }
 
@@ -733,7 +773,7 @@ namespace VenueGo.Controllers
                 //目前是開放,切換成不開放 >> 新增一筆,必須要有原因
                 if (string.IsNullOrWhiteSpace(reason))
                 {
-                    TempData["ErrorMessage"] = "請填寫不開放原因";
+                    TempData["VenueErrorMessage"] = "請填寫不開放原因";
                     return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
                 }
 

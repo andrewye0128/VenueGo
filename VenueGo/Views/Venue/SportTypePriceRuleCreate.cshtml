@@ -62,7 +62,7 @@
                     </div>
                 </div>
                 <div class="col-md-6">
-                    <label asp-for="PeakPrice" class="form-label fw-bold">尖峰價格 <span class="text-danger">*</span></label>
+                    <label asp-for="PeakPrice" class="form-label fw-bold">尖峰價格 <span id="peakPriceRequiredMark" class="text-danger">*</span></label>
                     <input asp-for="PeakPrice" type="number" min="0" class="form-control" />
                     <span asp-validation-for="PeakPrice" class="text-danger small"></span>
                 </div>
@@ -85,4 +85,33 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
+    <script>
+        //尖峰起始時間選成「不分尖峰/離峰」(空值)時,把尖峰價格輸入框disable掉
+        //disabled的欄位送出表單時不會夾帶值,後端收到的就是int預設值0,跟後端強制清成0的邏輯一致
+        (function () {
+            let peakStartTimeSelect = document.getElementById('PeakStartTime');
+            let peakPriceInput = document.getElementById('PeakPrice');
+            let peakPriceRequiredMark = document.getElementById('peakPriceRequiredMark');
+
+            function togglePeakPrice() {
+                if (peakStartTimeSelect.value === '') {
+                    peakPriceInput.disabled = true;
+                    //disable的同時把殘留的舊數字清空,不然畫面上會留著一個灰掉卻還顯示數字的欄位,讓人誤以為那個值還有效
+                    peakPriceInput.value = '';
+                    //這個欄位變成不需要填,星號跟著隱藏,不然disable掉還掛著星號會讓人誤會還是必填
+                    peakPriceRequiredMark.style.display = 'none';
+                }
+                else {
+                    peakPriceInput.disabled = false;
+                    peakPriceRequiredMark.style.display = '';
+                }
+            }
+
+            togglePeakPrice();
+
+            peakStartTimeSelect.addEventListener('change', function () {
+                togglePeakPrice();
+            });
+        })();
+    </script>
 }

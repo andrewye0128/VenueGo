@@ -11,17 +11,17 @@
     </a>
 </div>
 
-@if (TempData["SuccessMessage"] != null)
+@if (TempData["VenueSuccessMessage"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+        <i class="bi bi-check-circle-fill me-2"></i>@TempData["VenueSuccessMessage"]
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
-@if (TempData["ErrorMessage"] != null)
+@if (TempData["VenueErrorMessage"] != null)
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["VenueErrorMessage"]
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
@@ -151,11 +151,11 @@
 @section Scripts {
     <script>
         //Modal開啟時,把觸發它的按鈕(event.relatedTarget)身上的data-time讀出來,塞進Modal裡的隱藏欄位跟顯示文字
-        var unavailableReasonModal = document.getElementById('unavailableReasonModal');
+        const unavailableReasonModal = document.getElementById('unavailableReasonModal');
         if (unavailableReasonModal) {
             unavailableReasonModal.addEventListener('show.bs.modal', function (event) {
-                var button = event.relatedTarget;
-                var time = button.getAttribute('data-time');
+                const button = event.relatedTarget;
+                const time = button.getAttribute('data-time');
                 document.getElementById('unavailableReasonTime').value = time;
                 document.getElementById('unavailableReasonTimeText').textContent = time;
             });

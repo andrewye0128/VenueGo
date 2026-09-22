@@ -98,6 +98,18 @@ builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 C
 builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<ITimeService, TimeService>();
 builder.Services.AddHostedService<TimeSyncHostedService>();
+// AI 回覆草稿
+builder.Services.Configure<AiDraftOptions>(
+    builder.Configuration.GetSection(AiDraftOptions.SectionName));
+
+builder.Services.AddHttpClient(ReplyDraftService.HttpClientName, c =>
+{
+    // ⚠️ 一定要設逾時。LLM 慢起來可以慢到幾十秒，
+    //    預設 100 秒會讓員工以為網站當掉。
+    c.Timeout = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddScoped<IReplyDraftService, ReplyDraftService>();
+
 
 var app = builder.Build();
 

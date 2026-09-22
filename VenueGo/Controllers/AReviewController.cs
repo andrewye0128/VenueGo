@@ -12,11 +12,13 @@ using VenueGo.ViewModels.ReviewVM;
 namespace VenueGo.Controllers
 {
     [Authorize]
-    public class AReviewController(dbVenueContext db, ICurrentUser currentUser, ITimeService timeService) : Controller
+    public class AReviewController(dbVenueContext db, ICurrentUser currentUser, ITimeService timeService, IReplyDraftService replyDraftService, ILogger<ReplyDraftService> logger) : Controller
     {
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUser _currentUser = currentUser;
         private readonly ITimeService _timeService = timeService;
+        private readonly IReplyDraftService _replyDraft = replyDraftService;
+        private readonly ILogger<ReplyDraftService> _logger = logger;
 
         // ════════════════════════════════════════════════════════
         //  第一區：規則判定
@@ -400,7 +402,7 @@ namespace VenueGo.Controllers
             return _db.Database
                       .SqlQuery<ReviewRefRow>($@"
                           SELECT [ReviewId], [OrderId], [OrderNo], [VenueName],
-                                 [RentStartTime], [UserName],
+                                 [SportName], [RentStartTime], [UserName],
                                  [ReadByEmployeeName], [RepliedByEmployeeName],
                                  [SpamMarkedByEmployeeName]
                           FROM   dbo.v_ReviewFullInfo")
@@ -708,5 +710,62 @@ namespace VenueGo.Controllers
             return Ok(ApiResultVM.Ok("已標記為垃圾"));
         }
 
+        // ＝＝＝＝＝＝＝＝＝＝　試做AI草稿　＝＝＝＝＝＝＝＝＝＝
+        /// <summary>
+        /// 產生 AI 回覆草稿。只回文字，不寫資料庫。
+        /// ⚠️ 這支不會送出回覆，只是把字丟給前端填進輸入框。
+        /// </summary>
+        [HttpPost, ValidateAntiForgeryToken]
+        public async Task<IActionResult> DraftReply(int id, CancellationToken cancellationToken)
+        {
+            if (!_replyDraft.IsEnabled)
+                return StatusCode(503, new { ok = false, message = "AI 草稿功能未啟用" });
+
+            // ⚠️ 從資料庫讀評論，不要從前端接內容。
+            //    前端送什麼你就餵什麼給 LLM 的話，任何人都能拿你的金鑰
+            //    當免費 API 用（而且帳單記在你頭上）。
+            var review = await _db.ReviewMains.FirstOrDefaultAsync(r => r.ReviewId == id, cancellationToken);
+            if (review == null)
+                return StatusCode(404, new { ok = false, message = "找不到這則評論" });
+
+            if (review.RepliedAt != null)
+                return StatusCode(409, new { ok = false, message = "這則評論已經回覆過了" });
+
+            // 場館名稱與運動類型：沿用現有的跨表查法（沒有導覽屬性，要自己查）
+            var (venueName, sportTypeName) = await ResolveVenueAsync(review, cancellationToken);
+
+            try
+            {
+                string draft = await _replyDraft.DraftAsync(
+                    new ReplyDraftInput(review.StarRating, review.ReviewContent, venueName, sportTypeName),
+                    cancellationToken);
+
+                return Json(new { ok = true, draft });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "產生 AI 草稿失敗，ReviewId={ReviewId}", id);
+                // ⚠️ 不要把 ex.Message 直接回給前端——裡面可能有金鑰或內部路徑。
+                return StatusCode(502, new { ok = false, message = "AI 服務暫時無法使用，請稍後再試或自行撰寫" });
+            }
+        }
+
+        private async Task<(string venueName, string sportTypeName)> ResolveVenueAsync(ReviewMain review, CancellationToken cancellationToken)
+        {
+            if (review == null)
+            {
+                throw new ArgumentNullException(nameof(review), "傳入的評論資料不能為 null。");
+            }
+
+            var result = await _db.Database
+                      .SqlQuery<ReviewRefRow>($@"
+                          SELECT [ReviewId],[VenueName],[SportName]
+                          FROM   dbo.v_ReviewFullInfo
+                          WHERE  [ReviewId] = {review.ReviewId}") // 讓資料庫只查這一筆
+                      .FirstOrDefaultAsync(cancellationToken);
+
+            return (result?.VenueName ?? "未知的場地名稱", 
+                    result?.SportName ?? "未知的運動類型名稱");
+        }
     }
 }

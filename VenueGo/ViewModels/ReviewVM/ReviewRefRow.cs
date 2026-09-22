@@ -22,6 +22,7 @@ namespace VenueGo.ViewModels.ReviewVM
 
         /// <summary>只有現場評論有。預約評論是 null。</summary>
         public string? VenueName { get; set; }
+        public string? SportName { get; set; }
 
         /// <summary>只有現場評論有。⚠️ 這個要顯示完整時間，不要用 TimeAgo。</summary>
         public DateTime? RentStartTime { get; set; }

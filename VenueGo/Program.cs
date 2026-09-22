@@ -9,6 +9,7 @@ using VenueGo.Services.Orders;
 using VenueGo.Services.Reservations;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
+using VenueGo.Models.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -75,8 +76,6 @@ builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();
 // 註冊關於預約建立的服務：介面 → 實作
 builder.Services.AddScoped<IReservationCreationService, ReservationCreationService>();
 
-// 註冊關於目前登入者的服務：介面 → 實作
-builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 // 註冊關於預約查詢與指令的服務：介面 → 實作
 builder.Services.AddScoped<IReservationQueryService, ReservationQueryService>();
 // 註冊關於預約指令的服務：介面 → 實作
@@ -89,17 +88,16 @@ builder.Services.Configure<ReservationRulesOptions>(
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
 
 // 評論系統使用
-builder.Services.AddHttpContextAccessor();
 builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
 builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
 builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
 builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
-// TimeAPI 使用
-builder.Services.AddHttpClient(); // 👈 這行寫下去，系統自動打包註冊了 IHttpClientFactory
-builder.Services.AddScoped<ITimeService, TimeService>(); // 註冊 TimeService
-
-builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
+// 自動校時使用
+builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 CreateClient()
+builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
+builder.Services.AddSingleton<ITimeService, TimeService>();
+builder.Services.AddHostedService<TimeSyncHostedService>();
 
 var app = builder.Build();
 
@@ -128,7 +126,6 @@ app.MapStaticAssets();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}")
-    //pattern: "{controller=CReview}/{action=Index}/{id?}")
     .WithStaticAssets();
 
 

@@ -1,14 +1,13 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;   // 新增：Database.SqlQuery<T> 在這個命名空間
 using System.Linq.Expressions;
-using System.Text.RegularExpressions;
 using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Entities;
 using VenueGo.Services;
 using VenueGo.ViewModels;
 using VenueGo.ViewModels.ReviewVM;
-using static Microsoft.Extensions.Logging.EventSource.LoggingEventSource;
 
 namespace VenueGo.Controllers
 {
@@ -279,6 +278,19 @@ namespace VenueGo.Controllers
             return OverdueLevel.None;
         }
 
+        /*  ══════════════════════════════════════════════════════════════════
+            以下整段改用檢視表 dbo.v_ReviewFullInfo，原本的版本保留在註解裡。
+
+            原本：七次查詢（ReviewPerVisits／Venues／EntryTickets／
+                  ReviewPerBookings／Orders／Users／Employees×Users）
+            現在：一次查詢
+
+            能一次做完的原因是 View 已經在資料庫那邊把七張表接好了，
+            而且每個 JOIN 都接在對方的主鍵或唯一鍵上，所以一則評論保證一列。
+            ⚠️ 前提是 createV_Booking_Claude.sql 已經跑過。
+
+            ── 原本的程式碼 ──────────────────────────────────────────────
+
         /// <summary>
         /// 一次查好清單要用的所有名稱。
         ///
@@ -363,29 +375,70 @@ namespace VenueGo.Controllers
                                     visitOrderIds, userNames, employeeNames);
         }
 
-        private static ReviewQueueItemVM BuildItem(ReviewMain r, QueueLookups lk, DateTime now)
-        {
-            // 用 id 去字典拿資料。「is int vid」的意思是：有值的話取出來叫 vid。
-            ReviewPerVisit? visit = r.ReviewPerVisitId is int vid
-                                    ? lk.Visits.GetValueOrDefault(vid) : null;
-            ReviewPerBooking? booking = r.ReviewPerBookingId is int bid
-                                        ? lk.Bookings.GetValueOrDefault(bid) : null;
 
-            // 兩種評論都要追到訂單：預約評論直接有，現場評論靠票券轉一手。
-            // 追不到就是 null，分組時會單獨列出來。
-            int? orderId = null;
-            if (booking != null)
-            {
-                orderId = booking.OrderId;
-            }
-            else if (visit != null && lk.VisitOrderIds.TryGetValue(visit.Qrtoken, out int visitOrderId))
-            {
-                orderId = visitOrderId;
-            }
+            ══════════════════════════════════════════════════════════════════ */
+
+        /// <summary>
+        /// 一次查好清單要用的所有名稱，回傳「ReviewId → 周邊資料」。
+        ///
+        /// 跨表的工作全部在檢視表 dbo.v_ReviewFullInfo 裡完成，
+        /// 這裡只負責把結果撈回來。不管清單有幾筆，都只查一次。
+        ///
+        /// ⚠️ SELECT 的欄位必須跟 ReviewRefRow 的屬性一一對應，
+        ///    少一個或多一個都是執行期才會爆，不是編譯期。
+        /// </summary>
+        private Dictionary<int, ReviewRefRow> LoadRefs(List<ReviewMain> reviews)
+        {
+            if (reviews.Count == 0) return new Dictionary<int, ReviewRefRow>();
+
+            var ids = reviews.Select(r => r.ReviewId).Distinct().ToList();
+
+            // SqlQuery 回傳的是 IQueryable，可以接著用 LINQ 疊條件——
+            // EF 會把這段 SQL 當成子查詢包起來，再把 Contains 翻成 IN。
+            // 所以 ids 是以參數送出去的，不是字串拼接。
+            return _db.Database
+                      .SqlQuery<ReviewRefRow>($@"
+                          SELECT [ReviewId], [OrderId], [OrderNo], [VenueName],
+                                 [RentStartTime], [UserName],
+                                 [ReadByEmployeeName], [RepliedByEmployeeName],
+                                 [SpamMarkedByEmployeeName]
+                          FROM   dbo.v_ReviewFullInfo")
+                      .Where(x => ids.Contains(x.ReviewId))
+                      .ToList()
+                      .ToDictionary(x => x.ReviewId);
+
+            // ⚠️ 如果上面這種「SqlQuery 之後再疊 LINQ」的寫法在執行期出問題
+            //    （EF 要把它當子查詢包起來，極少數情況會翻譯失敗），
+            //    換成下面這版，用 SQL Server 內建的 STRING_SPLIT 直接篩：
+            //
+            //    string joined = string.Join(',', ids);
+            //    return _db.Database
+            //              .SqlQuery<ReviewRefRow>($@"
+            //                  SELECT v.[ReviewId], v.[OrderId], v.[OrderNo], v.[VenueName],
+            //                         v.[RentStartTime], v.[UserName],
+            //                         v.[ReadByEmployeeName], v.[RepliedByEmployeeName],
+            //                         v.[SpamMarkedByEmployeeName]
+            //                  FROM   dbo.v_ReviewFullInfo v
+            //                  JOIN   STRING_SPLIT({joined}, ',') s ON CAST(s.[value] AS int) = v.[ReviewId]")
+            //              .ToList()
+            //              .ToDictionary(x => x.ReviewId);
+            //
+            //    （STRING_SPLIT 需要 SQL Server 2016 以上，且資料庫相容性層級 130 以上。）
+        }
+
+        private static ReviewQueueItemVM BuildItem(ReviewMain r, Dictionary<int, ReviewRefRow> refs, DateTime now)
+        {
+            // 周邊資料全在這一列裡。理論上一定找得到（它就是從 ReviewMain 長出來的），
+            // 但用 GetValueOrDefault 比較安全——真的漏掉時是欄位空白，不是整頁 500。
+            ReviewRefRow? x = refs.GetValueOrDefault(r.ReviewId);
+
+            // 「追不到訂單」的判斷沒有變：View 已經幫忙把
+            // 預約評論的 OrderId 和現場評論的 QRToken→票券→OrderId 合併成一欄，
+            // 兩邊都追不到就是 null，分組時會單獨列出來。
 
             string displayName = r.IsAnonymous
                 ? (r.AnonymousNickname ?? "匿名使用者")
-                : (r.UserId is int uid ? lk.UserNames.GetValueOrDefault(uid) : null) ?? "已停用的帳號";
+                : x?.UserName ?? "已停用的帳號";
 
             return new ReviewQueueItemVM
             {
@@ -400,27 +453,24 @@ namespace VenueGo.Controllers
                 MentionsStaff = r.MentionsStaff,
 
                 IsBookingReview = r.ReviewPerBookingId != null,
-                VenueName       = visit != null ? lk.VenueNames.GetValueOrDefault(visit.VenueId) : null,
-                RentStartTime   = visit?.RentStartTime,
-                OrderId         = orderId,
-                OrderNo         = orderId is int oid ? lk.OrderNos.GetValueOrDefault(oid) : null,
+                VenueName       = x?.VenueName,
+                RentStartTime   = x?.RentStartTime,
+                OrderId         = x?.OrderId,
+                OrderNo         = x?.OrderNo,
 
                 ReadAt             = r.ReadAt,
-                ReadByEmployeeName = r.ReadByEmployeeId is int rid
-                                     ? lk.EmployeeNames.GetValueOrDefault(rid) : null,
+                ReadByEmployeeName = x?.ReadByEmployeeName,
                 IsPinned           = r.IsPinned,
 
                                 RepliedAt             = r.RepliedAt,
                 ReplyContent          = r.ReplyContent,
-                RepliedByEmployeeName = r.RepliedByEmployeeId is int pid
-                                        ? lk.EmployeeNames.GetValueOrDefault(pid) : null,
+                RepliedByEmployeeName = x?.RepliedByEmployeeName,
                 ReplyViewedAt         = r.ReplyViewedAt,
                 ReplySatisfaction     = r.ReplySatisfaction,
 
                 SpamMarkedAt             = r.SpamMarkedAt,
                 SpamReasonText           = r.SpamMarkedAt != null ? ReviewPolicy.SpamReasonText(r.SpamReason) : null,
-                SpamMarkedByEmployeeName = r.SpamMarkedByEmployeeId is int sid
-                                           ? lk.EmployeeNames.GetValueOrDefault(sid) : null,
+                SpamMarkedByEmployeeName = x?.SpamMarkedByEmployeeName,
 
                 OverdueLevel = GetOverdueLevel(r, now)
             };
@@ -496,9 +546,9 @@ namespace VenueGo.Controllers
 
             // ⚠️ 期中沒有分頁。資料量變大之後要補 Skip / Take。
             var reviews = ApplyTab(listBase, t).ToList();
-            var lookups = LoadLookups(reviews);
+            var refs = LoadRefs(reviews);   // 原本：var lookups = LoadLookups(reviews);
 
-            var items = reviews.Select(r => BuildItem(r, lookups, now)).ToList();
+            var items = reviews.Select(r => BuildItem(r, refs, now)).ToList();
 
             return new ReviewQueueVM
             {

@@ -37,10 +37,7 @@
     <Folder Include="Models\TimeSlots\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="ViewModels\MemberViewModels\" />
-    <Folder Include="Models\VenueModels\" />
-    <Folder Include="ViewModels\CheckinViewModels\" />
     <Folder Include="ViewModels\VenueViewModels\" />
-    <Folder Include="Views\MyReviewPageVM\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />
     <Folder Include="wwwroot\images\venues\" />

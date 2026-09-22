@@ -15,11 +15,11 @@
     {
         new { Text = "儀表板",   Icon = "bi-house-door",       Controller = "Dashboard",   Action = "Index", Roles = new string[] { } },
         new { Text = "場地管理", Icon = "bi-buildings",        Controller = "Venue",       Action = "VenueIndex", Roles = new string[] {RoleNames.Admin,RoleNames.Manager,RoleNames.Staff} },
-
-        new { Text = "預約管理", Icon = "bi-calendar-check",   Controller = "Reservation", Action = "Index", Roles = new string[] { } },
-        new { Text = "訂單管理", Icon = "bi-receipt",          Controller = "Order",       Action = "Index", Roles = new string[] { } },
+        new { Text = "預約管理", Icon = "bi-calendar-check",   Controller = "Reservation", Action = "Index", Roles = new string[] {RoleNames.Admin, RoleNames.Manager, RoleNames.Staff} },
+        new { Text = "訂單管理", Icon = "bi-receipt",          Controller = "Order",       Action = "Index", Roles = new string[] {RoleNames.Admin, RoleNames.Manager, RoleNames.Staff} },
         new { Text = "會員管理", Icon = "bi-people",           Controller = "Member",      Action = "Index", Roles = new string[] { } },
         new { Text = "付款管理", Icon = "bi-credit-card",      Controller = "Payment",     Action = "Index", Roles = new string[] { } },
+        new { Text = "票券管理", Icon = "bi-ticket-perforated", Controller = "Ticket",     Action = "Index", Roles = new string[] { } },
         new { Text = "統計報表", Icon = "bi-bar-chart",        Controller = "Report",      Action = "Index", Roles = new string[] { } },
         new { Text = "評論管理", Icon = "bi-chat-left-text",   Controller = "CReview",     Action = "Index", Roles = new string[] { } },
         // 🔒 限制：只有 Admin 角色可以看到「系統設定」

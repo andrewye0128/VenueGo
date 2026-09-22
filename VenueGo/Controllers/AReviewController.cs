@@ -12,10 +12,11 @@ using VenueGo.ViewModels.ReviewVM;
 namespace VenueGo.Controllers
 {
     [Authorize]
-    public class AReviewController(dbVenueContext db, ICurrentUser currentUser) : Controller
+    public class AReviewController(dbVenueContext db, ICurrentUser currentUser, ITimeService timeService) : Controller
     {
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUser _currentUser = currentUser;
+        private readonly ITimeService _timeService = timeService;
 
         // ════════════════════════════════════════════════════════
         //  第一區：規則判定
@@ -527,8 +528,8 @@ namespace VenueGo.Controllers
             var keywords = SplitKeywords(keyword);
 
             // 今天 00:00。整個請求共用同一個基準，清單和三個數字才會一致。
-            DateTime todayStart = DateTime.Today;
-            DateTime now = DateTime.Now;
+            DateTime todayStart = _timeService.Today;
+            DateTime now = _timeService.Now;
 
             var bySource = ApplySource(_db.ReviewMains, s);
 
@@ -579,23 +580,23 @@ namespace VenueGo.Controllers
         //  只改實體的值，SaveChanges 由 Action 呼叫。
         // ════════════════════════════════════════════════════════
 
-        private static void ApplyRead(ReviewMain r, int employeeId)
+        private static void ApplyRead(ReviewMain r, int employeeId, DateTime now)
         {
-            r.ReadAt = DateTime.Now;
+            r.ReadAt = now;
             r.ReadByEmployeeId = employeeId;
         }
 
-        private static void ApplyReply(ReviewMain r, string content, int employeeId)
+        private static void ApplyReply(ReviewMain r, string content, int employeeId, DateTime now)
         {
             r.ReplyContent = content;
-            r.RepliedAt = DateTime.Now;
+            r.RepliedAt = now;
             r.RepliedByEmployeeId = employeeId;
             r.IsPinned = false;     // 回覆後就離開待回覆清單，置頂沒有意義了
         }
 
-        private static void ApplySpam(ReviewMain r, byte reason, int employeeId)
+        private static void ApplySpam(ReviewMain r, byte reason, int employeeId, DateTime now)
         {
-            r.SpamMarkedAt = DateTime.Now;
+            r.SpamMarkedAt = now;
             r.SpamMarkedByEmployeeId = employeeId;
             r.SpamReason = reason;
             r.IsPublic = false;     // 規則：垃圾強制不公開
@@ -641,7 +642,7 @@ namespace VenueGo.Controllers
             var reject = RejectIfCannot(review, CanMarkRead);
             if (reject != null) return reject;
 
-            ApplyRead(review!, _currentUser.EmployeeId!.Value);
+            ApplyRead(review!, _currentUser.EmployeeId!.Value, _timeService.Now);
             _db.SaveChanges();
             return Ok(ApiResult<bool>.Ok(true));
         }
@@ -684,7 +685,7 @@ namespace VenueGo.Controllers
             var reject = RejectIfCannot(review, CanHandle);
             if (reject != null) return reject;
 
-            ApplyReply(review!, content, _currentUser.EmployeeId!.Value);
+            ApplyReply(review!, content, _currentUser.EmployeeId!.Value, _timeService.Now);
             _db.SaveChanges();
             return Ok(ApiResultVM.Ok("回覆已送出"));
         }
@@ -702,7 +703,7 @@ namespace VenueGo.Controllers
             var reject = RejectIfCannot(review, CanHandle);
             if (reject != null) return reject;
 
-            ApplySpam(review!, reason.Value, _currentUser.EmployeeId!.Value);
+            ApplySpam(review!, reason.Value, _currentUser.EmployeeId!.Value, _timeService.Now);
             _db.SaveChanges();
             return Ok(ApiResultVM.Ok("已標記為垃圾"));
         }

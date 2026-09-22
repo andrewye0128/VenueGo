@@ -1,8 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Helpers;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
-using VenueGo.Helpers;
+using VenueGo.Services;
 
 namespace VenueGo.Models.ReviewModels
 {
@@ -12,10 +13,11 @@ namespace VenueGo.Models.ReviewModels
     // 文件註解寫在「介面」上，不寫在這裡：呼叫端拿到的是介面，
     // IntelliSense 顯示的也是介面上的註解。<inheritdoc/> 讓這邊直接沿用，
     // 不會出現兩份說明各說各話的情況。
-    public class ReviewTicketFactory(dbVenueContext db)
+    public class ReviewTicketFactory(dbVenueContext db, ITimeService timeService)
         : IVisitReviewTicketFactory, IBookingReviewTicketFactory
     {
         private readonly dbVenueContext _db = db;
+        private readonly ITimeService _timeService = timeService;
 
         /// <inheritdoc/>
         public async Task<bool> CreateReviewPerVisitAsync(string? token)
@@ -46,8 +48,8 @@ namespace VenueGo.Models.ReviewModels
                 RentStartTime = reservation.BookingDate.ToDateTime(reservation.StartTime),
                 RentEndTime = reservation.BookingDate.ToDateTime(reservation.EndTime),
                 ActualEndTime = null,
-                CreatedAt = DateTime.Now,
-                ExpiredAt = DateTime.Now.AddDays(CDictionary.DAY_評論資格期限天數)
+                CreatedAt = _timeService.Now,
+                ExpiredAt = _timeService.Now.AddDays(CDictionary.DAY_評論資格期限天數)
             };
 
             // Add 不是 I/O，不需要 async；AddAsync 只有在用特殊主鍵產生策略時才需要。
@@ -110,8 +112,8 @@ namespace VenueGo.Models.ReviewModels
                 UserId = order.UserId,
                 OrderId = order.OrderId,
                 PaymentMethod = payment.PaymentMethod,
-                CreatedAt = DateTime.Now,
-                ExpiredAt = DateTime.Now.AddDays(CDictionary.DAY_評論資格期限天數)
+                CreatedAt = _timeService.Now,
+                ExpiredAt = _timeService.Now.AddDays(CDictionary.DAY_評論資格期限天數)
             };
 
             _db.ReviewPerBookings.Add(newBooking);

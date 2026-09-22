@@ -28,7 +28,7 @@
         /// </param>
         public static string Of(DateTime time, DateTime? now = null)
         {
-            DateTime baseline = now ?? DateTime.Now;
+            DateTime baseline = now ?? DateTime.Now; // 暫不套用TimeService
             TimeSpan span = baseline - time;
 
             // 未來時間：機器時鐘沒對準、或資料有問題。

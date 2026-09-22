@@ -495,7 +495,8 @@ wwwroot/uploads/*
 
 # Claude Code personal instructions/settings (not shared)
 CLAUDE.local.md
-.claude/settings.local.json
+.claude/
+VenueGo-HungYu.md
 
 # 場地上傳圖片
 /VenueGo/wwwroot/images/venues/

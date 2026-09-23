@@ -25,6 +25,16 @@
 
       /* ── 共用工具 ─────────────────────────────────────── */
 
+    /* AI 草稿的重複產生上限。
+       這是「防手滑」不是「防惡意」——會按到這顆按鈕的人本來就得先有員工帳號，
+       真正的成本控制在後端。這裡只是避免有人連點十次把額度燒光。
+
+       ⚠️ Map 存在模組層級，清單被整塊換掉（切分頁、重新篩選）時不會清空，
+          這是刻意的：如果切個分頁再回來就能重刷，這個限制等於不存在。
+          重新整理整頁才會歸零，那不值得為它寫進資料庫。 */
+    const AI_DRAFT_LIMIT = 3;
+    const aiDraftCount = new Map();
+
     function pageToken() {
         const input = document.querySelector('input[name="__RequestVerificationToken"]');
         return input ? input.value : '';
@@ -346,6 +356,74 @@
             return;
         }
 
+        // 4b. AI 回覆草稿：後端產生 → 填進輸入框 → 員工改完才送出
+        //     ⚠️ 這支不會送出回覆，送出走的還是原本那條路。
+        const aiBtn = e.target.closest('.js-ai-draft');
+        if (aiBtn) {
+            const form = aiBtn.closest('form');
+            const textarea = form.querySelector('.js-reply-text');
+            const errorBox = form.querySelector('.js-error');
+            const note = form.querySelector('.js-ai-note');
+            const id = aiBtn.dataset.reviewId;
+
+            const used = aiDraftCount.get(id) || 0;
+            if (used >= AI_DRAFT_LIMIT) {
+                errorBox.textContent =
+                    '這則已經產生過 ' + used + ' 次草稿了。再生一次多半還是差不多，自己寫會比較快。';
+                return;
+            }
+
+            /* 已經打了字就先問一聲。
+               ⚠️ 這裡跟罐頭回覆的行為刻意不同：罐頭回覆是「接在後面」，
+                  因為它是一個句子；AI 草稿是一整則完整回覆，只能「取代」。
+                  接在後面會變成兩則回覆黏在一起。 */
+            if (textarea.value.trim() &&
+                !window.confirm('要用 AI 草稿取代目前輸入的內容嗎？')) {
+                return;
+            }
+
+            // ⚠️ 防連點：每一次點擊都在花錢，而且 LLM 慢起來可以好幾秒。
+            //    按鈕沒有鎖住的話，員工會以為沒反應而連按。
+            const label = aiBtn.innerHTML;
+            aiBtn.disabled = true;
+            aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 產生中⋯';
+            errorBox.textContent = '';
+
+            // post() 已經自動帶防偽 token，也會做 assertJson（擋 302 假成功）
+            post(aiBtn.dataset.url, { id: id })
+                .then(function (res) {
+                    // 後端回的是 ApiResult<string>：success / message / data
+                    if (!res.data.success) {
+                        throw new Error(res.data.message || 'AI 草稿產生失敗');
+                    }
+
+                    textarea.value = res.data.data;
+
+                    // 程式設定 value 不會觸發 input 事件，
+                    // 補發一次讓下面的字數計數器更新（跟罐頭回覆同一個道理）
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+                    textarea.focus();
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+                    // 標記「這段是機器寫的」。這行提示是責任界線，不是裝飾。
+                    if (note) note.classList.remove('d-none');
+
+                    aiDraftCount.set(id, used + 1);
+                })
+                .catch(function (err) {
+                    /* ⚠️ 失敗就是失敗，輸入框一個字都不要動。
+                       員工可能已經打了一半，被一個失敗的請求清空是最糟的結果。
+                       錯誤寫進表單自己的 .js-error，跟其他操作一致，不要用 alert。 */
+                    errorBox.textContent = errorMessage(err);
+                })
+                .finally(function () {
+                    aiBtn.disabled = false;
+                    aiBtn.innerHTML = label;
+                });
+            return;
+        }
+
           // 5. 打開標記垃圾的 modal
         const spamBtn = e.target.closest('.js-spam-open');
         if (spamBtn) {
@@ -496,3 +574,19 @@
       highlight();
 
 })();
+
+/* ───────────────────────────────────────────────────────────────────────
+   後端要回的格式（跟專案既有的 ApiResult 一致，不要自己另外發明）
+
+       成功： return Ok(ApiResult<string>.Ok(draft));
+              → { success: true, message: null, errorCode: null, data: "草稿內容" }
+
+       失敗： return StatusCode(502, ApiResultVM.Fail("AI 服務暫時無法使用，請稍後再試或自行撰寫"));
+              → axios 遇到 5xx 會進 catch，errorMessage() 會取出 message
+
+       未啟用：return StatusCode(503, ApiResultVM.Fail("AI 草稿功能未啟用"));
+       已回覆：return StatusCode(409, ApiResultVM.Fail("這則評論已經回覆過了"));
+
+   ⚠️ 不要把例外的 ex.Message 直接回給前端——裡面可能有金鑰或內部路徑。
+      詳細錯誤記進 log，回給前端的是給人看的那一句。
+   ─────────────────────────────────────────────────────────────────────── */

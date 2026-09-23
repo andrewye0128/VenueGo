@@ -1,4 +1,4 @@
-@model VenueGo.ViewModels.ReviewVM.ReviewQueueVM
+﻿@model VenueGo.ViewModels.ReviewVM.ReviewQueueVM
 @using VenueGo.Helpers
 @using VenueGo.ViewModels.ReviewVM
 
@@ -294,7 +294,24 @@
                                     <form class="js-reply-form" method="post"
                                           asp-action="Reply" asp-route-id="@item.ReviewId">
 
-                                          <div class="d-flex flex-wrap gap-1 mb-2">
+                                          <div class="d-flex flex-wrap gap-1 mb-2 align-items-center">
+                                                @*  AI 草稿跟罐頭回覆放同一排，因為它們做的是同一件事——
+                                                    把文字填進下面的輸入框，員工改完才送出。
+                                                    用 primary 外框跟罐頭回覆的 secondary 區分，
+                                                    讓員工一眼看出「這顆不一樣：會花幾秒，會呼叫外部服務」。
+                                                    Model.AiDraftEnabled 為 false（沒設定金鑰）時整顆不出現，
+                                                    不要給一顆按了必定失敗的按鈕。 *@
+                                                @if (Model.AiDraftEnabled)
+                                                {
+                                                      <button type="button"
+                                                              class="btn btn-sm btn-outline-primary rounded-pill js-ai-draft"
+                                                              data-url="@Url.Action("DraftReply", new { id = item.ReviewId })"
+                                                              data-review-id="@item.ReviewId"
+                                                              title="依這則評論的內容與星等產生一份回覆草稿，產生後請務必自行確認">
+                                                            <i class="bi bi-stars"></i> AI 草稿
+                                                      </button>
+                                                      <span class="vr mx-1"></span>
+                                                }
                                                 @foreach (var canned in Model.CannedReplies)
                                                 {
                                                       <button type="button"
@@ -308,8 +325,17 @@
                                           <textarea name="content" class="form-control js-reply-text" rows="3"
                                                     maxlength="@ReviewPolicy.ReplyMaxLength"
                                                     placeholder="輸入回覆內容"></textarea>
-                                          <div class="form-text text-end">
-                                                <span class="js-count">0</span> / @ReviewPolicy.ReplyMaxLength
+                                          @*  ⚠️ 這行提示是責任界線，不只是體貼。
+                                              它在「AI 產生草稿之後」才出現（JS 拿掉 d-none），
+                                              標記的是「這段文字是機器寫的」，不是泛泛地說本站有 AI。
+                                              aria-live 讓讀螢幕的人也會被告知。 *@
+                                          <div class="form-text d-flex justify-content-between align-items-center">
+                                                <span class="js-ai-note text-muted d-none" aria-live="polite">
+                                                      <i class="bi bi-info-circle"></i> 這段草稿由 AI 產生，送出前請確認內容
+                                                </span>
+                                                <span class="ms-auto">
+                                                      <span class="js-count">0</span> / @ReviewPolicy.ReplyMaxLength
+                                                </span>
                                           </div>
 
                                           <div class="js-error text-danger small mb-2"></div>

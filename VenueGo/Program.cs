@@ -88,7 +88,7 @@ builder.Services.Configure<ReservationRulesOptions>(
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
 
 // 評論系統使用
-builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+//builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
 
 builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
 builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());

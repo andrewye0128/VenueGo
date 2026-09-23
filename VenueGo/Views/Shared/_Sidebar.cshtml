@@ -22,6 +22,9 @@
         new { Text = "票券管理", Icon = "bi-ticket-perforated", Controller = "Ticket",     Action = "Index", Roles = new string[] { } },
         new { Text = "統計報表", Icon = "bi-bar-chart",        Controller = "Report",      Action = "Index", Roles = new string[] { } },
         new { Text = "評論管理", Icon = "bi-chat-left-text",   Controller = "CReview",     Action = "Index", Roles = new string[] { } },
+        new { Text = "統計報表", Icon = "bi-bar-chart",        Controller = "Analytics",   Action = "Index", Roles = RoleNames.ManagerOrAdmin.Split(",") },
+        new { Text = "評論管理", Icon = "bi-chat-left-text",   Controller = "AReview",     Action = "Index", Roles = RoleNames.BackOffice.Split(",") },
+        new { Text = "評論專區", Icon = "bi-chat-dots-fill",   Controller = "CReview",     Action = "Index", Roles = new string[] { } },
         // 🔒 限制：只有 Admin 角色可以看到「系統設定」
         new { Text = "系統設定", Icon = "bi-gear",             Controller = "Setting",     Action = "Index", Roles = new string[] {"Admin"} },
     };

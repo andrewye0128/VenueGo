@@ -160,6 +160,7 @@ namespace VenueGo.Controllers
                 new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
                 new Claim(ClaimTypes.Name, user.Name),
                 new Claim(ClaimTypes.Email, user.Email),
+                new Claim(ClaimsPrincipalExtensions.EmployeeIdClaimType, employee.EmployeeId.ToString()), // 評論用
                 new Claim("EmployeeNo", employee.EmployeeNo ?? "")
             };
 

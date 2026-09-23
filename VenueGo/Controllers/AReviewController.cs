@@ -4,18 +4,20 @@ using Microsoft.EntityFrameworkCore;   // 新增：Database.SqlQuery<T> 在這�
 using System.Linq.Expressions;
 using VenueGo.Data;
 using VenueGo.Helpers;
+using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Services;
+using VenueGo.Services.Auth;
 using VenueGo.ViewModels;
 using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
-    [Authorize]
-    public class AReviewController(dbVenueContext db, ICurrentUser currentUser, ITimeService timeService) : Controller
+    [Authorize(Roles = RoleNames.BackOffice)]
+    public class AReviewController(dbVenueContext db, ICurrentUserService currentUserService, ITimeService timeService) : Controller
     {
         private readonly dbVenueContext _db = db;
-        private readonly ICurrentUser _currentUser = currentUser;
+        private readonly ICurrentUserService _currentUser = currentUserService;
         private readonly ITimeService _timeService = timeService;
 
         // ════════════════════════════════════════════════════════
@@ -706,6 +708,19 @@ namespace VenueGo.Controllers
             ApplySpam(review!, reason.Value, _currentUser.EmployeeId!.Value, _timeService.Now);
             _db.SaveChanges();
             return Ok(ApiResultVM.Ok("已標記為垃圾"));
+        }
+
+        [HttpGet]
+        public IActionResult CheckMyClaims()
+        {
+            // 檢查有沒有任何一筆 Claim 的型別是「角色」
+            var roles = User.Claims
+                            .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+                            .Select(c => c.Value)
+                            .ToList();
+
+            // 可以在這裡打斷點（Breakpoint），看 roles 陣列裡面有沒有字串（例如 "Member", "Admin"）
+            return Json(roles);
         }
 
     }

@@ -1,4 +1,6 @@
-﻿namespace VenueGo.Helpers
+﻿using VenueGo.Services;
+
+namespace VenueGo.Helpers
 {
     /// <summary>
     /// 把時間顯示成「3 小時前」這種相對說法。
@@ -21,6 +23,9 @@
 
         public const string FullFormat = "yyyy/M/d HH:mm";
 
+        // 🌟 新增：由外部 Program.cs 負責注入的靜態單例服務
+        public static ITimeService? TimeService { get; set; }
+
         /// <param name="time">要顯示的時間。</param>
         /// <param name="now">
         /// 比較基準。預設是 DateTime.Now。
@@ -28,8 +33,22 @@
         /// </param>
         public static string Of(DateTime time, DateTime? now = null)
         {
-            DateTime baseline = now ?? DateTime.Now; // 暫不套用TimeService
+            // 💡 暫時的測試：如果 TimeService 為 null，強制噴出錯誤訊息給你看！
+            if (TimeService == null)
+            {
+                return "【偵錯】TimeService 注入失敗，目前是 null！";
+            }
+
+            DateTime baseline = now ?? TimeService.Now; // 直接強制用 TimeService，不用 ?? DateTime.Now 墊底
             TimeSpan span = baseline - time;
+
+            // 💡 暫時的測試：把 baseline 和傳入的時間印在畫面上
+            // return $"基準:{baseline:mm:ss} | 資料:{time:mm:ss}"; 
+
+            if (span < TimeSpan.Zero) return "【偵錯】這筆資料在未來！" + time.ToString(FullFormat);
+
+            //DateTime baseline = now ?? TimeService?.Now ?? DateTime.Now; // 套用TimeService
+            //TimeSpan span = baseline - time;
 
             // 未來時間：機器時鐘沒對準、或資料有問題。
             // 這時候講「-3 分鐘前」只會讓人更困惑，直接給完整時間。

@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using VenueGo.Helpers;
 using static Microsoft.Extensions.Logging.EventSource.LoggingEventSource;
 
@@ -160,6 +160,19 @@ namespace VenueGo.ViewModels.ReviewVM
 
         /// <summary>已經打亂順序的罐頭回覆，整頁共用一組。</summary>
         public List<CannedReply> CannedReplies { get; init; } = new();
+
+        /// <summary>
+        /// AI 回覆草稿功能是否可用（＝後端有沒有設定金鑰）。
+        ///
+        /// 預設 false，所以在 BuildQueueVm 設定它之前，按鈕不會出現。
+        /// 這是刻意的：組員 clone 下來沒有金鑰也要能正常跑，
+        /// 不能因為少一個設定就看到一顆按了必定失敗的按鈕。
+        ///
+        /// 接上 IReplyDraftService 之後，在 BuildQueueVm 的 return 裡加一行：
+        ///     AiDraftEnabled = _replyDraft.IsEnabled,
+        /// 想先看 UI 長什麼樣的話，暫時寫死 true 也可以。
+        /// </summary>
+        public bool AiDraftEnabled { get; init; }
 
         public bool IsEmpty => Items.Count == 0;
 

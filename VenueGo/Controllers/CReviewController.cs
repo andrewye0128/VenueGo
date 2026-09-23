@@ -3,18 +3,18 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using VenueGo.Data;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
+using VenueGo.Services.Auth;
 using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
-    public class CReviewController(dbVenueContext db, ICurrentUser currentUser, IVisitReviewTicketFactory factory, ITimeService timeService) : Controller
+    public class CReviewController(dbVenueContext db, ICurrentUserService currentUserService, IVisitReviewTicketFactory factory, ITimeService timeService) : Controller
     {
         private readonly dbVenueContext _db = db;
-        private readonly ICurrentUser _currentUser = currentUser;
+        private readonly ICurrentUserService _currentUser = currentUserService;
         // 只注入「現場評論」那個介面：這支 Controller 的補償邏輯只會用到
         // CreateReviewPerVisitAsync，不該看得到預約評論的方法。
         private readonly IVisitReviewTicketFactory _reviewTicketFactory = factory;
@@ -108,7 +108,7 @@ namespace VenueGo.Controllers
                 return new(EligState.NotFound, null, null);          // 查無憑證 ❌
 
             // TODO: 登入方提供驗證方法後換掉這一行
-            if (_currentUser.MemberId != ticket.UserId)
+            if (_currentUser.UserId != ticket.UserId)
                 return new(EligState.NotFound, null, null);          // 不是你的 ❌
 
             var existing = await _db.ReviewMains
@@ -198,8 +198,8 @@ namespace VenueGo.Controllers
                 ReviewContent = null,
                 MentionsVenue = false,
                 MentionsStaff = false,
-                CanChooseAnonymous = _currentUser.MemberId != null,
-                IsAnonymous = _currentUser.MemberId == null,  // 未登入 → 鎖定匿名
+                CanChooseAnonymous = _currentUser.UserId != null,
+                IsAnonymous = _currentUser.UserId == null,  // 未登入 → 鎖定匿名
                 IsPublic = true
             };
         }
@@ -588,7 +588,7 @@ namespace VenueGo.Controllers
                 return View(redo);
             }
 
-            int? userId = _currentUser.MemberId;
+            int? userId = _currentUser.UserId;
             if (userId == null)
                 vm.IsAnonymous = true;   // 前端 disabled 擋不住直接送請求的人
 
@@ -643,7 +643,7 @@ namespace VenueGo.Controllers
             vm.IsAnonymous = false;
 
             var newReview = BuildNewReview(vm, null, r.Ticket.ReviewPerBookingId,
-                                           _currentUser.MemberId);
+                                           _currentUser.UserId);
 
             _db.ReviewMains.Add(newReview);
             await _db.SaveChangesAsync();
@@ -804,17 +804,17 @@ namespace VenueGo.Controllers
             throw new NotImplementedException();
         }
 
-        //[HttpGet]
-        //public IActionResult CheckMyClaims()
-        //{
-        //    // 檢查有沒有任何一筆 Claim 的型別是「角色」
-        //    var roles = User.Claims
-        //                    .Where(c => c.Type == ClaimTypes.Role)
-        //                    .Select(c => c.Value)
-        //                    .ToList();
+        [HttpGet]
+        public IActionResult CheckMyClaims()
+        {
+            // 檢查有沒有任何一筆 Claim 的型別是「角色」
+            var roles = User.Claims
+                            .Where(c => c.Type == System.Security.Claims.ClaimTypes.Role)
+                            .Select(c => c.Value)
+                            .ToList();
 
-        //    // 可以在這裡打斷點（Breakpoint），看 roles 陣列裡面有沒有字串（例如 "Member", "Admin"）
-        //    return Json(roles);
-        //}
+            // 可以在這裡打斷點（Breakpoint），看 roles 陣列裡面有沒有字串（例如 "Member", "Admin"）
+            return Json(roles);
+        }
     }
 }

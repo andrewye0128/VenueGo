@@ -68,7 +68,7 @@ builder.Services.AddScoped<ISlotSelectionValidator, SlotSelectionValidator>();
 builder.Services.AddScoped<IReservationPricingService, ReservationPricingService>();
 
 // 註冊關於目前登入者的服務：介面 → 實作
-builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUserService>();
 
 // 註冊關於訂單編號產生器的服務：介面 → 實作
 builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();
@@ -88,7 +88,7 @@ builder.Services.Configure<ReservationRulesOptions>(
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
 
 // 評論系統使用
-builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
+//builder.Services.AddScoped<ICurrentUser, VenueGo.Services.CurrentUserService>();
 
 builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
 builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());

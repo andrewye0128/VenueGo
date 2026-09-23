@@ -6,24 +6,24 @@ namespace VenueGo.Helpers
     {
         public static int? GetUserId(this ClaimsPrincipal user) 
         {
-            var identifier = user.FindFirstValue(ClaimTypes.NameIdentifier);
+            var identifier = user?.FindFirstValue(ClaimTypes.NameIdentifier);
 
             return int.TryParse(identifier, out var userId) ? userId : null;
         }
 
         public static string? GetUserName(this ClaimsPrincipal user)
         {
-            return user.FindFirstValue(ClaimTypes.Name);
+            return user?.FindFirstValue(ClaimTypes.Name);
         }
 
         public static string? GetUserEmail(this ClaimsPrincipal user)
         {
-            return user.FindFirstValue(ClaimTypes.Email);
+            return user?.FindFirstValue(ClaimTypes.Email);
         }
 
         public static string? GetEmployeeNo(this ClaimsPrincipal user)
         {
-            return user.FindFirstValue("EmployeeNo");
+            return user?.FindFirstValue("EmployeeNo");
         }
 
         /// <summary>

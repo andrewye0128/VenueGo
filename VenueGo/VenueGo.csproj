@@ -19,6 +19,8 @@
 
   <ItemGroup>
     <Compile Remove="Controllers\CReview1Controller.cs" />
+    <Compile Remove="Services\Auth\CurrentUserService.cs" />
+    <Compile Remove="Services\Auth\ICurrentUserService.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,9 +1,11 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 using VenueGo.Data;
 using VenueGo.Helpers;
-using VenueGo.Models.ReviewModels;
+using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
+using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 using VenueGo.ViewModels.ReviewVM;
 
@@ -602,6 +604,7 @@ namespace VenueGo.Controllers
         // ── 預約評論撰寫 ────────────────────────────────────
 
         [HttpGet]
+        [EmployeeAuthorize(RoleNames.Member)]
         public async Task<IActionResult> CreateForBooking(int? id)
         {
             var r = await ResolveBookingTicketAsync(id);
@@ -612,6 +615,7 @@ namespace VenueGo.Controllers
         }
 
         [HttpPost, ValidateAntiForgeryToken]
+        [EmployeeAuthorize(RoleNames.Member)]
         public async Task<IActionResult> CreateForBooking(ReviewCreateForBookingVM vm, int? id)
         {
             var r = await ResolveBookingTicketAsync(id);
@@ -799,5 +803,18 @@ namespace VenueGo.Controllers
         {
             throw new NotImplementedException();
         }
+
+        //[HttpGet]
+        //public IActionResult CheckMyClaims()
+        //{
+        //    // 檢查有沒有任何一筆 Claim 的型別是「角色」
+        //    var roles = User.Claims
+        //                    .Where(c => c.Type == ClaimTypes.Role)
+        //                    .Select(c => c.Value)
+        //                    .ToList();
+
+        //    // 可以在這裡打斷點（Breakpoint），看 roles 陣列裡面有沒有字串（例如 "Member", "Admin"）
+        //    return Json(roles);
+        //}
     }
 }

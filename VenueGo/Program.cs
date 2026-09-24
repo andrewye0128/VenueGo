@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Helpers;
@@ -49,6 +48,13 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 
 // 註冊 Session
 builder.Services.AddSession();
+
+//builder.Services.AddSession(options =>
+//{
+//    options.IdleTimeout = TimeSpan.FromMinutes(30);
+//    options.Cookie.HttpOnly = true;
+//    options.Cookie.IsEssential = true;
+//});
 
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
@@ -105,7 +111,7 @@ builder.Services.AddHostedService<TimeSyncHostedService>();
 // 註冊關於票券報到的服務：介面 → 實作
 builder.Services.AddScoped<ICheckInService, CheckInService>();
 
-builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
+//builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
 
 var app = builder.Build();
 

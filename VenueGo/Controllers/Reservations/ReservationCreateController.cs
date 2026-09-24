@@ -1,16 +1,23 @@
-﻿using System.Threading;
-using System.Threading.Tasks;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VenueGo.ViewModels.ReservationViewModels;
+using Microsoft.Extensions.Options;
+using System.Threading;
+using System.Threading.Tasks;
+using VenueGo.Helpers;
+using VenueGo.Models.Constants;
+using VenueGo.Models.Enums;
+using VenueGo.Models.Options;
+using VenueGo.Models.ReservationModels;
+using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
 using VenueGo.Services.Reservations;
-using VenueGo.Services.Venues;
-using Microsoft.Extensions.Options;
-using VenueGo.Models.Options;
 using VenueGo.Services.TimeSlots;
+using VenueGo.Services.Venues;
+using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Controllers.Reservations
 {
+    //[Authorize(Roles = RoleNames.BackOffice)]  //2/ 登入權限，該頁面要求登入
     [Route("Reservation/Create")]
     public class ReservationCreateController : Controller
     {
@@ -22,20 +29,32 @@ namespace VenueGo.Controllers.Reservations
         private readonly IMemberQueryService _memberQueryService;
         private readonly IVenueQueryService _venueQueryService;
         private readonly ITimeSlotService _timeSlotService;
+        private readonly ISlotSelectionValidator _slotValidator;
+        private readonly IReservationPricingService _pricingService;
+        private readonly IReservationCreationService _creationService;
         private readonly IReservationDraftStore _draftStore;
+        private readonly ICurrentUserService _currentUser;
         private readonly ReservationRulesOptions _rules;
 
         public ReservationCreateController(
             IMemberQueryService memberQueryService,
             IVenueQueryService venueQueryService,
             ITimeSlotService timeSlotService,
+            ISlotSelectionValidator slotValidator,
+            IReservationPricingService pricingService,
+            IReservationCreationService creationService,
             IReservationDraftStore draftStore,
+            ICurrentUserService currentUser,
             IOptionsSnapshot<ReservationRulesOptions> rules)
         {
             _memberQueryService = memberQueryService;
             _venueQueryService = venueQueryService;
             _timeSlotService = timeSlotService;
+            _slotValidator = slotValidator;
+            _pricingService = pricingService;
+            _creationService = creationService;
             _draftStore = draftStore;
+            _currentUser = currentUser;
             _rules = rules.Value;
         }
 
@@ -261,8 +280,11 @@ namespace VenueGo.Controllers.Reservations
             if (draft.MaxAllowedStep < 3)
             {
                 // 缺會員就回步驟 1，缺場地就回步驟 2，不要一律丟回第一步
-                return RedirectToAction(
-                    draft.IsMemberSelected ? nameof(SelectVenue) : nameof(SelectMember));
+                //return RedirectToAction(
+                //    draft.IsMemberSelected ? nameof(SelectVenue) : nameof(SelectMember));
+
+                // 缺哪一步就回哪一步，讓管理員少重做幾次。
+                return RedirectToAction(ResolveIncompleteStep(draft));
             }
 
             return View(await BuildSelectDateViewModel(
@@ -282,8 +304,11 @@ namespace VenueGo.Controllers.Reservations
 
             if (draft.MaxAllowedStep < 3)
             {
-                return RedirectToAction(
-                    draft.IsMemberSelected ? nameof(SelectVenue) : nameof(SelectMember));
+                //return RedirectToAction(
+                //    draft.IsMemberSelected ? nameof(SelectVenue) : nameof(SelectMember));
+
+                // 缺哪一步就回哪一步，讓管理員少重做幾次。
+                return RedirectToAction(ResolveIncompleteStep(draft));
             }
 
             if (date is null)
@@ -340,7 +365,7 @@ namespace VenueGo.Controllers.Reservations
             _draftStore.Save(draft);
 
             // TODO 步驟 4：SelectSlots 實作後改為 RedirectToAction(nameof(SelectSlots))
-            return RedirectToAction(nameof(SelectDate));
+            return RedirectToAction(nameof(SelectSlots));
         }
 
         /// <summary>
@@ -406,6 +431,275 @@ namespace VenueGo.Controllers.Reservations
         }
 
 
+        /// <summary>
+        /// 步驟 4：顯示時段表。
+        /// </summary>
+        [HttpGet("SelectSlots")]
+        public async Task<IActionResult> SelectSlots(CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            if (draft.MaxAllowedStep < 4)
+            {
+                return RedirectToAction(ResolveIncompleteStep(draft));
+            }
+
+            return View(await BuildSelectSlotsViewModel(draft.SlotTimes, cancellationToken));
+        }
+
+        /// <summary>
+        /// 步驟 4：確認所選時段並前往步驟 5。
+        /// </summary>
+        /// <param name="slotTimes">
+        /// 所選時段的起始時間，來自畫面上一組同名的 checkbox。
+        /// 格式為 HH:mm，由 ASP.NET Core 自動繫結為 TimeOnly（需 .NET 7 以上）。
+        /// </param>
+        [HttpPost("SelectSlots")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SelectSlots(
+            List<TimeOnly>? slotTimes, CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            if (draft.MaxAllowedStep < 4)
+            {
+                return RedirectToAction(ResolveIncompleteStep(draft));
+            }
+
+            // 伺服器端完整驗證。畫面上的 JavaScript 只能防手誤，
+            // 任何人都能改掉限制直接送出任意時段，所以這裡要重新查資料庫驗一次。
+            var validation = await _slotValidator.ValidateAsync(
+                draft.VenueId!.Value,
+                draft.BookingDate!.Value,
+                slotTimes ?? new List<TimeOnly>(),
+                cancellationToken);
+
+            if (!validation.IsValid)
+            {
+                foreach (var error in validation.Errors)
+                {
+                    ModelState.AddModelError(string.Empty, error);
+                }
+
+                // 重繪時不沿用使用者送來的選取，避免把不合法的組合再顯示回去
+                return View(await BuildSelectSlotsViewModel(new List<TimeOnly>(), cancellationToken));
+            }
+
+            // 計價一律使用驗證回傳的時段（伺服器端查來的），
+            // 絕不接受前端傳入的金額。
+            var pricing = _pricingService.Calculate(validation.Slots);
+
+            if (!pricing.IsComplete)
+            {
+                ModelState.AddModelError(string.Empty,
+                    "所選時段尚未設定價格，請先於場地管理設定該運動類型的計價規則。");
+                return View(await BuildSelectSlotsViewModel(new List<TimeOnly>(), cancellationToken));
+            }
+
+            draft.SlotTimes = pricing.Details.Select(d => d.SlotTime).ToList();
+            draft.EstimatedAmount = pricing.TotalAmount;
+            _draftStore.Save(draft);
+
+            // TODO 步驟 5：Confirm 實作後改為 RedirectToAction(nameof(Confirm))
+            //return RedirectToAction(nameof(SelectSlots));
+            return RedirectToAction(nameof(Confirm));
+        }
+
+        /// <summary>
+        /// 組裝步驟 4 的 ViewModel。
+        /// </summary>
+        /// <param name="selectedSlotTimes">要顯示為已選的時段。</param>
+        private async Task<SelectSlotsViewModel> BuildSelectSlotsViewModel(
+            IReadOnlyList<TimeOnly> selectedSlotTimes, CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            var daySlots = await _timeSlotService.GetDaySlotsAsync(
+                draft.VenueId!.Value, draft.BookingDate!.Value, cancellationToken);
+
+            var selectedSet = selectedSlotTimes.ToHashSet();
+
+            // 只把仍然可預約的時段視為已選。
+            // 使用者停留在頁面期間，原本選的時段可能已被其他管理員訂走，
+            // 這時不該再顯示為已選，否則他會以為還訂得到。
+            var buttons = daySlots
+                .Select(slot => SlotButtonViewModel.FromStatus(
+                    slot, slot.IsSelectable && selectedSet.Contains(slot.SlotTime)))
+                .ToList();
+
+            var confirmedSlots = daySlots
+                .Where(slot => slot.IsSelectable && selectedSet.Contains(slot.SlotTime))
+                .ToList();
+
+            ViewData["CurrentStep"] = 4;
+
+            return new SelectSlotsViewModel
+            {
+                Slots = buttons,
+                MaxSlots = _rules.MaxSlotsPerReservation,
+                Pricing = _pricingService.Calculate(confirmedSlots),
+                MemberName = draft.MemberName,
+                MemberPhone = draft.MemberPhone,
+                VenueName = draft.VenueName,
+                BookingDate = draft.BookingDate
+            };
+        }
+
+
+        /// <summary>
+        /// 判斷暫存資料缺哪一步，回傳該回到的 Action 名稱。
+        /// <para>
+        /// 不要一律丟回步驟 1。缺日期就回步驟 3，讓管理員少重做幾次。
+        /// </para>
+        /// </summary>
+        private static string ResolveIncompleteStep(ReservationDraft draft)
+        {
+            if (!draft.IsMemberSelected) return nameof(SelectMember);
+            if (!draft.IsVenueSelected) return nameof(SelectVenue);
+            return nameof(SelectDate);
+        }
+
+
+        /// <summary>
+        /// 步驟 5：顯示確認頁。
+        /// </summary>
+        [HttpGet("Confirm")]
+        public async Task<IActionResult> Confirm(CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            if (draft.MaxAllowedStep < 5)
+            {
+                return RedirectToAction(ResolveIncompleteStep(draft));
+            }
+
+            return View(await BuildConfirmViewModel(draft, new ConfirmReservationInputModel
+            {
+                // 預設值：人數 1 人；載具若會員已登錄則自動帶入，
+                // 並順便把發票類型預設為手機條碼，省去櫃檯多一次操作。
+                PersonAmount = draft.PersonAmount,
+                CarrierNo = draft.MemberCarrierNo,
+                InvoiceType = string.IsNullOrWhiteSpace(draft.MemberCarrierNo)
+                    ? InvoiceType.Paper
+                    : InvoiceType.MobileBarcode
+            }, cancellationToken));
+        }
+
+        /// <summary>
+        /// 步驟 5：建立預約。
+        /// <para>
+        /// 成功後清除暫存並導向新建立的預約詳細頁。
+        /// 不留在本頁的原因是：若回傳 View，網址會停在 POST 的位置，
+        /// 使用者按 F5 時瀏覽器會再次送出表單，建立出第二筆一模一樣的預約。
+        /// </para>
+        /// </summary>
+        [HttpPost("Confirm")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Confirm(
+            ConfirmReservationInputModel input, CancellationToken cancellationToken)
+        {
+            var draft = _draftStore.Get();
+
+            if (draft.MaxAllowedStep < 5)
+            {
+                return RedirectToAction(ResolveIncompleteStep(draft));
+            }
+
+            // 不論等一下驗證成功或失敗，先把這次送出的值同步回暫存，
+            // 讓「驗證失敗、留在本頁」時，右側「預約資訊摘要」顯示的是這次送出的內容，
+            // 而不是舊的暫存資料。
+            draft.PersonAmount = input.PersonAmount;
+            draft.InvoiceType = input.InvoiceType;
+            draft.CarrierNo = input.CarrierNo;
+
+            var operatorUserId = _currentUser.UserId;
+            if (operatorUserId is null)
+            {
+                // 未登入（或 Cookie 已過期）。Challenge 會導向登入頁，
+                // 登入成功後自動跳回這裡。
+                return Challenge();
+            }
+
+            var result = await _creationService.CreateAsync(
+                draft, input, operatorUserId.Value, cancellationToken);
+
+            if (result.IsSuccess)
+            {
+                // 流程結束，清掉暫存。不清的話下次點「新增預約」
+                // 會帶著這一次的選擇進入新的流程。
+                _draftStore.Clear();
+
+                TempData[CDictionary.TK_MSG_操作成功] =
+                    $"預約建立成功，訂單編號 {result.OrderNo}。";
+
+                return RedirectToAction("Details", "Reservation",
+                    new { id = result.ReservationId });
+            }
+
+            // 時段被搶走無法在本頁修正，必須回步驟 4 重選。
+            // 用 RedirectToAction 而非 View，才會重新向 TimeSlotService
+            // 查一次當天狀態，被訂走的那一格才會正確顯示為「已預約」。
+            if (result.IsSlotConflict)
+            {
+                draft.SlotTimes.Clear();
+                draft.EstimatedAmount = 0;
+                _draftStore.Save(draft);
+
+                TempData[CDictionary.TK_MSG_時段衝突] = string.Join(" ", result.Errors);
+
+                return RedirectToAction(nameof(SelectSlots));
+            }
+
+            // 其餘驗證失敗（人數超標、載具格式、未勾條款）留在本頁改正
+            foreach (var error in result.Errors)
+            {
+                ModelState.AddModelError(string.Empty, error);
+            }
+
+            _draftStore.Save(draft);
+            return View(await BuildConfirmViewModel(draft, input, cancellationToken));
+        }
+
+        /// <summary>
+        /// 組裝步驟 5 的 ViewModel。
+        /// <para>
+        /// 金額一律由伺服器端重新計價，不使用暫存的 EstimatedAmount，
+        /// 也不接受前端傳入的任何金額。
+        /// </para>
+        /// </summary>
+        private async Task<ConfirmReservationViewModel> BuildConfirmViewModel(
+            ReservationDraft draft,
+            ConfirmReservationInputModel input,
+            CancellationToken cancellationToken)
+        {
+            var daySlots = await _timeSlotService.GetDaySlotsAsync(
+                draft.VenueId!.Value, draft.BookingDate!.Value, cancellationToken);
+
+            var selectedSet = draft.SlotTimes.ToHashSet();
+            var selectedSlots = daySlots
+                .Where(slot => selectedSet.Contains(slot.SlotTime))
+                .ToList();
+
+            ViewData["CurrentStep"] = 5;
+
+            return new ConfirmReservationViewModel
+            {
+                Input = input,
+
+                UserId = draft.UserId ?? 0,
+                MemberNo = draft.MemberNo,
+                MemberName = draft.MemberName,
+                MemberPhone = draft.MemberPhone,
+                MemberEmail = draft.MemberEmail,
+
+                VenueName = draft.VenueName,
+                VenueCapacity = draft.VenueCapacity,
+
+                BookingDate = draft.BookingDate,
+                Pricing = _pricingService.Calculate(selectedSlots),
+                TermsVersion = _rules.TermsVersion
+            };
+        }
 
 
         /// <summary>

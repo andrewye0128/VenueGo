@@ -1,21 +1,15 @@
-@model IEnumerable<VenueGo.Models.VenueModels.CVenueWrap>
+@model VenueGo.ViewModels.VenueViewModels.VenueIndexViewModel
+@using VenueGo.Helpers
+@using VenueGo.Models.Constants
+@using VenueGo.Data
+@inject dbVenueContext Db
 
 @{
     ViewData["Title"] = "場地管理";
+    //分組跟換頁都已經在 Controller/Factory 那邊處理完成,這裡不用再自己組資料
 
-    //存取傳入的運動類型與id對照表
-    Dictionary<int, string> sportTypeNames = null;
-    if(ViewBag.SportTypeNames != null)
-    {
-        sportTypeNames = (Dictionary<int,string>)ViewBag.SportTypeNames;
-    }
-    else
-    {
-        sportTypeNames = new Dictionary<int, string>();
-    }
-
-    //依照運動類型名稱分組
-    var groups = Model.GroupBy(v => sportTypeNames[v.SportTypeId]);
+    //是否有新增/編輯/刪除的權限,只有Admin跟Manager可以,Staff看得到列表但不能異動
+    bool canManage = await AuthHelper.HasRoleAsync(User, Db, RoleNames.Admin, RoleNames.Manager);
 }
 
 <!-- 功能頁籤 -->
@@ -38,30 +32,36 @@
             <i class="bi bi-cash-coin me-1"></i>價格規則管理
         </a>
     </li>
-    <li class="nav-item">
-        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "WeekBusinessHourIndex" ? "active" : "")"
-           asp-controller="Venue" asp-action="WeekBusinessHourIndex">
-            <i class="bi bi-clock me-1"></i>營業時間管理
-        </a>
-    </li>
+    @if (canManage)
+    {
+        <li class="nav-item">
+            <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "WeekBusinessHourIndex" ? "active" : "")"
+               asp-controller="Venue" asp-action="WeekBusinessHourIndex">
+                <i class="bi bi-clock me-1"></i>營業時間管理
+            </a>
+        </li>
+    }
 </ul>
 
 <!-- 標題 + 新增按鈕同一行，左右分靠 -->
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h5 class="mb-0 fw-bold">場地列表</h5>
-    <a asp-action="VenueCreate" class="btn btn-primary btn-sm">
-        <i class="bi bi-plus-lg me-1"></i>新增場地
-    </a>
+    @if (canManage)
+    {
+        <a asp-action="VenueCreate" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg me-1"></i>新增場地
+        </a>
+    }
 </div>
 
 <!-- 場地卡片列表 -->
-@foreach (var group in groups)
+@foreach (var group in Model.Groups)
 {
-    <h4 class="mt-4 mb-2">@group.Key</h4>
+    <h4 class="mt-4 mb-2">@group.SportTypeName</h4>
     <hr class="mt-0 mb-3" />
 
     <div class="d-flex flex-column gap-3 mb-4">
-        @foreach (var item in group)
+        @foreach (var item in group.Venues)
         {
             <div class="card flex-row shadow-sm">
                 <img src="@item.PhotoPath" alt="@item.VenueName"
@@ -79,14 +79,65 @@
                         <div class="d-flex gap-2">
                             <a asp-action="VenueUnavailableSlotManage" asp-route-venueId="@item.VenueId"
                                class="btn btn-outline-primary btn-sm">開放時間設定</a>
-                            <a asp-action="VenueEdit" asp-route-id="@item.VenueId"
-                               class="btn btn-outline-secondary btn-sm">編輯</a>
-                            <a asp-action="VenueDelete" asp-route-id="@item.VenueId"
-                               class="btn btn-outline-danger btn-sm" onclick="return confirm('確定要刪除該場地嗎?')">刪除</a>
+                            @if (canManage)
+                            {
+                                <a asp-action="VenueEdit" asp-route-id="@item.VenueId"
+                                   class="btn btn-outline-secondary btn-sm">編輯</a>
+                                <a asp-action="VenueDelete" asp-route-id="@item.VenueId"
+                                   class="btn btn-outline-danger btn-sm" onclick="return confirm('確定要刪除該場地嗎?')">刪除</a>
+                            }
                         </div>
                     </div>
                 </div>
             </div>
         }
     </div>
+}
+
+<!-- 換頁按鈕 >> 分頁單位是運動類型分組,不是場地本身,這個元件只有VenueIndex在用,直接寫在這裡不另外拆檔案 -->
+@if (Model.TotalPages > 1)
+{
+    <nav aria-label="分頁導覽" class="mt-4">
+        <ul class="pagination pagination-sm mb-0">
+
+            <li class="page-item @(Model.HasPreviousPage ? "" : "disabled")">
+                @if (Model.HasPreviousPage)
+                {
+                    <a class="page-link" asp-action="VenueIndex" asp-route-page="@(Model.CurrentPage - 1)">上一頁</a>
+                }
+                else
+                {
+                    <span class="page-link">上一頁</span>
+                }
+            </li>
+
+            @for (int pageNumber = 1; pageNumber <= Model.TotalPages; pageNumber++)
+            {
+                bool isCurrentPage = pageNumber == Model.CurrentPage;
+
+                <li class="page-item @(isCurrentPage ? "active" : "")">
+                    @if (isCurrentPage)
+                    {
+                        <span class="page-link">@pageNumber</span>
+                    }
+                    else
+                    {
+                        <a class="page-link" asp-action="VenueIndex" asp-route-page="@pageNumber">@pageNumber</a>
+                    }
+                </li>
+            }
+
+            <li class="page-item @(Model.HasNextPage ? "" : "disabled")">
+                @if (Model.HasNextPage)
+                {
+                    <a class="page-link" asp-action="VenueIndex" asp-route-page="@(Model.CurrentPage + 1)">下一頁</a>
+                }
+                else
+                {
+                    <span class="page-link">下一頁</span>
+                }
+            </li>
+
+        </ul>
+    </nav>
 }

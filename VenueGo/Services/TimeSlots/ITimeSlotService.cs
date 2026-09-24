@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
-using VenueGo.Models.TimeSlots;
+using VenueGo.Models.ReservationModels;
 
 namespace VenueGo.Services.TimeSlots
 {

@@ -1,0 +1,47 @@
+﻿@*
+    操作成功／失敗的提示訊息。全專案通用，沒有訊息時不輸出任何內容。
+
+    用法：
+        <partial name="_OperationMessages" />
+
+    訊息由 Controller 寫進 TempData，因此能跨越重導向顯示——
+    這是 POST-Redirect-GET 模式必要的配套：
+    異動成功後導向 GET 頁面，ModelState 會消失，只有 TempData 留得住。
+*@
+@using VenueGo.Helpers
+
+@if (TempData[CDictionary.TK_MSG_操作成功] is string successMessage)
+{
+    <div class="alert alert-success alert-dismissible d-flex gap-2" role="status">
+        <i class="bi bi-check-circle flex-shrink-0 mt-1"></i>
+        <div class="flex-grow-1">@successMessage</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="關閉"></button>
+    </div>
+}
+
+@if (TempData[CDictionary.TK_MSG_操作失敗] is string errorMessage)
+{
+    <div class="alert alert-danger alert-dismissible d-flex gap-2" role="alert">
+        <i class="bi bi-exclamation-triangle flex-shrink-0 mt-1"></i>
+        <div class="flex-grow-1">@errorMessage</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="關閉"></button>
+    </div>
+}
+
+@if (TempData[CDictionary.TK_MSG_找不到指定物件] is string notFoundMessage)
+{
+    <div class="alert alert-warning alert-dismissible d-flex gap-2" role="alert">
+        <i class="bi bi-question-circle flex-shrink-0 mt-1"></i>
+        <div class="flex-grow-1">@notFoundMessage</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="關閉"></button>
+    </div>
+}
+
+@if (TempData[CDictionary.TK_MSG_時段衝突] is string conflictMessage)
+{
+    <div class="alert alert-warning alert-dismissible d-flex gap-2" role="alert">
+        <i class="bi bi-calendar-x flex-shrink-0 mt-1"></i>
+        <div class="flex-grow-1">@conflictMessage</div>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="關閉"></button>
+    </div>
+}

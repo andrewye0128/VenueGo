@@ -126,19 +126,46 @@ namespace VenueGo.Services.Venues
         /// 投影成卡片 ViewModel。價格以子查詢取得，
         /// 因為 SportTypePriceRules 對每種運動只有一列（UQ_SportTypePriceRules_SportTypeId）。
         /// </summary>
+        /// 
+        //private VenueCardViewModel Project(VenueQueryRow row) => new()
+        //{
+        //    VenueId = row.Venue.VenueId,
+        //    VenueName = row.Venue.VenueName,
+        //    SportName = row.SportType.SportName,
+        //    Capacity = row.Venue.Capacity,
+        //    PhotoPath = row.Venue.PhotoPath,
+        //    IsActive = row.Venue.IsActive,
+        //    OffPeakPrice = _db.SportTypePriceRules
+        //        .Where(r => r.SportTypeId == row.Venue.SportTypeId && r.IsActive)
+        //        .Select(r => (int?)r.OffPeakPrice)
+        //        .FirstOrDefault(),
+        //    PeakPrice = _db.SportTypePriceRules
+        //        .Where(r => r.SportTypeId == row.Venue.SportTypeId && r.IsActive)
+        //        .Select(r => (int?)r.PeakPrice)
+        //        .FirstOrDefault(),
+        //    PeakStartTime = _db.SportTypePriceRules
+        //        .Where(r => r.SportTypeId == row.Venue.SportTypeId && r.IsActive)
+        //        .Select(r => r.PeakStartTime)
+        //        .FirstOrDefault()
+        //};
+
+
+
         private static readonly Expression<Func<VenueQueryRow, VenueCardViewModel>> Project =
-    row => new VenueCardViewModel
-    {
-        VenueId = row.Venue.VenueId,
-        VenueName = row.Venue.VenueName,
-        SportName = row.SportType.SportName,
-        Capacity = row.Venue.Capacity,
-        PhotoPath = row.Venue.PhotoPath,
-        IsActive = row.Venue.IsActive,
-        OffPeakPrice = row.PriceRule == null ? null : (int?)row.PriceRule.OffPeakPrice,
-        PeakPrice = row.PriceRule == null ? null : (int?)row.PriceRule.PeakPrice,
-        PeakStartTime = row.PriceRule == null ? null : row.PriceRule.PeakStartTime
-    };
+        row => new VenueCardViewModel
+        {
+            VenueId = row.Venue.VenueId,
+            VenueName = row.Venue.VenueName,
+            SportName = row.SportType.SportName,
+            Capacity = row.Venue.Capacity,
+            PhotoPath = row.Venue.PhotoPath,
+            IsActive = row.Venue.IsActive,
+            OffPeakPrice = row.PriceRule == null ? null : (int?)row.PriceRule.OffPeakPrice,
+            PeakPrice = row.PriceRule == null ? null : (int?)row.PriceRule.PeakPrice,
+            PeakStartTime = row.PriceRule == null ? null : row.PriceRule.PeakStartTime
+        };
+
+
 
         /// <summary>
         /// 查詢過程的中繼型別，讓篩選與投影可以共用同一個查詢。

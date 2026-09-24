@@ -40,6 +40,11 @@ namespace VenueGo.ViewModels.ReviewVM
         public bool HasReply => RepliedAt != null;
 
         /// <summary>
+        /// 只給星等、沒有留言。卡片版型要換一種，跟 ReviewQueueItemVM 同名同義。
+        /// </summary>
+        public bool IsRatingOnly => string.IsNullOrWhiteSpace(Content);
+
+        /// <summary>
         /// 顯示名稱的判定邏輯集中在這裡，View 就不必寫 if。
         /// 匿名但暱稱意外是 null 時要有 fallback，否則畫面會空白。
         /// </summary>

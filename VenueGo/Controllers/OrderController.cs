@@ -1,10 +1,13 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Helpers;
+using VenueGo.Models.Constants;
 using VenueGo.Services;
 
 namespace VenueGo.Controllers
 {
+    [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     public class OrderController : Controller
     {
         private readonly dbVenueContext _db;

@@ -19,6 +19,11 @@
 
   <ItemGroup>
     <Compile Remove="Controllers\CReview1Controller.cs" />
+    <Compile Remove="Services\Auth\CurrentUserService.cs" />
+    <Compile Remove="Services\Auth\ICurrentUserService.cs" />
+    <Compile Remove="Services\FakeCurrentUser.cs" />
+    <Compile Remove="Services\HttpContextCurrentUser.cs" />
+    <Compile Remove="Services\ICurrentUser.cs" />
   </ItemGroup>
 
   <ItemGroup>
@@ -37,10 +42,10 @@
     <Folder Include="Models\ReservationModels\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="ViewModels\CheckinViewModels\" />
+    <Folder Include="Models\TimeSlots\" />
+    <Folder Include="Models\VenueModels\" />
+    <Folder Include="ViewModels\MemberViewModels\" />
     <Folder Include="ViewModels\VenueViewModels\" />
-    <Folder Include="ViewModels\ReservationViewModels\" />
-    <Folder Include="Views\MyReviewPageVM\" />
-    <Folder Include="Views\Reservation\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />
     <Folder Include="wwwroot\images\venues\" />

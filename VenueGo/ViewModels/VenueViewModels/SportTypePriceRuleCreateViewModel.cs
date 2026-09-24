@@ -15,10 +15,12 @@ namespace VenueGo.ViewModels.VenueViewModels
         public TimeOnly? PeakStartTime { get; set; }   // 可為 null，代表不分尖峰/離峰
 
         [Display(Name = "尖峰價格")]
+        [Required(ErrorMessage = "尖峰價格不可空白")]
         [Range(0, int.MaxValue, ErrorMessage = "尖峰價格不可為負數")]
         public int PeakPrice { get; set; }
 
         [Display(Name = "離峰價格")]
+        [Required(ErrorMessage = "離峰價格不可空白")]
         [Range(0, int.MaxValue, ErrorMessage = "離峰價格不可為負數")]
         public int OffPeakPrice { get; set; }
 

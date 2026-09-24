@@ -78,6 +78,7 @@ namespace VenueGo.Controllers
             return View(model);
         }
 
+        [HttpGet]
         public async Task<IActionResult> EditRole(int id)
         {
             var role = await _db.Roles.FindAsync(id);
@@ -88,6 +89,9 @@ namespace VenueGo.Controllers
                 .Select(rp => rp.PermissionId)
                 .ToListAsync();
 
+            // [NEW] 是否已有使用者使用此角色，用於畫面上提示「名稱不可修改」
+            var isRoleInUse = await IsRoleInUseAsync(id);
+
             var model = new RoleEditViewModel
             {
                 RoleId = role.RoleId,
@@ -96,6 +100,8 @@ namespace VenueGo.Controllers
                 Status = role.Status,
                 SelectedPermissionIds = selectedPermIds,
                 AvailablePermissions = await GetAvailablePermissionsAsync()
+                // 若 RoleEditViewModel 有對應欄位（例如 IsInUse），可在此一併帶入畫面顯示提示文字：
+                // IsInUse = isRoleInUse
             };
 
             return View(model);
@@ -111,17 +117,34 @@ namespace VenueGo.Controllers
             if (role == null) return NotFound();
 
             bool isReservedRole = ReservedRoleNames.Contains(role.RoleName, StringComparer.OrdinalIgnoreCase);
+            var trimmedName = model.RoleName?.Trim() ?? string.Empty;
+            bool nameChanged = !string.Equals(role.RoleName, trimmedName, StringComparison.Ordinal);
 
             // [5] 禁止把系統保留角色改名，避免依賴角色名稱的邏輯悄悄失效
-            if (isReservedRole && !string.Equals(role.RoleName, model.RoleName?.Trim(), StringComparison.Ordinal))
+            if (isReservedRole && nameChanged)
             {
                 ModelState.AddModelError("RoleName", $"系統角色「{role.RoleName}」的名稱不可修改。");
             }
 
             // [5] 禁止把其他角色改名成與保留角色相同的名稱
-            if (!isReservedRole && ReservedRoleNames.Contains(model.RoleName?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            if (!isReservedRole && ReservedRoleNames.Contains(trimmedName, StringComparer.OrdinalIgnoreCase))
             {
                 ModelState.AddModelError("RoleName", "此名稱為系統保留角色名稱，請使用其他名稱。");
+            }
+
+            // [NEW] 應用層檢查角色名稱是否與其他既有角色重複（排除自己）
+            // 注意：此檢查未搭配資料庫 unique index，高併發下仍有極小機率發生 race condition，
+            // 但已足以擋下一般情境下的重複命名。
+            if (!isReservedRole && nameChanged
+                && await IsRoleNameDuplicateAsync(trimmedName, excludeRoleId: model.RoleId))
+            {
+                ModelState.AddModelError("RoleName", "角色名稱已存在，請使用其他名稱。");
+            }
+
+            // [NEW] 若此角色已有使用者使用，禁止修改角色名稱（權限仍可調整）
+            if (!isReservedRole && nameChanged && await IsRoleInUseAsync(model.RoleId))
+            {
+                ModelState.AddModelError("RoleName", "此角色已有使用者使用，無法修改角色名稱。若需調整權限，請保留原名稱後再送出。");
             }
 
             // [7] 禁止停用 Admin 角色本身，避免整個系統沒有人可以再進入後台
@@ -152,7 +175,7 @@ namespace VenueGo.Controllers
                 return View(model);
             }
 
-            role.RoleName = model.RoleName.Trim();
+            role.RoleName = trimmedName;
             role.Description = model.Description;
             role.Status = model.Status;
             role.UpdatedAt = DateTime.Now;
@@ -181,7 +204,7 @@ namespace VenueGo.Controllers
                 Action = "UpdateRolePermissions",
                 EntityType = "Role",
                 EntityId = model.RoleId.ToString(),
-                NewValue = $"Updated Role: {model.RoleName}",
+                NewValue = $"Updated Role: {role.RoleName}",
                 CreatedAt = DateTime.Now
             });
 
@@ -202,6 +225,7 @@ namespace VenueGo.Controllers
             return RedirectToAction(nameof(Roles));
         }
 
+        [HttpGet]
         public async Task<IActionResult> CreateRole()
         {
             var model = new RoleCreateViewModel
@@ -217,14 +241,16 @@ namespace VenueGo.Controllers
         public async Task<IActionResult> CreateRole(RoleCreateViewModel model)
         {
             int currentUserId = GetCurrentUserId();
+            var trimmedName = model.RoleName?.Trim() ?? string.Empty;
 
-            if (await _db.Roles.AnyAsync(r => r.RoleName == model.RoleName))
+            // [FIX] 用 trim 後的名稱做重複性檢查，避免「Staff 」通過檢查但存入後變成重複
+            if (await IsRoleNameDuplicateAsync(trimmedName, excludeRoleId: null))
             {
                 ModelState.AddModelError("RoleName", "角色名稱已存在");
             }
 
             // [5] 新建角色也不可佔用系統保留名稱
-            if (ReservedRoleNames.Contains(model.RoleName?.Trim() ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            if (ReservedRoleNames.Contains(trimmedName, StringComparer.OrdinalIgnoreCase))
             {
                 ModelState.AddModelError("RoleName", "此名稱為系統保留角色名稱，請使用其他名稱。");
             }
@@ -239,9 +265,18 @@ namespace VenueGo.Controllers
 
             try
             {
+                // [NEW] 交易內再次確認名稱未被搶先建立（縮小應用層檢查與寫入之間的競態窗口）
+                if (await IsRoleNameDuplicateAsync(trimmedName, excludeRoleId: null))
+                {
+                    await transaction.RollbackAsync();
+                    ModelState.AddModelError("RoleName", "角色名稱已存在，請使用其他名稱。");
+                    model.AvailablePermissions = await GetAvailablePermissionsAsync();
+                    return View(model);
+                }
+
                 var role = new Role
                 {
-                    RoleName = model.RoleName.Trim(),
+                    RoleName = trimmedName,
                     Description = model.Description,
                     Status = model.Status,
                     CreatedAt = DateTime.Now,
@@ -285,7 +320,7 @@ namespace VenueGo.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                _logger.LogError(ex, "Failed to create role {RoleName}", model.RoleName); // [4]
+                _logger.LogError(ex, "Failed to create role {RoleName}", trimmedName); // [4]
                 ModelState.AddModelError("", "新增角色失敗，請稍後再試。");
                 model.AvailablePermissions = await GetAvailablePermissionsAsync();
                 return View(model);
@@ -409,7 +444,11 @@ namespace VenueGo.Controllers
 
             // [6] Email 唯一性檢查改為不分大小寫，避免 A@b.com / a@b.com 視為不同帳號
             var normalizedEmail = model.Email?.Trim().ToLowerInvariant();
-            if (await _db.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail))
+            if (string.IsNullOrWhiteSpace(normalizedEmail))
+            {
+                ModelState.AddModelError("Email", "請輸入 Email");
+            }
+            else if (await _db.Users.AnyAsync(u => u.Email.ToLower() == normalizedEmail))
             {
                 ModelState.AddModelError("Email", "此 Email 已被註冊使用");
             }
@@ -508,13 +547,36 @@ namespace VenueGo.Controllers
                     TempData["SuccessMessage"] = $"成功建立員工帳號：{user.Name} ({user.Email})，員工編號：{finalEmployeeNo}";
                     return RedirectToAction(nameof(UserList));
                 }
-                catch (DbUpdateException ex) when (IsUniqueConstraintViolation(ex) && attempt < maxRetries)
+                catch (DbUpdateException ex) when (attempt < maxRetries)
                 {
-                    // [1] 命中 EmployeeNo（或 Email）unique constraint 衝突，重新產生編號後重試
                     await transaction.RollbackAsync();
-                    _logger.LogWarning(ex, "Unique constraint conflict on attempt {Attempt} while creating user, regenerating EmployeeNo", attempt);
-                    finalEmployeeNo = await GenerateNextEmployeeNoAsync();
-                    continue;
+
+                    var conflictField = GetUniqueConstraintConflictField(ex);
+
+                    if (conflictField == ConflictField.EmployeeNo)
+                    {
+                        // [FIX] 確定是 EmployeeNo 撞號，重新產生編號後重試
+                        _logger.LogWarning(ex, "EmployeeNo conflict on attempt {Attempt}, regenerating", attempt);
+                        finalEmployeeNo = await GenerateNextEmployeeNoAsync();
+                        continue;
+                    }
+
+                    if (conflictField == ConflictField.Email)
+                    {
+                        // [FIX] 是 Email 撞號（極端併發情境），直接回錯誤，不做無意義的重試
+                        _logger.LogWarning(ex, "Email conflict on attempt {Attempt} for {Email}", attempt, normalizedEmail);
+                        ModelState.AddModelError("Email", "此 Email 已被註冊使用");
+                        model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
+                        model.EmployeeNo = finalEmployeeNo;
+                        return View(model);
+                    }
+
+                    // 無法判斷具體衝突欄位，視為一般錯誤，不再重試
+                    _logger.LogError(ex, "Unrecognized unique constraint conflict while creating user {Email}", normalizedEmail);
+                    ModelState.AddModelError("", "建立帳號過程發生錯誤，請稍後再試。");
+                    model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
+                    model.EmployeeNo = finalEmployeeNo;
+                    return View(model);
                 }
                 catch (Exception ex)
                 {
@@ -529,7 +591,7 @@ namespace VenueGo.Controllers
             }
 
             // 重試多次仍失敗
-            _logger.LogError("Failed to create user with Email {Email} after {MaxRetries} retries due to repeated unique constraint conflicts", normalizedEmail, maxRetries);
+            _logger.LogError("Failed to create user with Email {Email} after {MaxRetries} retries due to repeated EmployeeNo conflicts", normalizedEmail, maxRetries);
             ModelState.AddModelError("", "建立帳號過程發生錯誤（編號衝突），請稍後再試。");
             model.AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true);
             model.EmployeeNo = await GenerateNextEmployeeNoAsync();
@@ -555,6 +617,14 @@ namespace VenueGo.Controllers
                 .Select(ur => ur.RoleId)
                 .ToListAsync();
 
+            // [NEW-方案B] 若此員工目前是離職/留停，查出上次被移除的角色快照，供畫面顯示參考
+            bool isCurrentlyInactive = userData.Emp.Status.Equals("Resigned", StringComparison.OrdinalIgnoreCase)
+                                     || userData.Emp.Status.Equals("OnLeave", StringComparison.OrdinalIgnoreCase);
+
+            string? previousRoleNames = isCurrentlyInactive
+                ? await GetLastRemovedRolesSnapshotAsync(id)
+                : null;
+
             var model = new EditUserViewModel
             {
                 UserId = userData.User.UserId,
@@ -565,7 +635,11 @@ namespace VenueGo.Controllers
                 JobTitle = userData.Emp.JobTitle,
                 Status = userData.Emp.Status,
                 SelectedRoleIds = currentRoleIds,
-                AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true)
+                AvailableRoles = await GetAvailableRolesAsync(excludeMemberRoles: true),
+                // [NEW-方案B][需確認] EditUserViewModel 需新增 public string? PreviousRoleNames { get; set; }
+                // 若尚未新增此欄位，這行會編譯失敗，請先在 ViewModel 補上對應屬性，
+                // 或先移除這行、改用 ViewBag/ViewData["PreviousRoleNames"] 暫時傳遞給 View。
+                PreviousRoleNames = previousRoleNames
             };
 
             return View(model);
@@ -652,6 +726,21 @@ namespace VenueGo.Controllers
                     .Where(ur => staffRoleIds.Contains(ur.RoleId) && !targetRoleIds.Contains(ur.RoleId))
                     .ToList();
 
+                // [NEW-方案B] 補上跟 UpdateEmployeeStatus 一致的角色快照記錄。
+                // 原因：員工狀態也可能透過這個 EditUser 表單直接改成 Resigned/OnLeave，
+                // 若只在 UpdateEmployeeStatus 記錄快照，會漏掉從這裡異動角色的情境。
+                string? removedRolesSnapshot = null;
+                if (rolesToRemove.Any())
+                {
+                    var removedRoleIds = rolesToRemove.Select(ur => ur.RoleId).ToList();
+                    var removedRoleNames = await _db.Roles
+                        .Where(r => removedRoleIds.Contains(r.RoleId))
+                        .Select(r => r.RoleName)
+                        .ToListAsync();
+
+                    removedRolesSnapshot = string.Join(",", removedRoleNames);
+                }
+
                 _db.UserRoles.RemoveRange(rolesToRemove);
 
                 var roleIdsToAdd = targetRoleIds
@@ -676,6 +765,7 @@ namespace VenueGo.Controllers
                     Action = "EditUser",
                     EntityType = "Employee",
                     EntityId = emp.EmployeeId.ToString(),
+                    OldValue = removedRolesSnapshot, // [NEW-方案B] 此次異動被移除的角色快照（null 表示沒有角色被移除）
                     NewValue = $"Updated employee: {user.Name} ({user.Email}), JobTitle: {emp.JobTitle}, Status: {emp.Status}",
                     CreatedAt = DateTime.Now
                 });
@@ -696,76 +786,90 @@ namespace VenueGo.Controllers
             }
         }
 
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> UpdateEmployeeStatus(int userId, string status)
-        {
-            int currentUserId = GetCurrentUserId();
+        //[HttpPost]
+        //[ValidateAntiForgeryToken]
+        //public async Task<IActionResult> UpdateEmployeeStatus(int userId, string status)
+        //{
+        //    int currentUserId = GetCurrentUserId();
 
-            // [2] 白名單驗證 status 參數，避免寫入非預期的值
-            if (string.IsNullOrWhiteSpace(status) || !AllowedEmployeeStatuses.Contains(status))
-            {
-                TempData["ErrorMessage"] = "無效的狀態值。";
-                return RedirectToAction(nameof(UserList));
-            }
+        //    // [2] 白名單驗證 status 參數，避免寫入非預期的值
+        //    if (string.IsNullOrWhiteSpace(status) || !AllowedEmployeeStatuses.Contains(status))
+        //    {
+        //        TempData["ErrorMessage"] = "無效的狀態值。";
+        //        return RedirectToAction(nameof(UserList));
+        //    }
 
-            // [7] 禁止管理員把自己設為離職/留職停薪，避免自己被鎖在系統外
-            if (userId == currentUserId && !string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase))
-            {
-                TempData["ErrorMessage"] = "不可將自己的帳號狀態變更為離職或留職停薪。";
-                return RedirectToAction(nameof(UserList));
-            }
+        //    // [7] 禁止管理員把自己設為離職/留職停薪，避免自己被鎖在系統外
+        //    if (userId == currentUserId && !string.Equals(status, "Active", StringComparison.OrdinalIgnoreCase))
+        //    {
+        //        TempData["ErrorMessage"] = "不可將自己的帳號狀態變更為離職或留職停薪。";
+        //        return RedirectToAction(nameof(UserList));
+        //    }
 
-            var user = await _db.Users.FindAsync(userId);
-            var emp = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
+        //    var user = await _db.Users.FindAsync(userId);
+        //    var emp = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == userId);
 
-            if (user == null || emp == null)
-            {
-                TempData["ErrorMessage"] = "找不到相關員工資料。";
-                return RedirectToAction(nameof(UserList));
-            }
+        //    if (user == null || emp == null)
+        //    {
+        //        TempData["ErrorMessage"] = "找不到相關員工資料。";
+        //        return RedirectToAction(nameof(UserList));
+        //    }
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
+        //    using var transaction = await _db.Database.BeginTransactionAsync();
 
-            try
-            {
-                emp.Status = status;
-                emp.UpdatedAt = DateTime.Now;
+        //    try
+        //    {
+        //        emp.Status = status;
+        //        emp.UpdatedAt = DateTime.Now;
 
-                if (status.Equals("Resigned", StringComparison.OrdinalIgnoreCase) ||
-                    status.Equals("OnLeave", StringComparison.OrdinalIgnoreCase))
-                {
-                    var rolesToRemove = await (from ur in _db.UserRoles
-                                               join r in _db.Roles on ur.RoleId equals r.RoleId
-                                               where ur.UserId == userId && r.RoleName != MemberRoleName
-                                               select ur).ToListAsync();
-                    _db.UserRoles.RemoveRange(rolesToRemove);
-                }
+        //        // [NEW-方案B] 離職/留停前，先記錄即將被移除的角色名稱清單，
+        //        // 存進 AuditLog.OldValue，供日後復職時人工查閱、手動重新指派。
+        //        // 注意：這裡假設 AuditLog Entity 已有 OldValue（string?）欄位；
+        //        // 若沒有，請改成把角色清單併入 NewValue 文字內，或先新增該欄位。
+        //        string? removedRolesSnapshot = null;
 
-                _db.AuditLogs.Add(new AuditLog
-                {
-                    UserId = currentUserId,
-                    Action = "UpdateEmployeeStatus",
-                    EntityType = "Employee",
-                    EntityId = emp.EmployeeId.ToString(),
-                    NewValue = $"Updated employee {emp.EmployeeNo} status to '{status}'",
-                    CreatedAt = DateTime.Now
-                });
+        //        if (status.Equals("Resigned", StringComparison.OrdinalIgnoreCase) ||
+        //            status.Equals("OnLeave", StringComparison.OrdinalIgnoreCase))
+        //        {
+        //            var rolesToRemove = await (from ur in _db.UserRoles
+        //                                       join r in _db.Roles on ur.RoleId equals r.RoleId
+        //                                       where ur.UserId == userId && r.RoleName != MemberRoleName
+        //                                       select new { ur, r.RoleName }).ToListAsync();
 
-                await _db.SaveChangesAsync();
-                await transaction.CommitAsync();
+        //            if (rolesToRemove.Any())
+        //            {
+        //                // 用逗號分隔的角色名稱字串，方便之後直接顯示或簡單解析（不建議做複雜結構化解析，僅供人工參考）
+        //                removedRolesSnapshot = string.Join(",", rolesToRemove.Select(x => x.RoleName));
+        //            }
 
-                TempData["SuccessMessage"] = $"已成功將 {user.Name} 的狀態變更為：{status}";
-                return RedirectToAction(nameof(UserList));
-            }
-            catch (Exception ex)
-            {
-                await transaction.RollbackAsync();
-                _logger.LogError(ex, "Failed to update employee status for UserId {UserId} to {Status}", userId, status); // [4]
-                TempData["ErrorMessage"] = "狀態變更失敗，請稍後再試。";
-                return RedirectToAction(nameof(UserList));
-            }
-        }
+        //            _db.UserRoles.RemoveRange(rolesToRemove.Select(x => x.ur));
+        //        }
+
+        //        _db.AuditLogs.Add(new AuditLog
+        //        {
+        //            UserId = currentUserId,
+        //            Action = "UpdateEmployeeStatus",
+        //            EntityType = "Employee",
+        //            EntityId = emp.EmployeeId.ToString(),
+        //            OldValue = removedRolesSnapshot, // [NEW-方案B] 離職前的角色快照（null 表示無角色被移除，例如復職時 status=Active）
+        //            NewValue = $"Updated employee {emp.EmployeeNo} status to '{status}'",
+        //            CreatedAt = DateTime.Now
+        //        });
+
+        //        await _db.SaveChangesAsync();
+        //        await transaction.CommitAsync();
+
+        //        TempData["SuccessMessage"] = $"已成功將 {user.Name} 的狀態變更為：{status}";
+        //        return RedirectToAction(nameof(UserList));
+        //    }
+        //    catch (Exception ex)
+        //    {
+        //        await transaction.RollbackAsync();
+        //        _logger.LogError(ex, "Failed to update employee status for UserId {UserId} to {Status}", userId, status); // [4]
+        //        TempData["ErrorMessage"] = "狀態變更失敗，請稍後再試。";
+        //        return RedirectToAction(nameof(UserList));
+        //    }
+        //}
 
         #endregion
 
@@ -774,18 +878,97 @@ namespace VenueGo.Controllers
         private int GetCurrentUserId()
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return int.TryParse(userIdClaim, out int userId) ? userId : 0;
+
+            if (!int.TryParse(userIdClaim, out int userId) || userId <= 0)
+            {
+                // [FIX] 無法解析出合法 UserId 時直接拋例外，
+                // 避免 fallback 成 0 導致「自我鎖定保護」等安全檢查被意外繞過，
+                // 也避免寫入錯誤的 AuditLog.UserId = 0
+                _logger.LogError("Unable to resolve current user id from claims. Claim value: {ClaimValue}", userIdClaim);
+                throw new InvalidOperationException("無法取得目前登入使用者的識別碼。");
+            }
+
+            return userId;
         }
 
-        // [1] 判斷例外是否為 unique constraint 違反（SQL Server: 2601/2627，PostgreSQL: 23505）
-        private static bool IsUniqueConstraintViolation(DbUpdateException ex)
+        // [NEW] 應用層檢查角色名稱是否重複（大小寫不分，排除自己）
+        // 說明：Roles.RoleName 目前資料庫層未加 unique index，
+        // 此檢查與寫入之間仍存在極小的競態窗口（TOCTOU），
+        // 若未來併發建立/改名角色的情境變多，建議評估補上資料庫 unique index。
+        private async Task<bool> IsRoleNameDuplicateAsync(string roleName, int? excludeRoleId)
+        {
+            if (string.IsNullOrWhiteSpace(roleName)) return false;
+
+            var normalized = roleName.Trim().ToLower();
+
+            var query = _db.Roles.Where(r => r.RoleName.ToLower() == normalized);
+
+            if (excludeRoleId.HasValue)
+            {
+                query = query.Where(r => r.RoleId != excludeRoleId.Value);
+            }
+
+            return await query.AnyAsync();
+        }
+
+        // [NEW] 檢查此角色目前是否已被任何使用者使用（有 UserRoles 紀錄）
+        private async Task<bool> IsRoleInUseAsync(int roleId)
+        {
+            return await _db.UserRoles.AnyAsync(ur => ur.RoleId == roleId);
+        }
+
+        // [NEW-方案B] 查詢此員工「最近一次」被移除角色時的快照，
+        // 供 EditUser 頁面顯示給管理員參考，方便復職時手動重新勾選角色。
+        // 注意：角色移除可能發生在 UpdateEmployeeStatus 或 EditUser 這兩個 Action，
+        // 因此這裡不限定 Action 名稱，只要 EntityType/EntityId 對得上且 OldValue 有值即可。
+        // 回傳 null 表示查無紀錄（例如從未離職過，或最近一次異動沒有角色被移除）。
+        private async Task<string?> GetLastRemovedRolesSnapshotAsync(int userId)
+        {
+            // [注意] AuditLog.EntityId 存的是 EmployeeId（字串），而不是 UserId，
+            // 這裡需要先找出對應的 EmployeeId 再比對，避免抓錯人的紀錄。
+            var emp = await _db.Employees.AsNoTracking().FirstOrDefaultAsync(e => e.UserId == userId);
+            if (emp == null) return null;
+
+            var employeeIdStr = emp.EmployeeId.ToString();
+
+            var lastLog = await _db.AuditLogs
+                .Where(a => a.EntityType == "Employee"
+                            && (a.Action == "UpdateEmployeeStatus" || a.Action == "EditUser")
+                            && a.EntityId == employeeIdStr
+                            && a.OldValue != null)
+                .OrderByDescending(a => a.CreatedAt)
+                .FirstOrDefaultAsync();
+
+            return lastLog?.OldValue;
+        }
+
+        private enum ConflictField { Unknown, EmployeeNo, Email }
+
+        // [FIX] 解析例外訊息，判斷實際撞到哪個欄位的唯一索引
+        // 依賴 SQL Server 錯誤訊息中會帶出索引名稱，例如：
+        // "Cannot insert duplicate key row ... with unique index 'IX_Employees_EmployeeNo'."
+        // 請確認資料庫中 EmployeeNo / Email 的唯一索引已依此命名，否則請調整下方比對字串。
+        private static ConflictField GetUniqueConstraintConflictField(DbUpdateException ex)
         {
             var message = ex.InnerException?.Message ?? ex.Message;
-            return message.Contains("2601") ||
-                   message.Contains("2627") ||
-                   message.Contains("23505") ||
-                   message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
-                   message.Contains("UNIQUE constraint", StringComparison.OrdinalIgnoreCase);
+
+            bool isUniqueViolation =
+                message.Contains("2601") ||
+                message.Contains("2627") ||
+                message.Contains("23505") ||
+                message.Contains("duplicate key", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("UNIQUE constraint", StringComparison.OrdinalIgnoreCase);
+
+            if (!isUniqueViolation) return ConflictField.Unknown;
+
+            if (message.Contains("EmployeeNo", StringComparison.OrdinalIgnoreCase))
+                return ConflictField.EmployeeNo;
+
+            if (message.Contains("Email", StringComparison.OrdinalIgnoreCase) ||
+                message.Contains("IX_Users_Email", StringComparison.OrdinalIgnoreCase))
+                return ConflictField.Email;
+
+            return ConflictField.Unknown;
         }
 
         private async Task<string> GenerateNextEmployeeNoAsync()

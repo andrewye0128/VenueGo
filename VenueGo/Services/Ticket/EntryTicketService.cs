@@ -3,7 +3,7 @@ using VenueGo.Data;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
 
-namespace VenueGo.Services
+namespace VenueGo.Services.Ticket
 {
     public class EntryTicketService : IEntryTicketService
     {

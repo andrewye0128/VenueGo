@@ -4,7 +4,21 @@
     ViewData["Title"] = "票券詳情";
 }
 
-<ul class="nav nav-tabs" id="detailTab" role="tablist">
+@if (TempData["SuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["ErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+<ul class="nav nav-tabs mb-3" id="detailTab" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#venueInfo" type="button">場館/時段資訊</button>
     </li>
@@ -13,18 +27,24 @@
     </li>
 </ul>
 
-<div class="d-flex justify-content-between align-items-center mb-4">
+<div class="d-flex gap-5 mb-4 p-2">
     <h5>票券詳情 #@Model.TicketId</h5>
     <p>
         會員:@Model.UserName
         <span class="badge @(Model.Status switch
-            {
-                1 => "bg-success",
-                2 => "bg-secondary",
-                3 => "bg-warning text-dark",
-                4 => "bg-danger",
-                _ => "bg-dark"
-            })">@Model.StatusText</span>
+              {
+                  1 => "bg-success",
+                  2 => "bg-secondary",
+                  3 => "bg-warning text-dark",
+                  4 => "bg-danger",
+                  5 => "bg-info text-dark",
+                  _ => "bg-dark"
+              })">@Model.StatusText
+        </span>
+        @if (Model.ExpiredReasonText != null)
+        {
+            <small class="text-muted ms-1">（@Model.ExpiredReasonText）</small>
+        }
     </p>
 </div>
 
@@ -45,19 +65,19 @@
         <div class="mb-3 d-flex flex-wrap gap-2">
             <form asp-action="ManualCheckIn" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
                 <input type="text" name="remark" placeholder="原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
-                <button type="submit" class="btn btn-sm btn-success">手動報到</button>
+                <button type="submit" class="btn btn-sm btn-success" disabled="@(!Model.CanCheckIn)">手動報到</button>
             </form>
             <form asp-action="ManualCheckOut" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
                 <input type="text" name="remark" placeholder="原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
-                <button type="submit" class="btn btn-sm btn-outline-secondary">手動離場</button>
+                <button type="submit" class="btn btn-sm btn-outline-secondary disabled="@(!Model.CanCheckOut)">手動離場</button>
             </form>
             <form asp-action="ManualCancel" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
                 <input type="text" name="remark" placeholder="取消原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
-                <button type="submit" class="btn btn-sm btn-danger" onclick="return confirm('確定取消這張票券?')">手動取消</button>
+                <button type="submit" class="btn btn-sm btn-danger"  disabled="@(!Model.CanCancel)" onclick="return confirm('確定取消這張票券?')">手動取消</button>
             </form>
             <form asp-action="ManualExpire" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
                 <input type="text" name="remark" placeholder="原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
-                <button type="submit" class="btn btn-sm btn-warning">手動轉逾期</button>
+                <button type="submit" class="btn btn-sm btn-warning disabled="@(!Model.CanInvalidate)">手動轉失效</button>
             </form>
         </div>
 
@@ -78,7 +98,7 @@
                             <td>@log.ActionTime</td>
                             <td>@log.ActionText</td>
                             <td>@(log.IsManualOverride ? "是" : "否")</td>
-                            <td>@(log.IsValid ? $"{log.ActionText}成功": "異常行為")</td>
+                            <td>@(log.IsValid ? $"{log.ActionText}成功" : "異常行為")</td>
                             <td>@log.OperatorId</td>
                         </tr>
                     }
@@ -87,3 +107,14 @@
         </table>
     </div>
 </div>
+
+
+@section Scripts {
+    @if (TempData["SuccessMessage"] != null || TempData["ErrorMessage"] != null)
+    {
+        <script>
+            bootstrap.Tab.getOrCreateInstance(
+                document.querySelector('[data-bs-target="#checkinManage"]')).show();
+        </script>
+    }
+}

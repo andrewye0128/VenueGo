@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Services;
+using VenueGo.Services.Ticket;
 
 namespace VenueGo.Controllers
 {

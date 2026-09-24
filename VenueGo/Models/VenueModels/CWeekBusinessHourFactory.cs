@@ -76,7 +76,8 @@ namespace VenueGo.Models.VenueModels
 
 
         //批次修改 >> 一次把7天的營業時間設定存回去,7筆都在同一個DbContext裡處理,最後一次SaveChanges
-        public void EditAll(List<CWeekBusinessHourWrap> wraps)
+        //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
+        public void EditAll(List<CWeekBusinessHourWrap> wraps, int userId, DateTime now)
         {
             using (dbVenueContext db = new dbVenueContext())
             {
@@ -86,10 +87,23 @@ namespace VenueGo.Models.VenueModels
                     var data = db.WeekBusinessHours.FirstOrDefault(w => w.BusinessHoursId == wrap.BusinessHoursId);
                     if (data != null)
                     {
-                        //DayOfWeek不開放編輯,故意不覆蓋,只更新以下欄位
-                        data.IsOpen = wrap.IsOpen;
-                        data.OpenTime = wrap.OpenTime;
-                        data.CloseTime = wrap.CloseTime;
+                        //表單每次都會送回7天,只有內容真的有變的那天才更新
+                        //這樣每一天的UpdatedAt/UpdatedBy才看得出「這一天」最後是誰、何時改的
+                        bool isChanged = data.IsOpen != wrap.IsOpen
+                                      || data.OpenTime != wrap.OpenTime
+                                      || data.CloseTime != wrap.CloseTime;
+
+                        if (isChanged)
+                        {
+                            //DayOfWeek不開放編輯,故意不覆蓋,只更新以下欄位
+                            data.IsOpen = wrap.IsOpen;
+                            data.OpenTime = wrap.OpenTime;
+                            data.CloseTime = wrap.CloseTime;
+
+                            //稽核欄位:記錄最後修改時間與修改者
+                            data.UpdatedAt = now;
+                            data.UpdatedBy = userId;
+                        }
                     }
                 }
 

@@ -151,8 +151,9 @@ namespace VenueGo.Models.VenueModels
         }
 
 
-        //價格規則修改
-        public void Edit(CSportTypePriceRuleWrap Wrap)
+        //價格規則修改(含 IsActive 停用/啟用)
+        //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
+        public void Edit(CSportTypePriceRuleWrap Wrap, int userId, DateTime now)
         {
             using (dbVenueContext db = new dbVenueContext())
             {
@@ -165,6 +166,10 @@ namespace VenueGo.Models.VenueModels
                     data.PeakPrice = Wrap.PeakPrice;
                     data.OffPeakPrice = Wrap.OffPeakPrice;
                     data.IsActive = Wrap.IsActive;
+
+                    //稽核欄位:記錄最後修改時間與修改者
+                    data.UpdatedAt = now;
+                    data.UpdatedBy = userId;
                 }
 
                 db.SaveChanges();

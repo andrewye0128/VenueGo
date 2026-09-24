@@ -6,6 +6,7 @@ using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;
+using VenueGo.Services;
 using VenueGo.ViewModels.VenueViewModels;
 
 namespace VenueGo.Controllers
@@ -15,9 +16,14 @@ namespace VenueGo.Controllers
     {
         //取得照片路徑 >> 取得wwwroot的實際路徑(Controller建構子注入)
         private readonly IWebHostEnvironment _env;
-        public VenueController(IWebHostEnvironment env)
+
+        //取得校時後的系統時間(取代 DateTime.Now,Controller建構子注入)
+        private readonly ITimeService _timeService;
+
+        public VenueController(IWebHostEnvironment env, ITimeService timeService)
         {
             _env = env;
+            _timeService = timeService;
         }
 
 
@@ -50,8 +56,20 @@ namespace VenueGo.Controllers
                 return View(Wrap);
             }
 
-            //設定暫時預設欄位值 >> 要回來改
-            Wrap.CreatedBy = 1; //尚未整合會員ID追蹤,先給1
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
+            //稽核欄位由後端決定
+            Wrap.CreatedAt = _timeService.Now;
+            Wrap.CreatedBy = userId.Value;
+            //Wrap 直接接表單,可能被夾帶修改紀錄 >> 新增時強制清空
+            Wrap.UpdatedAt = null;
+            Wrap.UpdatedBy = null;
             Wrap.IsActive = true;
 
             //存入DB >> 呼叫 Factory 進行 CRUD
@@ -88,9 +106,17 @@ namespace VenueGo.Controllers
             if (!ModelState.IsValid)
                 return View(Wrap);
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
             //將前端填寫資料送入 Factory 進行 Edit CRUD
             CSportTypeFactory SportTypeFactory = new CSportTypeFactory();
-            SportTypeFactory.Edit(Wrap);
+            SportTypeFactory.Edit(Wrap, userId.Value, _timeService.Now);
 
             return RedirectToAction("SportTypeIndex");
         }
@@ -104,10 +130,17 @@ namespace VenueGo.Controllers
             if (id == null)
                 return RedirectToAction("SportTypeIndex");
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypeIndex");
+            }
 
             //把回傳變數送入 factory 執行軟刪除
             CSportTypeFactory SportTypeFactory = new CSportTypeFactory();
-            SportTypeFactory.Delete((int)id);
+            SportTypeFactory.Delete((int)id, userId.Value, _timeService.Now);
 
             return RedirectToAction("SportTypeIndex");
         }
@@ -153,6 +186,15 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            //放在照片上傳之前檢查,取不到就不存照片,避免留下沒人用的檔案
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("VenueIndex");
+            }
+
             //照片上傳
             // null >> 表單有夾帶檔案欄位
             // PhotoFile.Length > 0 >> 確認檔案內容不是空檔案（避免選到大小為 0 byte 的檔案）
@@ -188,7 +230,8 @@ namespace VenueGo.Controllers
             VenueWrap.IsActive = true;
             VenueWrap.Capacity = vm.Capacity;
             VenueWrap.PhotoPath = vm.PhotoPath;
-            VenueWrap.CreatedBy = 1;//尚未整合會員權限,先設為1
+            VenueWrap.CreatedAt = _timeService.Now;
+            VenueWrap.CreatedBy = userId.Value;
 
             //送進Factory執行新增
             CVenueFactory VenueFactory = new CVenueFactory();
@@ -243,6 +286,14 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("VenueIndex");
+            }
+
             //先處理照片路徑改變 >> 若有上傳照片,就要改變vm的PhotoPath
             if (vm.PhotoFile != null && vm.PhotoFile.Length > 0)
             {
@@ -272,7 +323,7 @@ namespace VenueGo.Controllers
 
             //執行場地資料編輯 >> 送進Factory處理
             CVenueFactory VenueFactory = new CVenueFactory();
-            VenueFactory.Edit(vm);
+            VenueFactory.Edit(vm, userId.Value, _timeService.Now);
 
 
 
@@ -289,10 +340,17 @@ namespace VenueGo.Controllers
             if (id == null)
                 return RedirectToAction("VenueIndex");
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("VenueIndex");
+            }
 
             //把回傳變數送入 factory 執行軟刪除
             CVenueFactory VenueFactory = new CVenueFactory();
-            VenueFactory.Delete((int)id);
+            VenueFactory.Delete((int)id, userId.Value, _timeService.Now);
 
             return RedirectToAction("VenueIndex");
         }
@@ -362,6 +420,14 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypePriceRuleIndex");
+            }
+
             //尖峰起始時間沒填,代表不分尖峰/離峰,尖峰價格沒有意義,強制清成0
             //不管前端有沒有正確disable掉輸入框,後端都要保證資料一致(跟WeekBusinessHour的IsOpen=false邏輯一樣)
             if (!vm.PeakStartTime.HasValue)
@@ -376,6 +442,9 @@ namespace VenueGo.Controllers
             Wrap.PeakPrice = vm.PeakPrice;
             Wrap.OffPeakPrice = vm.OffPeakPrice;
             Wrap.IsActive = true;
+            //此表沒有 CreatedAt/CreatedBy,新增也算一次異動 >> 寫入 UpdatedAt/UpdatedBy 保留建立者資訊
+            Wrap.UpdatedAt = _timeService.Now;
+            Wrap.UpdatedBy = userId.Value;
 
             //存入DB >> 呼叫 Factory 進行 CRUD
             SportTypePriceRuleFactory.Create(Wrap);
@@ -439,6 +508,14 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypePriceRuleIndex");
+            }
+
             //尖峰起始時間沒填,代表不分尖峰/離峰,尖峰價格沒有意義,強制清成0
             //不管前端有沒有正確disable掉輸入框,後端都要保證資料一致(跟WeekBusinessHour的IsOpen=false邏輯一樣)
             if (!vm.PeakStartTime.HasValue)
@@ -455,7 +532,7 @@ namespace VenueGo.Controllers
             EditWrap.IsActive = vm.IsActive;
 
             //將前端填寫資料送入 Factory 進行 Edit CRUD
-            SportTypePriceRuleFactory.Edit(EditWrap);
+            SportTypePriceRuleFactory.Edit(EditWrap, userId.Value, _timeService.Now);
 
             return RedirectToAction("SportTypePriceRuleIndex");
         }
@@ -573,6 +650,14 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("WeekBusinessHourIndex");
+            }
+
             //驗證通過,轉成Wrap存回去
             List<CWeekBusinessHourWrap> wraps = new List<CWeekBusinessHourWrap>();
 
@@ -599,7 +684,7 @@ namespace VenueGo.Controllers
                 wraps.Add(wrap);
             }
 
-            WeekBusinessHourFactory.EditAll(wraps);
+            WeekBusinessHourFactory.EditAll(wraps, userId.Value, _timeService.Now);
             TempData["VenueSuccessMessage"] = "營業時間設定已儲存";
 
             return RedirectToAction("WeekBusinessHourIndex");
@@ -649,7 +734,9 @@ namespace VenueGo.Controllers
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager,RoleNames.Staff)]
         public IActionResult VenueUnavailableSlotManage(int venueId, DateOnly? date)
         {
-            DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+            //今天跟現在時間都從同一個校時後的時間拆出來,避免跨午夜時兩者對不上
+            DateTime currentTime = _timeService.Now;
+            DateOnly today = DateOnly.FromDateTime(currentTime);
 
             //date防呆 >> 沒帶就設為今天,早於今天就拉回今天,不管網址是不是被手動改過
             DateOnly targetDate;
@@ -679,6 +766,7 @@ namespace VenueGo.Controllers
             vm.VenueName = venue.VenueName;
             vm.PhotoPath = venue.PhotoPath;
             vm.Date = targetDate;
+            vm.Today = today;   //View 用來判斷日期選擇器最小值、是否顯示前一天,不在 View 自己取時間
 
             //理論上7天資料都已經存在,查不到就當作沒營業處理(異常情況防呆)
             if (businessHour == null || !businessHour.IsOpen)
@@ -708,7 +796,7 @@ namespace VenueGo.Controllers
             }
 
             //現在的時間,只有targetDate是今天時才會用來判斷IsPast
-            TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
+            TimeOnly now = TimeOnly.FromDateTime(currentTime);
 
             foreach (TimeOnly time in hourSlots)
             {
@@ -748,13 +836,23 @@ namespace VenueGo.Controllers
         [HttpPost]
         public IActionResult VenueUnavailableSlotToggle(int venueId, DateOnly date, TimeOnly time, string? reason)
         {
-            DateOnly today = DateOnly.FromDateTime(DateTime.Now);
-            TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
+            //今天跟現在時間都從同一個校時後的時間拆出來,新增時的 CreatedAt 也用同一個值
+            DateTime currentTime = _timeService.Now;
+            DateOnly today = DateOnly.FromDateTime(currentTime);
+            TimeOnly now = TimeOnly.FromDateTime(currentTime);
 
             //防呆 >> 不能對過去的日期時間做切換,不管前端有沒有正確把按鈕disable掉
             if (date < today || (date == today && time <= now))
             {
                 TempData["VenueErrorMessage"] = "已經過去的時段無法設定";
+                return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
+            }
+
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
                 return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
             }
 
@@ -782,8 +880,8 @@ namespace VenueGo.Controllers
                 wrap.UnavailableDate = date;
                 wrap.UnavailableTime = time;
                 wrap.Reason = reason;
-                wrap.CreatedAt = DateTime.Now;
-                wrap.CreatedBy = 1; //尚未整合會員權限,先設為1
+                wrap.CreatedAt = currentTime;
+                wrap.CreatedBy = userId.Value;
 
                 VenueUnavailableSlotFactory.Create(wrap);
             }

@@ -163,7 +163,8 @@ namespace VenueGo.Models.VenueModels
         }
 
         //場地編輯
-        public void Edit(VenueEditViewModel vm)
+        //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
+        public void Edit(VenueEditViewModel vm, int userId, DateTime now)
         {
             using (dbVenueContext db = new dbVenueContext())
             {
@@ -180,14 +181,19 @@ namespace VenueGo.Models.VenueModels
 
                     if (vm.PhotoFile != null)
                         VenueDb.PhotoPath = vm.PhotoPath;
+
+                    //稽核欄位:記錄最後修改時間與修改者
+                    VenueDb.UpdatedAt = now;
+                    VenueDb.UpdatedBy = userId;
                 }
                 db.SaveChanges();
             }
         }
 
 
-        //場地刪除
-        public void Delete(int id)
+        //場地刪除(軟刪除)
+        //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
+        public void Delete(int id, int userId, DateTime now)
         {
             Venue data = null;
 
@@ -197,7 +203,13 @@ namespace VenueGo.Models.VenueModels
                 data = db.Venues.FirstOrDefault(p => p.VenueId == id);
 
                 if (data != null)
+                {
                     data.IsActive = false;
+
+                    //軟刪除也是一次更新 >> 記錄是誰、何時停用
+                    data.UpdatedAt = now;
+                    data.UpdatedBy = userId;
+                }
                 db.SaveChanges();
             }
         }

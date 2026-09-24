@@ -169,103 +169,103 @@ namespace VenueGo.Models.CheckinModels
         }
 
         // 使用bool方法表示[這次操作在流程上合不合理], 只有符合異常流程出現時會需要使用的方法
-        public bool ManualCheckIn(int ticketId, int operatorId)
-        {
-            dbVenueContext db = new dbVenueContext();
-            var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
-            if (ticket == null) return false;
+        //public bool ManualCheckIn(int ticketId, int operatorId)
+        //{
+        //    dbVenueContext db = new dbVenueContext();
+        //    var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
+        //    if (ticket == null) return false;
 
-            var lastLog = db.CheckInLogs
-            .Where(l => l.TicketId == ticketId &&
-            (l.Action == (byte)CheckInAction.CheckIn || l.Action == (byte)CheckInAction.CheckOut))
-            .OrderByDescending(l => l.ActionTime)
-            .FirstOrDefault();
+        //    var lastLog = db.CheckInLogs
+        //    .Where(l => l.TicketId == ticketId &&
+        //    (l.Action == (byte)CheckInAction.CheckIn || l.Action == (byte)CheckInAction.CheckOut))
+        //    .OrderByDescending(l => l.ActionTime)
+        //    .FirstOrDefault();
 
-            // 沒有紀錄或上一筆是離場
-            bool isValid = lastLog == null || lastLog.Action == (byte)CheckInAction.CheckOut;
+        //    // 沒有紀錄或上一筆是離場
+        //    bool isValid = lastLog == null || lastLog.Action == (byte)CheckInAction.CheckOut;
 
-            if (isValid && ticket.Status == (byte)EntryTicketStatus.Valid)
-                ticket.Status = (byte)EntryTicketStatus.Used;
+        //    if (isValid && ticket.Status == (byte)EntryTicketStatus.Valid)
+        //        ticket.Status = (byte)EntryTicketStatus.Used;
 
-            db.CheckInLogs.Add(new CheckInLog
-            {
-                TicketId = ticketId,
-                Action = (byte)CheckInAction.CheckIn,
-                ActionTime = DateTime.Now,
-                IsValid = isValid,
-                IsManualOverride = true,
-                OperatorId = operatorId
-            });
-            db.SaveChanges();
-            return isValid;
-        }
+        //    db.CheckInLogs.Add(new CheckInLog
+        //    {
+        //        TicketId = ticketId,
+        //        Action = (byte)CheckInAction.CheckIn,
+        //        ActionTime = DateTime.Now,
+        //        IsValid = isValid,
+        //        IsManualOverride = true,
+        //        OperatorId = operatorId
+        //    });
+        //    db.SaveChanges();
+        //    return isValid;
+        //}
 
-        public bool ManualCheckOut(int ticketId, int operatorId)
-        {
-            dbVenueContext db = new dbVenueContext();
-            var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
-            if (ticket == null) return false;
+        //public bool ManualCheckOut(int ticketId, int operatorId)
+        //{
+        //    dbVenueContext db = new dbVenueContext();
+        //    var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
+        //    if (ticket == null) return false;
 
-            var lastLog = db.CheckInLogs
-            .Where(l => l.TicketId == ticketId &&
-            (l.Action == (byte)CheckInAction.CheckIn || l.Action == (byte)CheckInAction.CheckOut))
-            .OrderByDescending(l => l.ActionTime)
-            .FirstOrDefault();
+        //    var lastLog = db.CheckInLogs
+        //    .Where(l => l.TicketId == ticketId &&
+        //    (l.Action == (byte)CheckInAction.CheckIn || l.Action == (byte)CheckInAction.CheckOut))
+        //    .OrderByDescending(l => l.ActionTime)
+        //    .FirstOrDefault();
 
-            // 上一筆是入場
-            bool isValid = lastLog != null && lastLog.Action == (byte)CheckInAction.CheckIn;
+        //    // 上一筆是入場
+        //    bool isValid = lastLog != null && lastLog.Action == (byte)CheckInAction.CheckIn;
 
-            db.CheckInLogs.Add(new CheckInLog
-            {
-                TicketId = ticketId,
-                Action = (byte)CheckInAction.CheckOut,
-                ActionTime = DateTime.Now,
-                IsValid = isValid,
-                IsManualOverride = true,
-                OperatorId = operatorId
-            });
-            db.SaveChanges();
-            return isValid;
-        }
+        //    db.CheckInLogs.Add(new CheckInLog
+        //    {
+        //        TicketId = ticketId,
+        //        Action = (byte)CheckInAction.CheckOut,
+        //        ActionTime = DateTime.Now,
+        //        IsValid = isValid,
+        //        IsManualOverride = true,
+        //        OperatorId = operatorId
+        //    });
+        //    db.SaveChanges();
+        //    return isValid;
+        //}
 
-        public bool ManualCancel(int ticketId, int operatorId)
-        {
-            dbVenueContext db = new dbVenueContext();
-            var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
-            if (ticket == null || ticket.Status == (byte)EntryTicketStatus.Cancelled) return false;
+        //public bool ManualCancel(int ticketId, int operatorId)
+        //{
+        //    dbVenueContext db = new dbVenueContext();
+        //    var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
+        //    if (ticket == null || ticket.Status == (byte)EntryTicketStatus.Cancelled) return false;
 
-            ticket.Status = (byte)EntryTicketStatus.Cancelled;
-            db.CheckInLogs.Add(new CheckInLog
-            {
-                TicketId = ticketId,
-                Action = (byte)CheckInAction.ManualCancel,
-                ActionTime = DateTime.Now,
-                IsValid = true,
-                IsManualOverride = true,
-                OperatorId = operatorId
-            });
-            db.SaveChanges();
-            return true;
-        }
+        //    ticket.Status = (byte)EntryTicketStatus.Cancelled;
+        //    db.CheckInLogs.Add(new CheckInLog
+        //    {
+        //        TicketId = ticketId,
+        //        Action = (byte)CheckInAction.ManualCancel,
+        //        ActionTime = DateTime.Now,
+        //        IsValid = true,
+        //        IsManualOverride = true,
+        //        OperatorId = operatorId
+        //    });
+        //    db.SaveChanges();
+        //    return true;
+        //}
 
-        public bool ManualExpire(int ticketId, int operatorId)
-        {
-            dbVenueContext db = new dbVenueContext();
-            var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
-            if (ticket == null || ticket.Status == (byte)EntryTicketStatus.Expired) return false;
+        //public bool ManualExpire(int ticketId, int operatorId)
+        //{
+        //    dbVenueContext db = new dbVenueContext();
+        //    var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
+        //    if (ticket == null || ticket.Status == (byte)EntryTicketStatus.Expired) return false;
 
-            ticket.Status = (byte)EntryTicketStatus.Expired;
-            db.CheckInLogs.Add(new CheckInLog
-            {
-                TicketId = ticketId,
-                Action = (byte)CheckInAction.ManualExpire,
-                ActionTime = DateTime.Now,
-                IsValid = true,
-                IsManualOverride = true,
-                OperatorId = operatorId
-            });
-            db.SaveChanges();
-            return true;
-        }
+        //    ticket.Status = (byte)EntryTicketStatus.Expired;
+        //    db.CheckInLogs.Add(new CheckInLog
+        //    {
+        //        TicketId = ticketId,
+        //        Action = (byte)CheckInAction.ManualExpire,
+        //        ActionTime = DateTime.Now,
+        //        IsValid = true,
+        //        IsManualOverride = true,
+        //        OperatorId = operatorId
+        //    });
+        //    db.SaveChanges();
+        //    return true;
+        //}
     }
 }

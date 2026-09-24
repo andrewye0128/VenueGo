@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Services
+﻿namespace VenueGo.Services.Ticket
 {
     public interface IEntryTicketService
     {

@@ -240,39 +240,110 @@ namespace VenueGo.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> CreateRole(RoleCreateViewModel model)
         {
+            // 取得目前登入使用者 ID
             int currentUserId = GetCurrentUserId();
+
+            // 整理角色名稱
             var trimmedName = model.RoleName?.Trim() ?? string.Empty;
 
-            // [FIX] 用 trim 後的名稱做重複性檢查，避免「Staff 」通過檢查但存入後變成重複
-            if (await IsRoleNameDuplicateAsync(trimmedName, excludeRoleId: null))
+            // 整理前端傳入的權限 ID
+            // Distinct 可以避免同一個 PermissionId 被重複送出
+            var selectedPermissionIds = model.SelectedPermissionIds?
+                .Distinct()
+                .ToList() ?? new List<int>();
+
+
+            // =========================
+            // 1. 基本資料驗證
+            // =========================
+
+            // 檢查角色名稱是否重複
+            if (await IsRoleNameDuplicateAsync(trimmedName, null))
             {
-                ModelState.AddModelError("RoleName", "角色名稱已存在");
+                ModelState.AddModelError(
+                    "RoleName",
+                    "角色名稱已存在");
             }
 
-            // [5] 新建角色也不可佔用系統保留名稱
-            if (ReservedRoleNames.Contains(trimmedName, StringComparer.OrdinalIgnoreCase))
+            // 檢查是否使用系統保留角色名稱
+            if (ReservedRoleNames.Contains(
+                trimmedName,
+                StringComparer.OrdinalIgnoreCase))
             {
-                ModelState.AddModelError("RoleName", "此名稱為系統保留角色名稱，請使用其他名稱。");
+                ModelState.AddModelError(
+                    "RoleName",
+                    "此名稱為系統保留角色名稱，請使用其他名稱。");
             }
+
+
+            // =========================
+            // 2. 驗證 PermissionId
+            // =========================
+
+            if (selectedPermissionIds.Any())
+            {
+                // 查詢資料庫中實際存在且啟用的權限
+                var validPermissionIds = await _db.Permissions
+                    .Where(p =>
+                        selectedPermissionIds.Contains(p.PermissionId)
+                        && p.Status)
+                    .Select(p => p.PermissionId)
+                    .ToListAsync();
+
+                // 數量不同，代表有非法或停用的 PermissionId
+                if (validPermissionIds.Count !=
+                    selectedPermissionIds.Count)
+                {
+                    ModelState.AddModelError(
+                        "",
+                        "選擇的權限中包含不存在或已停用的權限。");
+                }
+            }
+
+
+            // =========================
+            // 3. 驗證失敗 → 回到表單
+            // =========================
 
             if (!ModelState.IsValid)
             {
-                model.AvailablePermissions = await GetAvailablePermissionsAsync();
+                // 重新載入權限清單
+                model.AvailablePermissions =
+                    await GetAvailablePermissionsAsync();
+
                 return View(model);
             }
 
-            using var transaction = await _db.Database.BeginTransactionAsync();
+
+            // =========================
+            // 4. 開始 Transaction
+            // =========================
+
+            using var transaction =
+                await _db.Database.BeginTransactionAsync();
 
             try
             {
-                // [NEW] 交易內再次確認名稱未被搶先建立（縮小應用層檢查與寫入之間的競態窗口）
-                if (await IsRoleNameDuplicateAsync(trimmedName, excludeRoleId: null))
+                // 再檢查一次角色名稱
+                // 避免多人同時建立相同名稱
+                if (await IsRoleNameDuplicateAsync(trimmedName, null))
                 {
                     await transaction.RollbackAsync();
-                    ModelState.AddModelError("RoleName", "角色名稱已存在，請使用其他名稱。");
-                    model.AvailablePermissions = await GetAvailablePermissionsAsync();
+
+                    ModelState.AddModelError(
+                        "RoleName",
+                        "角色名稱已存在，請使用其他名稱。");
+
+                    model.AvailablePermissions =
+                        await GetAvailablePermissionsAsync();
+
                     return View(model);
                 }
+
+
+                // =========================
+                // 5. 建立 Role
+                // =========================
 
                 var role = new Role
                 {
@@ -284,22 +355,31 @@ namespace VenueGo.Controllers
                 };
 
                 _db.Roles.Add(role);
+
+                // 儲存 Role，取得資料庫產生的 RoleId
                 await _db.SaveChangesAsync();
 
-                if (model.SelectedPermissionIds != null && model.SelectedPermissionIds.Any())
+
+                // =========================
+                // 6. 建立 RolePermission
+                // =========================
+
+                foreach (var permId in selectedPermissionIds)
                 {
-                    foreach (var permId in model.SelectedPermissionIds)
+                    _db.RolePermissions.Add(new RolePermission
                     {
-                        _db.RolePermissions.Add(new RolePermission
-                        {
-                            RoleId = role.RoleId,
-                            PermissionId = permId,
-                            Status = true,
-                            AssignedAt = DateTime.Now,
-                            AssignedBy = currentUserId
-                        });
-                    }
+                        RoleId = role.RoleId,
+                        PermissionId = permId,
+                        Status = true,
+                        AssignedAt = DateTime.Now,
+                        AssignedBy = currentUserId
+                    });
                 }
+
+
+                // =========================
+                // 7. 建立 AuditLog
+                // =========================
 
                 _db.AuditLogs.Add(new AuditLog
                 {
@@ -311,18 +391,42 @@ namespace VenueGo.Controllers
                     CreatedAt = DateTime.Now
                 });
 
+
+                // =========================
+                // 8. 儲存權限與操作紀錄
+                // =========================
+
                 await _db.SaveChangesAsync();
+
+
+                // =========================
+                // 9. Transaction 成功
+                // =========================
+
                 await transaction.CommitAsync();
 
-                TempData["SuccessMessage"] = $"成功建立新角色：{role.RoleName}";
+                TempData["SuccessMessage"] =
+                    "角色建立成功。";
+
                 return RedirectToAction(nameof(Roles));
             }
             catch (Exception ex)
             {
+                // 任一資料庫操作失敗
+                // 將這次 Transaction 全部取消
                 await transaction.RollbackAsync();
-                _logger.LogError(ex, "Failed to create role {RoleName}", trimmedName); // [4]
-                ModelState.AddModelError("", "新增角色失敗，請稍後再試。");
-                model.AvailablePermissions = await GetAvailablePermissionsAsync();
+
+                _logger.LogError(
+                    ex,
+                    "建立角色時發生錯誤");
+
+                ModelState.AddModelError(
+                    "",
+                    "建立角色失敗，請稍後再試。");
+
+                model.AvailablePermissions =
+                    await GetAvailablePermissionsAsync();
+
                 return View(model);
             }
         }
@@ -786,6 +890,8 @@ namespace VenueGo.Controllers
             }
         }
 
+        // [警告] 目前沒有任何 View 或前端呼叫此方法，是預留給未來「列表頁快速切換狀態」功能使用。
+        // 若要啟用，請確認快照邏輯（角色移除記錄）與 EditUser 保持一致。
         //[HttpPost]
         //[ValidateAntiForgeryToken]
         //public async Task<IActionResult> UpdateEmployeeStatus(int userId, string status)
@@ -891,23 +997,51 @@ namespace VenueGo.Controllers
             return userId;
         }
 
-        // [NEW] 應用層檢查角色名稱是否重複（大小寫不分，排除自己）
-        // 說明：Roles.RoleName 目前資料庫層未加 unique index，
-        // 此檢查與寫入之間仍存在極小的競態窗口（TOCTOU），
-        // 若未來併發建立/改名角色的情境變多，建議評估補上資料庫 unique index。
-        private async Task<bool> IsRoleNameDuplicateAsync(string roleName, int? excludeRoleId)
+        /// <summary>
+        /// 檢查角色名稱是否已經存在。
+        /// </summary>
+        /// <param name="roleName">要檢查的角色名稱</param>
+        /// <param name="excludeRoleId">
+        /// 修改角色時，要排除目前正在修改的角色。
+        /// 新增角色時則傳入 null。
+        /// </param>
+        /// <returns>
+        /// true = 已存在其他相同名稱的角色
+        /// false = 沒有重複
+        /// </returns>
+        private async Task<bool> IsRoleNameDuplicateAsync(
+            string roleName,
+            int? excludeRoleId)
         {
-            if (string.IsNullOrWhiteSpace(roleName)) return false;
+            // 如果角色名稱是 null、空字串或只有空白，
+            // 就不用進行資料庫查詢。
+            if (string.IsNullOrWhiteSpace(roleName))
+                return false;
 
-            var normalized = roleName.Trim().ToLower();
+            // 移除角色名稱前後的空白，
+            // 例如 " Staff " → "Staff"
+            var normalized = roleName.Trim();
 
-            var query = _db.Roles.Where(r => r.RoleName.ToLower() == normalized);
+            // 建立查詢：
+            // 從 Roles 資料表中找出 RoleName
+            // 等於目前要檢查的角色名稱。
+            var query = _db.Roles
+                .Where(r => r.RoleName == normalized);
 
+            // 如果有指定 excludeRoleId，
+            // 代表目前是在「修改角色」。
             if (excludeRoleId.HasValue)
             {
-                query = query.Where(r => r.RoleId != excludeRoleId.Value);
+                // 排除目前正在修改的角色本身，
+                // 避免把自己判斷成「重複」。
+                query = query.Where(
+                    r => r.RoleId != excludeRoleId.Value);
             }
 
+            // AnyAsync() 用來確認查詢結果是否至少有一筆資料。
+            //
+            // true  → 找到其他相同角色名稱，代表重複
+            // false → 沒有找到，代表沒有重複
             return await query.AnyAsync();
         }
 

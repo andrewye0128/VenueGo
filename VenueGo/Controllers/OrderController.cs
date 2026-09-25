@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Services.Ticket;
 using VenueGo.Helpers;
 using VenueGo.Models.Constants;
 using VenueGo.Services;

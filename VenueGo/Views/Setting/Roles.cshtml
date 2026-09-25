@@ -48,7 +48,7 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-4">角色 ID</th>
+                        @* <th class="ps-4">角色 ID</th> *@
                         <th>角色名稱</th>
                         <th>描述</th>
                         <th>綁定使用者數</th>
@@ -69,7 +69,7 @@
                         @foreach (var item in Model)
                         {
                             <tr>
-                                <td class="ps-4 fw-bold">#@item.RoleId</td>
+                                @* <td class="ps-4 fw-bold">#@item.RoleId</td> *@
                                 <td><span class="badge bg-primary fs-6">@item.RoleName</span></td>
                                 <td>@(string.IsNullOrEmpty(item.Description) ? "-" : item.Description)</td>
                                 <td>

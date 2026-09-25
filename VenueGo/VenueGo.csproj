@@ -39,6 +39,9 @@
   <ItemGroup>
     <Folder Include="Models\MemberModels\" />
     <Folder Include="Models\OperationModels\" />
+    <Folder Include="Models\ReservationModels\" />
+    <Folder Include="Models\VenueModels\" />
+    <Folder Include="ViewModels\CheckinViewModels\" />
     <Folder Include="Models\TimeSlots\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="ViewModels\MemberViewModels\" />

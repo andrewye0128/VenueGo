@@ -46,8 +46,9 @@
                     <option value="">全部狀態</option>
                     <option value="1" selected="@(@Model.SelectedStatus == 1)">有效</option>
                     <option value="2" selected="@(Model.SelectedStatus == 2)">已使用</option>
-                    <option value="3" selected="@(Model.SelectedStatus == 3)">已逾期</option>
+                    <option value="3" selected="@(Model.SelectedStatus == 3)">已失效</option>
                     <option value="4" selected="@(Model.SelectedStatus == 4)">已取消</option>
+                    <option value="5" selected="@(Model.SelectedStatus == 5)">已完成</option>
                 </select>
             </div>
             <div class="col-lg-2 d-flex align-items-end gap-2">
@@ -96,13 +97,14 @@
                                       2 => "bg-secondary",
                                       3 => "bg-warning text-dark",
                                       4 => "bg-danger",
+                                      5 => "bg-info text-dark",
                                       _ => "bg-dark"
                                   })">
                                 @item.StatusText
                             </span>
                         </td>
                         <td class="text-nowrap">
-                            @if (item.Status == 1)
+                            @if (item.Status == 1 && DateTime.Now <= item.BookingDate.ToDateTime(item.EndTime))
                             {
                                 <form asp-action="QuickCheckIn" asp-route-id="@item.TicketId" method="post" class="d-inline">
                                     <button type="submit" class="btn btn-sm btn-success">快速報到</button>

@@ -65,7 +65,7 @@ namespace VenueGo.Controllers
                                    BookingDate = r.BookingDate,
                                    StartTime = r.StartTime,
                                    EndTime = r.EndTime,
-                                   ReservationStatus = r.ReservationStatus,
+                                   ReservationStatus = (ReservationStatus)r.ReservationStatus,
 
                                    // 付款狀態改用子查詢，不再用 left join。
                                    //

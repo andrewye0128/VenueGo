@@ -25,7 +25,9 @@ namespace VenueGo.ViewModels.ReservationViewModels
         public string TimeRange => $"{StartTime:HH\\:mm} ~ {EndTime:HH\\:mm}";
 
         [DisplayName("預約狀態")]
-        public byte ReservationStatus { get; set; }
+        public ReservationStatus ReservationStatus { get; set; }
+
+        public string ReservationStatusText => ReservationStatus.GetDisplayName();
 
         [DisplayName("付款狀態")]
         public PaymentStatus? PaymentStatus { get; set; }

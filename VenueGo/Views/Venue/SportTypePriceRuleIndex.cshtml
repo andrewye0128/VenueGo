@@ -107,7 +107,16 @@
                                         <span class="text-muted">不分尖/離峰</span>
                                     }
                                 </td>
-                                <td>@item.PeakPrice 元</td>
+                                <td>
+                                          @if (item.PeakStartTime.HasValue)
+                                    {
+                                        <span>@item.PeakPrice 元</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">--</span>                                       
+                                    }
+                                </td>
                                 <td>@item.OffPeakPrice 元</td>
                                 <td>
                                     @if (item.IsActive)

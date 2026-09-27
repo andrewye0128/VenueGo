@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System.Net.WebSockets;
+using System.Reflection.Metadata.Ecma335;
 using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Constants;
@@ -381,6 +382,8 @@ namespace VenueGo.Controllers
             return View(vm);
         }
 
+     
+
 
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //價格規則新增 >> 資料回傳存入DB
@@ -388,6 +391,16 @@ namespace VenueGo.Controllers
         public IActionResult SportTypePriceRuleCreate(SportTypePriceRuleCreateViewModel vm)
         {
             CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+            //價格填寫檢查 >> 確認尖峰價格 > 離峰價格
+            if (vm.PeakStartTime != null)
+            {
+                //檢查尖峰價格是否大於離峰價格
+                if(vm.PeakPrice <= vm.OffPeakPrice)
+                {
+                    ModelState.AddModelError(nameof(vm.PeakPrice), "尖峰價格應大於離峰價格");
+                }
+            }
+
 
             //整點檢查 >> PeakStartTime 有值時,分鐘/秒數必須是0
             //前端已經改成下拉選單、選項本身就只有整點,這裡是防止有人跳過前端直接送 POST(例如用 Postman)
@@ -481,6 +494,17 @@ namespace VenueGo.Controllers
         public IActionResult SportTypePriceRuleEdit(SportTypePriceRuleEditViewModel vm)
         {
             CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+
+            //價格填寫檢查 >> 確認尖峰價格 > 離峰價格
+            if (vm.PeakStartTime != null)
+            {
+                //檢查尖峰價格是否大於離峰價格
+                if (vm.PeakPrice <= vm.OffPeakPrice)
+                {
+                    ModelState.AddModelError(nameof(vm.PeakPrice), "尖峰價格應大於離峰價格");
+                }
+            }
+
 
             //整點檢查 >> PeakStartTime 有值時,分鐘/秒數必須是0
             if (!IsWholeHour(vm.PeakStartTime))
@@ -913,6 +937,5 @@ namespace VenueGo.Controllers
             return time.Value >= CSportTypePriceRuleFactory.BusinessOpenTime
                 && time.Value <= CSportTypePriceRuleFactory.LatestPeakStartTime;
         }
-
     }
 }

@@ -4,7 +4,18 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- 前台 Vue 專案所在資料夾（相對於此 .csproj） -->
+    <SpaRoot>Front-Web\</SpaRoot>
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**;$(SpaRoot)dist\**</DefaultItemExcludes>
   </PropertyGroup>
+
+  <!-- 前台 Vue 專案：不當成網站內容發佈，只在方案總管顯示原始碼 -->
+  <ItemGroup>
+   <Content Remove="$(SpaRoot)**" />
+   <None Remove="$(SpaRoot)**" />
+   <None Include="$(SpaRoot)**" Exclude="$(SpaRoot)node_modules\**;$(SpaRoot)dist\**" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Remove="Views\ReviewCardViewModel\**" />
@@ -34,6 +45,7 @@
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="QRCoder" Version="1.8.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
 
   <ItemGroup>

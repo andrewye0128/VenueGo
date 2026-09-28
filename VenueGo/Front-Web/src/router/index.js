@@ -34,6 +34,12 @@ const router = createRouter({
       name: "demo-button",
       component: () => import("../views/ButtonDemoView.vue"),
     },
+    {
+      // 前端驗證（UForm + Zod）範例頁
+      path: "/demo/form",
+      name: "demo-form",
+      component: () => import("../views/FormDemoView.vue"),
+    },
   ],
 });
 

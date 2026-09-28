@@ -15,6 +15,10 @@ const props = defineProps({
   disabledValues: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
   error: { type: String, default: "" },
+  // 放在 UForm 裡時，要跟 schema 的欄位名稱一樣，驗證錯誤才會顯示在這個選單下方
+  name: { type: String, default: undefined },
+  // Label 旁邊顯示必填的 * 號
+  required: { type: Boolean, default: false },
 });
 
 // 不鎖整頁捲動，避免捲軸消失/出現造成 Header、Footer 右側閃動
@@ -41,7 +45,8 @@ const selectedIcon = computed(() => items.value.find((item) => item.value === mo
 </script>
 
 <template>
-  <UFormField :label="label" :error="error || false">
+  <!-- error 沒值時要傳 undefined，不能傳 false：false 代表「永遠不顯示錯誤」，UForm 的驗證錯誤會被藏起來 -->
+  <UFormField :label="label" :name="name" :required="required" :error="error || undefined">
     <USelect
       v-model="model"
       :items="items"

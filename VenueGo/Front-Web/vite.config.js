@@ -25,6 +25,50 @@ export default defineConfig({
       // 把 Nuxt UI 元件調整成 VenueGo Design System 的樣子
       // 顏色本身在 main.css 用 --ui-* 變數對應到品牌色
       ui: {
+        // 表單驗證時機：離開欄位（blur）或選項改變（change）時才檢查，打字途中不檢查
+        // 寫在 defaultVariants 會成為全站所有 UForm 的預設值，組員不用每張表單都設定
+        form: {
+          defaultVariants: {
+            validateOn: ["blur", "change"],
+          },
+        },
+        // 輸入框、多行輸入框：外觀與 USelect 一致（高 40px、圓角 4px、滑鼠停留藍框）
+        input: {
+          slots: {
+            base: "rounded disabled:opacity-100 disabled:bg-brand-background disabled:text-neutral-text-secondary",
+          },
+          variants: {
+            size: {
+              md: { base: "h-10 px-3 text-sm gap-2" },
+            },
+          },
+          compoundVariants: [
+            {
+              color: "primary",
+              variant: "outline",
+              class:
+                "hover:ring-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary",
+            },
+          ],
+        },
+        textarea: {
+          slots: {
+            base: "rounded disabled:opacity-100 disabled:bg-brand-background disabled:text-neutral-text-secondary",
+          },
+          variants: {
+            size: {
+              md: { base: "px-3 py-2 text-sm" },
+            },
+          },
+          compoundVariants: [
+            {
+              color: "primary",
+              variant: "outline",
+              class:
+                "hover:ring-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary",
+            },
+          ],
+        },
         select: {
           slots: {
             base: "disabled:opacity-100 data-[state=open]:ring-brand-primary",
@@ -62,6 +106,11 @@ export default defineConfig({
         },
         // UButton 對應 BaseButton：action / primary = solid、secondary = outline、text = ghost
         button: {
+          // 全站按鈕預設開啟 loadingAuto：在 UForm 裡的送出按鈕，送出處理中會自動轉圈、不能重複按
+          // （@click 綁定的是會等待的 async 函式時，也會自動轉圈）
+          defaultVariants: {
+            loadingAuto: true,
+          },
           slots: {
             base: "cursor-pointer justify-center rounded font-semibold transition disabled:opacity-100 aria-disabled:opacity-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary",
           },

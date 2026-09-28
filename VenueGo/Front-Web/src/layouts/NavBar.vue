@@ -64,11 +64,6 @@ const isDrawerOpen = ref(false);
           <UButton color="action" size="lg" to="/booking">立即預約</UButton>
         </div>
       </div>
-
-      <!-- <div class="flex items-center gap-4">
-        <BaseButton variant="secondary" size="lg" to="/login">登入</BaseButton>
-        <BaseButton variant="action" size="lg" to="/booking">立即預約</BaseButton>
-      </div> -->
     </div>
 
     <NavDrawer :open="isDrawerOpen" :items="navItems" @close="isDrawerOpen = false" />

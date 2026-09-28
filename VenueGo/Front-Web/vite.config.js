@@ -84,11 +84,12 @@ export default defineConfig({
               class: "hover:bg-primary active:bg-primary text-white hover:brightness-120 active:brightness-65 disabled:bg-neutral-border aria-disabled:bg-neutral-border disabled:brightness-100 aria-disabled:brightness-100",
             },
             // 白底藍框（secondary）
+            // 用真正的 border 取代 Nuxt UI 預設的內側 ring，寬度才會跟 BaseButton 一樣（ring 不佔寬度，會少 2px）
             {
               color: "primary",
               variant: "outline",
               class:
-                "ring-brand-primary bg-neutral-surface hover:bg-brand-primary/8 active:bg-brand-primary/16 disabled:bg-neutral-border aria-disabled:bg-neutral-border disabled:text-white aria-disabled:text-white disabled:ring-neutral-border aria-disabled:ring-neutral-border",
+                "ring-0 border border-brand-primary bg-neutral-surface hover:bg-brand-primary/8 active:bg-brand-primary/16 disabled:bg-neutral-border aria-disabled:bg-neutral-border disabled:text-white aria-disabled:text-white disabled:border-neutral-border aria-disabled:border-neutral-border",
             },
             // 純文字（text）
             {
@@ -96,6 +97,32 @@ export default defineConfig({
               variant: "ghost",
               class:
                 "hover:bg-brand-primary/8 active:bg-brand-primary/16 disabled:text-neutral-border aria-disabled:text-neutral-border",
+            },
+            // 載入中：UButton 會自動加上 disabled（防止重複送出），這裡讓它維持原本顏色，游標顯示「處理中」
+            {
+              loading: true,
+              color: "action",
+              variant: "solid",
+              class: "disabled:bg-action disabled:cursor-progress",
+            },
+            {
+              loading: true,
+              color: "primary",
+              variant: "solid",
+              class: "disabled:bg-primary disabled:cursor-progress",
+            },
+            {
+              loading: true,
+              color: "primary",
+              variant: "outline",
+              class:
+                "disabled:bg-neutral-surface disabled:text-brand-primary disabled:border-brand-primary disabled:cursor-progress",
+            },
+            {
+              loading: true,
+              color: "primary",
+              variant: "ghost",
+              class: "disabled:text-brand-primary disabled:cursor-progress",
             },
             // 只有 icon 的正方形按鈕
             { size: "sm", square: true, class: "w-8 px-0" },

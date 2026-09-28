@@ -2,7 +2,6 @@
 import { ref } from "vue";
 import { RouterLink } from "vue-router";
 import Logo from "@/components/Logo.vue";
-import BaseButton from "@/components/base/BaseButton.vue";
 import IconMenu from "@/components/icons/IconMenu.vue";
 import IconCalendarPlus from "@/components/icons/IconCalendarPlus.vue";
 import NavDrawer from "./NavDrawer.vue";
@@ -31,13 +30,14 @@ const isDrawerOpen = ref(false);
       <div class="justify-self-end">
         <!-- 手機：只有 icon -->
         <div class="md:hidden">
-          <BaseButton variant="action" to="/booking" icon-only aria-label="立即預約">
+          <!-- 圖示沿用 IconCalendarPlus，放在 UButton 裡面，外觀跟原本一樣 -->
+          <UButton color="action" to="/booking" square aria-label="立即預約">
             <IconCalendarPlus class="h-6 w-6" />
-          </BaseButton>
+          </UButton>
         </div>
         <!-- 平板：文字按鈕 -->
         <div class="hidden md:block">
-          <BaseButton variant="action" to="/booking">立即預約</BaseButton>
+          <UButton color="action" to="/booking">立即預約</UButton>
         </div>
       </div>
     </div>
@@ -60,8 +60,8 @@ const isDrawerOpen = ref(false);
         </ul>
 
         <div class="flex items-center gap-4">
-          <BaseButton variant="secondary" size="lg" to="/login">登入</BaseButton>
-          <BaseButton variant="action" size="lg" to="/booking">立即預約</BaseButton>
+          <UButton color="primary" variant="outline" size="lg" to="/login">登入</UButton>
+          <UButton color="action" size="lg" to="/booking">立即預約</UButton>
         </div>
       </div>
 

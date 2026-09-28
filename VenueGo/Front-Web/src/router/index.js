@@ -29,7 +29,7 @@ const router = createRouter({
       component: () => import("../views/SelectDemoView.vue"),
     },
     {
-      // BaseButton 與 UButton 比較頁
+      // UButton 使用說明頁
       path: "/demo/button",
       name: "demo-button",
       component: () => import("../views/ButtonDemoView.vue"),

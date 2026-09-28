@@ -10,9 +10,9 @@
   --color-brand-primary: #1d5faf;
   --color-brand-action: #c24e17;
   --color-brand-background: #f3f5f8;
-  /* 新增（尚未列入 Design System v1）：Footer 等深色區塊，需同步更新 Figma */
+  /* Footer 等深色區塊，需同步更新 Figma */
   --color-brand-dark: #0d233e;
-  /* 新增（尚未列入 Design System v1）：運動類型 icon 等需要吸引目光的小元素，需同步更新 Figma */
+  /* 運動類型 icon 等需要吸引目光的小元素，需同步更新 Figma */
   --color-brand-accent: #f03010;
 
   --color-neutral-surface: #ffffff;

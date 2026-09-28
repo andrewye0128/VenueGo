@@ -80,7 +80,6 @@
     <div class="alert bg-warning-subtle border-warning-subtle text-warning-emphasis d-flex flex-wrap align-items-center gap-2 py-2" role="note">
         <strong>場館公休日</strong>
         <span class="badge rounded-pill text-bg-light border">@Model.ClosedDaysText</span>
-        <span class="small">公休日不列入下方的尖峰時段摘要</span>
         @if (canManage)
         {
             <a asp-action="WeekBusinessHourIndex" class="btn btn-primary btn-sm ms-auto">前往營業時間管理</a>
@@ -138,7 +137,7 @@
                                     {
                                         @* 改版前的舊價格規則,還沒有每日尖峰資料,提醒管理者進去編輯儲存一次 *@
                                         <span class="text-warning-emphasis">
-                                            <i class="bi bi-exclamation-triangle-fill me-1"></i>尚未設定尖峰時段,請編輯
+                                            --未設置尖峰時段--
                                         </span>
                                     }
                                     else if (!item.HasAnyPeak)

@@ -9,31 +9,20 @@ namespace VenueGo.Models.VenueModels
 {
     public class CSportTypePriceRuleFactory
     {
-        //【舊版,Controller 改完後刪除】以下三個常數、無參數的 GetPeakStartTimeOptions()、
-        //單一參數的 Create(Wrap)、三個參數的 Edit(Wrap, userId, now) 都是「一個運動類型只有一個尖峰時間」時代的寫法,
-        //目前 Controller 還在使用,先保留讓專案可以編譯;
-        //改成「每天各自設定」後(SportTypePeakHours),Controller 換成呼叫下方新方法時一起刪除
-        // ⚠️【暫時寫死,待接續開發】營業時間目前還沒有 WeekBusinessHour 功能可以查,
-        // 先假設全週營業時間固定是 10:00~22:00。
-        // TODO: 等 WeekBusinessHour(場館營業時間管理)開發完成後,
-        //       這兩個值要改成向 WeekBusinessHour 資料表查詢實際營業時間,
-        //       不能再繼續用這裡寫死的常數。
-        public static readonly TimeOnly BusinessOpenTime = new TimeOnly(10, 0);   //開始營業時間
-        public static readonly TimeOnly BusinessCloseTime = new TimeOnly(22, 0);  //結束營業時間(打烊時間)
-
-        //尖峰起始時間最晚可以設定到「打烊前一小時」,讓尖峰時段至少有一小時長度,
-        //所以不是直接用 BusinessCloseTime,而是再往前推一小時
-        public static readonly TimeOnly LatestPeakStartTime = BusinessCloseTime.AddHours(-1);
-
-
-
-        //價格規則查詢 >> 給 SportTypePriceRuleIndex 顯示用,連帶查出運動類型名稱
+        //價格規則查詢 >> 給 SportTypePriceRuleIndex 顯示用,連帶查出運動類型名稱、每天尖峰時間的摘要與明細
+        //整個方法只查 3 次DB(價格規則+運動類型、全部尖峰時間、營業時間),不在迴圈裡逐筆查詢
         public List<SportTypePriceRuleIndexViewModel> QueryAll()
         {
             List<SportTypePriceRuleIndexViewModel> list = new List<SportTypePriceRuleIndexViewModel>();
 
+            //營業時間 7 筆,每一筆價格規則的摘要、明細都要用到,先查一次重複使用
+            List<CWeekBusinessHourWrap> businessHours = new CWeekBusinessHourFactory().QueryAll();
+
             using (dbVenueContext db = new dbVenueContext())
             {
+                //一次查出所有運動類型的尖峰時間,下面再依 SportTypeId 分給各筆價格規則
+                List<SportTypePeakHour> allPeakHours = db.SportTypePeakHours.ToList();
+
                 //LINQ查詢 >> 依SportTypeId關聯SportTypePriceRule與SportType兩張表
                 var datas = from p in db.SportTypePriceRules
                             join t in db.SportTypes on p.SportTypeId equals t.SportTypeId
@@ -46,31 +35,45 @@ namespace VenueGo.Models.VenueModels
                     item.SportTypePriceRuleId = data.PriceRule.SportTypePriceRuleId;
                     item.SportTypeId = data.PriceRule.SportTypeId;
                     item.SportName = data.SportType.SportName;
-                    item.PeakStartTime = data.PriceRule.PeakStartTime;
                     item.PeakPrice = data.PriceRule.PeakPrice;
                     item.OffPeakPrice = data.PriceRule.OffPeakPrice;
                     item.IsActive = data.PriceRule.IsActive;
+
+                    //從全部尖峰時間中挑出這個運動類型的那幾筆,包成 Wrap
+                    List<CSportTypePeakHourWrap> peakHours = new List<CSportTypePeakHourWrap>();
+                    foreach (SportTypePeakHour peakHour in allPeakHours)
+                    {
+                        if (peakHour.SportTypeId == data.PriceRule.SportTypeId)
+                        {
+                            CSportTypePeakHourWrap wrap = new CSportTypePeakHourWrap();
+                            wrap.sportTypePeakHour = peakHour;
+                            peakHours.Add(wrap);
+                        }
+                    }
+
+                    //一筆都沒有 = 改版前的舊價格規則,還沒在後台儲存過,列表要提醒「尚未設定尖峰時段」
+                    item.IsPeakNotConfigured = peakHours.Count == 0;
+
+                    //7 天明細;列表不需要舊欄位當預設值(沒設定就是沒設定),所以第三個參數傳 null
+                    item.Days = BuildPeakRows(peakHours, businessHours, null);
+                    item.PeakSummary = BuildPeakSummary(peakHours, businessHours);
+
+                    //有沒有尖峰、有沒有超出營業時間,都只看營業日(公休日存檔時一律是 null,不列入判斷)
+                    foreach (SportTypePeakHourRowViewModel day in item.Days)
+                    {
+                        if (day.IsBusinessDay && day.PeakStartTime.HasValue)
+                        {
+                            item.HasAnyPeak = true;
+                        }
+
+                        if (day.IsOutOfRange)
+                        {
+                            item.HasOutOfRange = true;
+                        }
+                    }
+
                     list.Add(item);
                 }
-            }
-
-            return list;
-        }
-
-
-        //尖峰起始時間下拉選單選項 >> 從開始營業時間到「打烊前一小時」,每小時一個選項
-        //改用下拉選單(而不是 <input type="time">)是為了在 UI 上直接讓使用者只選得出整點,
-        //而不是靠 step/min/max 這種「使用者還是打得出不合法值,只能靠瀏覽器提示」的做法
-        //⚠️【暫時寫死,待接續開發】選項範圍依據上面寫死的營業時間常數產生,
-        //等 WeekBusinessHour(場館營業時間管理)開發完成後,要改成依照實際營業時間動態產生選項
-        public List<SelectListItem> GetPeakStartTimeOptions()
-        {
-            List<SelectListItem> list = new List<SelectListItem>();
-
-            for (TimeOnly time = BusinessOpenTime; time <= LatestPeakStartTime; time = time.AddHours(1))
-            {
-                string text = time.ToString("HH:mm");
-                list.Add(new SelectListItem { Text = text, Value = text });
             }
 
             return list;
@@ -126,10 +129,17 @@ namespace VenueGo.Models.VenueModels
                 vm.SportTypePriceRuleId = data.PriceRule.SportTypePriceRuleId;
                 vm.SportTypeId = data.PriceRule.SportTypeId;
                 vm.SportTypeName = data.SportType.SportName;
-                vm.PeakStartTime = data.PriceRule.PeakStartTime;
                 vm.PeakPrice = data.PriceRule.PeakPrice;
                 vm.OffPeakPrice = data.PriceRule.OffPeakPrice;
                 vm.IsActive = data.PriceRule.IsActive;
+
+                //7 天尖峰時間:查出這個運動類型目前的每日資料,組成 7 列
+                //還沒有每日資料(改版前的舊價格規則)時,營業日先用舊欄位的尖峰起始時間當預設值,
+                //讓編輯畫面不是一片空白;按下儲存後 Edit() 會一次建立 7 筆
+                List<CSportTypePeakHourWrap> peakHours = QueryPeakHours(data.PriceRule.SportTypeId);
+                List<CWeekBusinessHourWrap> businessHours = new CWeekBusinessHourFactory().QueryAll();
+                vm.Days = BuildPeakRows(peakHours, businessHours, data.PriceRule.PeakStartTime);
+
                 return vm;
             }
         }
@@ -143,43 +153,6 @@ namespace VenueGo.Models.VenueModels
                 return db.SportTypePriceRules.Any(p => p.SportTypeId == sportTypeId);
             }
         }
-
-        //價格規則新增
-        public void Create(CSportTypePriceRuleWrap Wrap)
-        {
-            using (dbVenueContext db = new dbVenueContext())
-            {
-                db.SportTypePriceRules.Add(Wrap.sportTypePriceRule);
-                db.SaveChanges();
-            }
-        }
-
-
-        //價格規則修改(含 IsActive 停用/啟用)
-        //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
-        public void Edit(CSportTypePriceRuleWrap Wrap, int userId, DateTime now)
-        {
-            using (dbVenueContext db = new dbVenueContext())
-            {
-                //依照Wrap傳來的id查找對應資料
-                var data = db.SportTypePriceRules.FirstOrDefault(p => p.SportTypePriceRuleId == Wrap.SportTypePriceRuleId);
-                if (data != null)
-                {
-                    //SportTypeId 不開放編輯,故意不覆蓋,只更新以下欄位
-                    data.PeakStartTime = Wrap.PeakStartTime;
-                    data.PeakPrice = Wrap.PeakPrice;
-                    data.OffPeakPrice = Wrap.OffPeakPrice;
-                    data.IsActive = Wrap.IsActive;
-
-                    //稽核欄位:記錄最後修改時間與修改者
-                    data.UpdatedAt = now;
-                    data.UpdatedBy = userId;
-                }
-
-                db.SaveChanges();
-            }
-        }
-
 
         //防呆用 >> 檢查該運動類型底下是否還有場地在使用,避免硬刪除價格規則後場地找不到對應價格
         //不分場地IsActive,因為停用中的場地之後可能重新啟用,一樣需要有價格規則
@@ -534,6 +507,103 @@ namespace VenueGo.Models.VenueModels
         }
 
 
+        //把尖峰時間跟營業時間組成畫面用的 7 列(週一~週日) >> 新增/編輯表單的 7 列表格、列表頁的明細共用
+        //peakHours:這個運動類型的尖峰時間(可以是 0 筆、部分天數、7 筆)
+        //businessHours:7 天營業時間(由呼叫方查好傳入,不在這裡查DB)
+        //legacyPeakStartTime:舊欄位 SportTypePriceRules.PeakStartTime,只有「peakHours 一筆都沒有」時才拿來當營業日的預設值;
+        //                     新增頁、列表頁不需要預設值,傳 null
+        //每一列的規則:
+        //1. 公休日 >> 不給選項、尖峰時間顯示為 null(存檔時 Controller 也會強制清成 null)
+        //2. 營業日 >> 選項 = 當天開始營業 ~ 打烊前一小時的整點
+        //3. 營業日的值超出當天營業時間(營業時間之後被改過) >> IsOutOfRange = true,
+        //   並把這個值額外加在選項最前面,標示「(超出營業時間)」:
+        //   讓使用者看得到原本設了什麼,不會因為選項裡沒有這個值而變成空白、存檔時被悄悄清掉;
+        //   這個值存檔時會被 IsPeakStartTimeValid 擋下,使用者必須改成範圍內的時間或不分尖峰/離峰
+        public List<SportTypePeakHourRowViewModel> BuildPeakRows(List<CSportTypePeakHourWrap> peakHours, List<CWeekBusinessHourWrap> businessHours, TimeOnly? legacyPeakStartTime)
+        {
+            List<SportTypePeakHourRowViewModel> rows = new List<SportTypePeakHourRowViewModel>();
+
+            //有沒有已經存過的每日資料;一筆都沒有時才使用舊欄位當預設值
+            bool hasSavedData = peakHours.Count > 0;
+
+            foreach (DayOfWeek day in DisplayOrderDays)
+            {
+                SportTypePeakHourRowViewModel row = new SportTypePeakHourRowViewModel();
+                row.DayOfWeek = day;
+                row.DayName = GetShortDayName(day);
+
+                //這天是否營業:查不到營業時間、IsOpen=false、或時間不完整,都當作公休
+                CWeekBusinessHourWrap? businessHour = FindBusinessHour(businessHours, day);
+                if (businessHour != null && businessHour.IsOpen && businessHour.OpenTime.HasValue && businessHour.CloseTime.HasValue)
+                {
+                    row.IsBusinessDay = true;
+                    row.OpenTime = businessHour.OpenTime;
+                    row.CloseTime = businessHour.CloseTime;
+                }
+                else
+                {
+                    row.IsBusinessDay = false;
+                }
+
+                //這天要顯示的尖峰時間:有存過的資料就用存的值(那天沒有資料就是 null),都沒存過才用舊欄位
+                TimeOnly? value;
+                if (hasSavedData)
+                {
+                    value = FindPeakStartTime(peakHours, day);
+                }
+                else
+                {
+                    value = legacyPeakStartTime;
+                }
+
+                if (!row.IsBusinessDay)
+                {
+                    //公休日:不能設定尖峰,畫面上一律顯示為不分尖峰/離峰,也不需要選項
+                    row.PeakStartTime = null;
+                    row.IsOutOfRange = false;
+                }
+                else
+                {
+                    row.PeakStartTime = value;
+                    row.Options = GetPeakStartTimeOptions(businessHour);
+                    row.IsOutOfRange = !IsPeakStartTimeValid(value, businessHour);
+
+                    //超出範圍的舊值補在選項最前面,讓下拉選單能顯示它(規則 3)
+                    if (row.IsOutOfRange && value.HasValue)
+                    {
+                        string text = value.Value.ToString("HH:mm");
+                        row.Options.Insert(0, new SelectListItem { Text = text + "（超出營業時間）", Value = text });
+                    }
+                }
+
+                rows.Add(row);
+            }
+
+            return rows;
+        }
+
+
+        //場館公休日的文字,例如「週一」或「週一、週三」(週一排最前面),沒有公休日時回傳空字串
+        //價格規則列表頁、新增/編輯頁頂端的「場館公休日」提醒使用
+        //營業時間由呼叫方查好傳入(不在這裡查DB)
+        public string BuildClosedDaysText(List<CWeekBusinessHourWrap> businessHours)
+        {
+            List<string> closedDays = new List<string>();
+
+            foreach (DayOfWeek day in DisplayOrderDays)
+            {
+                //判斷規則跟 BuildPeakRows 一致:查不到營業時間或 IsOpen=false 都算公休
+                CWeekBusinessHourWrap? businessHour = FindBusinessHour(businessHours, day);
+                if (businessHour == null || !businessHour.IsOpen)
+                {
+                    closedDays.Add(GetShortDayName(day));
+                }
+            }
+
+            return string.Join("、", closedDays);
+        }
+
+
         //價格規則新增(每天各自設定尖峰時間版本)
         //rule:價格規則本身;peakHours:7 天的尖峰時間(公休日應由 Controller 先強制清成 null)
         //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
@@ -666,9 +736,10 @@ namespace VenueGo.Models.VenueModels
         }
 
 
-        //星期的簡短名稱 >> 摘要文字用「週一」格式
+        //星期的簡短名稱 >> 摘要文字、7 列表格、錯誤訊息都用「週一」格式
         //Controller 的 GetDayName() 回傳的是「星期一」格式(營業時間頁用),格式不同所以另外寫一個
-        private string GetShortDayName(DayOfWeek day)
+        //public:Controller 整理表單送回的 7 列時也要用(NormalizePeakDays)
+        public string GetShortDayName(DayOfWeek day)
         {
             string name;
 

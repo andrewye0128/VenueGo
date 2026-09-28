@@ -1,0 +1,141 @@
+@model List<VenueGo.ViewModels.VenueViewModels.SportTypePeakHourRowViewModel>
+@*
+    價格規則「每週尖峰時段」7 列表格(週一~週日) >> SportTypePriceRuleCreate / SportTypePriceRuleEdit 共用
+    呼叫方式:<partial name="_SportTypePeakHoursTable" for="Days" />
+    用 for="Days" 呼叫,欄位名稱會自動加上 "Days" 前綴(例如 Days[0].PeakStartTime),表單送回時才能綁定到 ViewModel 的 Days
+    畫面互動(即時說明、尖峰價格停用、全部不分尖峰/離峰按鈕)寫在 wwwroot/js/price-rule-peak-hours.js
+*@
+@{
+    //公休日名稱,例如「週一」或「週一、週三」,顯示在表格上方當提醒
+    List<string> closedDayNames = new List<string>();
+    foreach (var day in Model)
+    {
+        if (!day.IsBusinessDay)
+        {
+            closedDayNames.Add(day.DayName);
+        }
+    }
+}
+
+<div class="d-flex flex-column gap-3">
+    @if (closedDayNames.Count > 0)
+    {
+        @* 提醒底色跟價格規則列表頁一致:淺黃色(bg-warning-subtle) *@
+        <div class="alert bg-warning-subtle border-warning-subtle text-warning-emphasis d-flex flex-wrap align-items-center gap-2 py-2 mb-0" role="note">
+            <strong>場館公休日</strong>
+            <span class="badge rounded-pill text-bg-light border">@string.Join("、", closedDayNames)</span>
+            <span class="small">公休日不能設定尖峰,營業時間請到營業時間管理調整</span>
+        </div>
+    }
+
+    @* 統一設定只保留「全部不分尖峰/離峰」:各天營業時間可能不同,統一套用某個時間可能落在某天範圍外,所以尖峰時間一律逐天選擇 *@
+    <div class="d-flex flex-wrap align-items-center gap-2 p-2 bg-body-tertiary border rounded">
+        <span class="fw-medium text-secondary">統一設定</span>
+        <button type="button" id="clearAllPeakHours" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-eraser me-1"></i>全部不分尖峰/離峰
+        </button>
+        <span class="form-text m-0">把所有營業日清回不分尖峰/離峰;各天的尖峰時間請在下方逐天選擇</span>
+    </div>
+
+    <div class="table-responsive">
+        <table class="table align-middle mb-0 border">
+            <thead class="table-light">
+                <tr>
+                    <th style="width: 12%;">星期</th>
+                    <th style="width: 20%;">當天營業時間</th>
+                    <th>尖峰起始時間</th>
+                    <th style="width: 30%;">尖峰時段</th>
+                </tr>
+            </thead>
+            <tbody>
+                @for (int i = 0; i < Model.Count; i++)
+                {
+                    var day = Model[i];
+
+                    //目前選取的值,跟選項的 Value("HH:mm")比對用
+                    string currentValue = day.PeakStartTime.HasValue ? day.PeakStartTime.Value.ToString("HH:mm") : "";
+
+                    //公休日整列灰色;超出營業時間的舊值整列橘色
+                    string rowClass = "";
+                    if (!day.IsBusinessDay)
+                    {
+                        rowClass = "table-secondary";
+                    }
+                    else if (day.IsOutOfRange)
+                    {
+                        rowClass = "table-warning";
+                    }
+
+                    <tr class="@rowClass">
+                        <td>
+                            @* 隱藏欄位:表單送回時讓後端知道這一列是星期幾 *@
+                            <input type="hidden" asp-for="@Model[i].DayOfWeek" />
+                            <strong>@day.DayName</strong>
+                        </td>
+                        <td>
+                            @if (day.IsBusinessDay)
+                            {
+                                <span>@day.OpenTime?.ToString("HH:mm")–@day.CloseTime?.ToString("HH:mm")</span>
+                            }
+                            else
+                            {
+                                <span class="text-muted">公休</span>
+                            }
+                        </td>
+                        <td>
+                            @if (!day.IsBusinessDay)
+                            {
+                                @* 公休日選單停用;disabled 的欄位不會送回,後端也會強制存 null *@
+                                <select class="form-select form-select-sm" disabled aria-label="@day.DayName 尖峰起始時間">
+                                    <option>公休</option>
+                                </select>
+                            }
+                            else
+                            {
+                                @* 不用 asp-for 讓框架自動比對選取值:TimeOnly? 的自動字串格式跟選項的 "HH:mm" 對不上,
+                                   會造成選取的值消失。改成自己逐項比對,手動標記 selected(跟原本單一下拉選單的做法一樣)
+                                   name/id 用 Html.NameFor/IdFor 產生,才會帶上 "Days" 前綴 *@
+                                <select name="@Html.NameFor(m => m[i].PeakStartTime)" id="@Html.IdFor(m => m[i].PeakStartTime)"
+                                        class="form-select form-select-sm peak-hour-select"
+                                        data-close="@day.CloseTime?.ToString("HH:mm")"
+                                        aria-label="@day.DayName 尖峰起始時間">
+                                    <option value="">不分尖峰/離峰</option>
+                                    @foreach (var option in day.Options)
+                                    {
+                                        //超出營業時間的舊值(Factory 補在選項最前面),加上 data-out 讓 JS 顯示警告
+                                        bool isOutOfRangeOption = day.IsOutOfRange && option.Value == currentValue;
+
+                                        if (option.Value == currentValue && isOutOfRangeOption)
+                                        {
+                                            <option value="@option.Value" selected="selected" data-out="1">@option.Text</option>
+                                        }
+                                        else if (option.Value == currentValue)
+                                        {
+                                            <option value="@option.Value" selected="selected">@option.Text</option>
+                                        }
+                                        else
+                                        {
+                                            <option value="@option.Value">@option.Text</option>
+                                        }
+                                    }
+                                </select>
+                                <span asp-validation-for="@Model[i].PeakStartTime" class="text-danger small"></span>
+                            }
+                        </td>
+                        <td>
+                            @* 尖峰時段說明,由 JS 依選取的值即時更新,例如「17:00–22:00,5 小時」 *@
+                            @if (day.IsBusinessDay)
+                            {
+                                <span class="peak-hour-effect small"></span>
+                            }
+                            else
+                            {
+                                <span class="small text-muted">公休日不能設定尖峰</span>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>

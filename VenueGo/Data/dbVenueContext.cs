@@ -50,6 +50,8 @@ public partial class dbVenueContext : DbContext
 
     public virtual DbSet<SportType> SportTypes { get; set; }
 
+    public virtual DbSet<SportTypePeakHour> SportTypePeakHours { get; set; }
+
     public virtual DbSet<SportTypePriceRule> SportTypePriceRules { get; set; }
 
     public virtual DbSet<User> Users { get; set; }
@@ -256,11 +258,17 @@ public partial class dbVenueContext : DbContext
 
             entity.ToTable("ReviewMain");
 
+            entity.HasIndex(e => e.CreatedAt, "IX_ReviewMain_CreatedAt");
+
             entity.HasIndex(e => new { e.IsPinned, e.CreatedAt }, "IX_ReviewMain_PendingReply")
                 .IsDescending(true, false)
                 .HasFilter("([ReadAt] IS NOT NULL AND [RepliedAt] IS NULL AND [SpamMarkedAt] IS NULL)");
 
             entity.HasIndex(e => new { e.StarRating, e.CreatedAt }, "IX_ReviewMain_Rating").IsDescending(false, true);
+
+            entity.HasIndex(e => e.RepliedAt, "IX_ReviewMain_RepliedAt")
+                .IsDescending()
+                .HasFilter("([RepliedAt] IS NOT NULL)");
 
             entity.HasIndex(e => e.SpamMarkedAt, "IX_ReviewMain_Spam")
                 .IsDescending()
@@ -324,6 +332,8 @@ public partial class dbVenueContext : DbContext
 
         modelBuilder.Entity<Role>(entity =>
         {
+            entity.HasIndex(e => e.RoleName, "UQ_Roles_RoleName").IsUnique();
+
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(0)
                 .HasDefaultValueSql("(sysdatetime())", "DF_Roles_CreatedAt");
@@ -352,6 +362,14 @@ public partial class dbVenueContext : DbContext
                 .HasDefaultValueSql("(sysdatetime())", "DF_SportTypes_CreatedAt");
             entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_SportTypes_IsActive");
             entity.Property(e => e.SportName).HasMaxLength(20);
+            entity.Property(e => e.UpdatedAt).HasPrecision(0);
+        });
+
+        modelBuilder.Entity<SportTypePeakHour>(entity =>
+        {
+            entity.HasIndex(e => new { e.SportTypeId, e.DayOfWeek }, "UQ_SportTypePeakHours_SportTypeId_DayOfWeek").IsUnique();
+
+            entity.Property(e => e.PeakStartTime).HasPrecision(0);
             entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });
 

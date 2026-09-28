@@ -40,6 +40,12 @@ const router = createRouter({
       name: "demo-form",
       component: () => import("../views/FormDemoView.vue"),
     },
+    {
+      // 前後端 API 連線測試頁
+      path: "/demo/api",
+      name: "demo-api",
+      component: () => import("../views/ApiDemoView.vue"),
+    },
   ],
 });
 

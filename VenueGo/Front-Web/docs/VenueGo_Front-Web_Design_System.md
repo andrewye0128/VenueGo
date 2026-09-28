@@ -935,9 +935,24 @@ Disabled
 Disabled：
 
 - 淺灰底
-- 灰色文字
+- 白色文字（v1.1 更正：原為灰色文字）
 - 不可操作
 - 不使用品牌色
+
+各狀態規格（v1.1 新增，依前台實作）：
+
+| 狀態 | Action / Primary（有底色） | Secondary（白底藍框） | Text（純文字） |
+| --- | --- | --- | --- |
+| Default | 品牌色底、白字 | 白底、1px Brand / Primary 框、Brand / Primary 字 | 透明底、Brand / Primary 字 |
+| Hover | 亮度 120%（變亮） | 底色 Brand / Primary 8% | 底色 Brand / Primary 8% |
+| Pressed | 亮度 65%（變暗） | 底色 Brand / Primary 16% | 底色 Brand / Primary 16% |
+| Disabled | 底色 Neutral / Border（`#D3DAE3`）、白字 | 底色、框線 Neutral / Border，白字 | 文字 Neutral / Border |
+| Loading | 維持 Default 顏色 ＋ 轉圈圖示 | 維持 Default 顏色 ＋ 轉圈圖示 | 維持 Default 顏色 ＋ 轉圈圖示 |
+| Focus（鍵盤操作） | 2px Brand / Primary 外框，距離按鈕 2px | 同左 | 同左 |
+
+- Hover、Pressed 不新增顏色，以亮度或 Brand / Primary 透明度表現。
+- Loading 時不可重複點擊（防止重複送出表單），游標顯示「處理中」。
+- Disabled 時游標顯示「禁止」，沒有 Hover、Pressed 效果。
 
 ---
 
@@ -948,6 +963,15 @@ Small
 Medium
 Large
 ```
+
+| Size | 高度 | 左右內距 | 字級 | 只有圖示時 |
+| --- | --- | --- | --- | --- |
+| Small | 32px | 12px | 14px | 32 × 32px |
+| Medium（預設） | 40px | 16px | 14px | 40 × 40px |
+| Large | 48px | 24px | 16px | 48 × 48px |
+
+- 字重皆為 600（Button / Medium），圓角 4px（Radius / XS）。
+- 只有圖示的按鈕為正方形，必須提供文字說明給螢幕閱讀器（`aria-label`）。
 
 ---
 
@@ -1307,6 +1331,33 @@ Filled
 Error
 Disabled
 ```
+
+Input、Select、Textarea 共用規格（v1.1 新增，依前台實作）：
+
+| 項目 | 規格 |
+| --- | --- |
+| 高度 | 40px（Textarea 依行數） |
+| 圓角 | 4px（Radius / XS） |
+| 字級 | 14px；Placeholder 使用 Neutral / Text / Secondary |
+| Label | 14px、字重 500（Label / Medium）、Neutral / Text / Primary；必填欄位標示 * |
+| Default | 白底、1px Neutral / Border 框 |
+| Hover | 框線變為 Brand / Primary |
+| Focus | 2px Brand / Primary 外框，距離欄位 2px；Select 展開時框線為 Brand / Primary |
+| Error | 框線 Semantic / Error，欄位下方顯示 12px Semantic / Error 錯誤訊息 |
+| Disabled | 底色 Brand / Background、文字 Neutral / Text / Secondary |
+
+Select 選項清單：
+
+- 滑鼠停留或鍵盤選到的選項：底色 Brand / Primary 8%
+- 已選中的選項：Brand / Primary 字、字重 600，右側顯示勾選圖示
+- 停用的選項：文字變淡，並在名稱後加上狀態說明（例如「游泳（暫停開放）」，依 3.4 狀態不能只靠顏色）
+- 選項有圖示時放在左側；選中後，選單框左側也顯示該圖示
+- 選項清單不使用陰影，以 1px Neutral / Border 框線區隔
+
+驗證時機：
+
+- 離開欄位（blur）或選項改變（change）時檢查，打字途中不檢查
+- 按下送出時檢查全部欄位
 
 ---
 
@@ -1745,8 +1796,19 @@ Button
 Vue：
 
 ```text
-BaseButton.vue
+UButton（Nuxt UI）
 ```
+
+Type 對應（v1.1 更新：前台改用 Nuxt UI）：
+
+| Figma Type | UButton 寫法 |
+| --- | --- |
+| Action | `color="action"` |
+| Primary | `color="primary"` |
+| Secondary | `color="primary" variant="outline"` |
+| Text | `color="primary" variant="ghost"` |
+
+Size 對應 `size="sm"` / 預設 / `size="lg"`；Loading 對應 `loading`；Disabled 對應 `disabled`。
 
 ---
 
@@ -1801,7 +1863,7 @@ Input
 Vue：
 
 ```text
-BaseInput.vue
+UInput（Nuxt UI），搭配 UFormField 顯示 Label 與錯誤訊息
 ```
 
 ---
@@ -1815,12 +1877,15 @@ Select
 Vue：
 
 ```text
-BaseSelect.vue
+USelect（Nuxt UI）
+運動類型選單使用專案元件 SportTypeSelect.vue
 ```
 
 ---
 
 ## 10.3 建議 Vue Components
+
+> v1.1 更新：前台已改用 Nuxt UI，下方 `base/` 的基礎元件（Button、Input、Select、Textarea、Modal）改用 Nuxt UI 的 UButton、UInput、USelect、UTextarea、UModal，不另外建立 Base 元件。其他專案元件（booking、feedback、venue）仍依下方結構規劃。
 
 ```text
 components/
@@ -2077,6 +2142,10 @@ v1.1
 v1.1（草案，色碼待 Figma 確認）
 - 新增 Color / Brand / Dark（#0D233E）：Footer 等深色區塊背景
 - 新增 Color / Brand / Accent（#F03010）：運動類型等小型圖示
+- 5.1.2 Button State：新增各狀態規格（Hover 亮度 120%、Pressed 亮度 65%、Loading）；Disabled 文字更正為白色
+- 5.1.3 Button Size：新增高度 Small 32px / Medium 40px / Large 48px
+- 5.5 Form Controls：新增 Input、Select、Textarea 共用規格與驗證時機
+- 10.2、10.3：Button、Input、Select 改對應 Nuxt UI 的 UButton、UInput、USelect
 ```
 
 ---

@@ -15,6 +15,9 @@ export default defineConfig({
       colorMode: false,
       // 把用到的 Iconify icon 打包進專案，不在執行時向網路抓
       icon: { clientBundle: { scan: true } },
+      // 團隊規則：只有 Nuxt UI 的 U 開頭元件自動匯入，專案自己的元件（src/components）一律要寫 import
+      // dirs: [] 代表不自動掃描任何專案資料夾；忘了 import 時，瀏覽器 console 會出現 Failed to resolve component 警告
+      components: { dirs: [] },
       // 在 Nuxt UI 內建的顏色名稱之外，新增 action（Design System 的 Brand / Action）
       theme: {
         colors: ["primary", "secondary", "success", "info", "warning", "error", "action"],

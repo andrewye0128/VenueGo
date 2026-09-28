@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "@nuxt/ui";
 /* 放進 base 圖層，讓 Tailwind 的 utility class（例如 font-bold）可以正常覆蓋它 */
 @import "./base.css" layer(base);
 
@@ -11,6 +12,8 @@
   --color-brand-background: #f3f5f8;
   /* 新增（尚未列入 Design System v1）：Footer 等深色區塊，需同步更新 Figma */
   --color-brand-dark: #0d233e;
+  /* 新增（尚未列入 Design System v1）：運動類型 icon 等需要吸引目光的小元素，需同步更新 Figma */
+  --color-brand-accent: #f03010;
 
   --color-neutral-surface: #ffffff;
   --color-neutral-border: #d3dae3;
@@ -65,3 +68,19 @@ a,
     padding: 0 2rem;
   }
 } */
+
+/* 【POC】Nuxt UI 的語意變數對應到 Design System 色彩
+   直接覆蓋 --ui-*，不用替品牌色補 50–950 的深淺 */
+:root {
+  --ui-primary: var(--color-brand-primary);
+  --ui-error: var(--color-semantic-error);
+  --ui-radius: 0.25rem;
+  --ui-text-dimmed: var(--color-neutral-text-secondary);
+  --ui-text-muted: var(--color-neutral-text-secondary);
+  --ui-text: var(--color-neutral-text-primary);
+  --ui-text-highlighted: var(--color-neutral-text-primary);
+  --ui-bg: var(--color-neutral-surface);
+  --ui-bg-elevated: var(--color-brand-background);
+  --ui-border: var(--color-neutral-border);
+  --ui-border-accented: var(--color-neutral-border);
+}

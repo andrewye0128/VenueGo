@@ -1,5 +1,5 @@
 <script setup>
-// 【POC】運動類型下拉選單範例 — Nuxt UI 版，只存在 poc/select-nuxtui 分支
+// 運動類型下拉選單 SportTypeSelect 的使用說明頁（給組員參考）
 import { ref } from "vue";
 import SportTypeSelect from "@/components/SportTypeSelect.vue";
 import { ALL_SPORTS } from "@/constants/sportTypes";

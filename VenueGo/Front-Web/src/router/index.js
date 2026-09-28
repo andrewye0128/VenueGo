@@ -23,10 +23,16 @@ const router = createRouter({
       component: () => import("../views/BookingView.vue"),
     },
     {
-      // 【POC】下拉選單比較 SportTypeSelect 元件使用-示範頁面
+      // SportTypeSelect 元件使用說明頁
       path: "/demo/select",
       name: "demo-select",
       component: () => import("../views/SelectDemoView.vue"),
+    },
+    {
+      // BaseButton 與 UButton 比較頁
+      path: "/demo/button",
+      name: "demo-button",
+      component: () => import("../views/ButtonDemoView.vue"),
     },
   ],
 });

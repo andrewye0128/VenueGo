@@ -69,10 +69,12 @@ a,
   }
 } */
 
-/* 【POC】Nuxt UI 的語意變數對應到 Design System 色彩
+/* Nuxt UI 的語意變數對應到 Design System 色彩
    直接覆蓋 --ui-*，不用替品牌色補 50–950 的深淺 */
 :root {
   --ui-primary: var(--color-brand-primary);
+  /* action 為自訂顏色名稱（vite.config.js 的 theme.colors），對應 Brand / Action */
+  --ui-action: var(--color-brand-action);
   --ui-error: var(--color-semantic-error);
   --ui-radius: 0.25rem;
   --ui-text-dimmed: var(--color-neutral-text-secondary);

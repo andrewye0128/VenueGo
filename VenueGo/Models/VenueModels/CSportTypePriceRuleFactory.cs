@@ -155,13 +155,12 @@ namespace VenueGo.Models.VenueModels
         }
 
         //防呆用 >> 檢查該運動類型底下是否還有場地在使用,避免硬刪除價格規則後場地找不到對應價格
-        //不分場地IsActive,因為停用中的場地之後可能重新啟用,一樣需要有價格規則
+        //只算「存在的場地」(IsActive == true):Venues 的 IsActive 是軟刪除用的系統欄位,已刪除的場地不算連動
+        //判斷規則跟刪除運動類型共用同一個方法(CVenueFactory.QueryActiveVenueNamesBySportType),兩邊不會不一致
         public bool HasLinkedVenues(int sportTypeId)
         {
-            using (dbVenueContext db = new dbVenueContext())
-            {
-                return db.Venues.Any(v => v.SportTypeId == sportTypeId);
-            }
+            List<string> activeVenueNames = new CVenueFactory().QueryActiveVenueNamesBySportType(sportTypeId);
+            return activeVenueNames.Count > 0;
         }
 
         //對外方法一 >> 依場地與預約的多個時段區塊,計算總價格

@@ -124,7 +124,9 @@ namespace VenueGo.Controllers
 
 
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
-        //運動類型刪除
+        //運動類型刪除(軟刪除) >> 刪除前必須確認沒有任何資料還在使用這個運動類型
+        //刪除順序:先刪場地 >> 再刪價格規則 >> 最後才能刪運動類型
+        //(價格規則的刪除本身也會檢查底下有沒有場地,所以三者的刪除順序是一致的)
         public IActionResult SportTypeDelete(int? id)
         {
             //驗證變數是否為null
@@ -139,9 +141,33 @@ namespace VenueGo.Controllers
                 return RedirectToAction("SportTypeIndex");
             }
 
-            //把回傳變數送入 factory 執行軟刪除
+            //確認運動類型存在(查不到或已經刪除過,就不用再刪),順便取得名稱放進訊息
             CSportTypeFactory SportTypeFactory = new CSportTypeFactory();
+            CSportTypeWrap sportType = SportTypeFactory.QueryById(id);
+            if (sportType.SportTypeId == 0 || !sportType.IsActive)
+            {
+                TempData["VenueErrorMessage"] = "找不到這個運動類型,可能已經被刪除。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
+            //檢查一:底下還有存在的場地 >> 擋下(已刪除的場地不算),訊息列出場地名稱,讓使用者知道要先處理哪些場地
+            List<string> activeVenueNames = new CVenueFactory().QueryActiveVenueNamesBySportType((int)id);
+            if (activeVenueNames.Count > 0)
+            {
+                TempData["VenueErrorMessage"] = $"「{sportType.SportName}」底下還有 {activeVenueNames.Count} 個場地({string.Join("、", activeVenueNames)}),請先刪除這些場地,才能刪除運動類型。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
+            //檢查二:還有價格規則 >> 擋下,請使用者先到價格規則管理刪除(2026-09-29 決定:不自動一起刪除價格規則)
+            if (new CSportTypePriceRuleFactory().HasPriceRule((int)id))
+            {
+                TempData["VenueErrorMessage"] = $"「{sportType.SportName}」還有價格規則,請先到「價格規則管理」刪除它的價格規則,才能刪除運動類型。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
+            //檢查通過 >> 執行軟刪除
             SportTypeFactory.Delete((int)id, userId.Value, _timeService.Now);
+            TempData["VenueSuccessMessage"] = $"已成功刪除運動類型「{sportType.SportName}」";
 
             return RedirectToAction("SportTypeIndex");
         }

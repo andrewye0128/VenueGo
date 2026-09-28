@@ -141,15 +141,19 @@ namespace VenueGo.Models.VenueModels
 
 
 
-        //撈取SportType提供給VenueCreate送到前端產生下拉選單
+        //撈取SportType提供給VenueCreate送到前端產生下拉選單(VenueIndex 的分組也使用)
+        //只列出存在的運動類型(IsActive == true):SportTypes 的 IsActive 是軟刪除用的系統欄位,
+        //已刪除的運動類型不能再被選來建立場地,否則會出現「場地還在、運動類型已被刪除」的資料
         public List<SelectListItem> GetSportTypes()
         {
             List<SelectListItem> list = new List<SelectListItem>();
 
             using (dbVenueContext db = new dbVenueContext())
             {
-                var datas = from t in db.SportTypes select t;
-                ;
+                var datas = from t in db.SportTypes
+                            where t.IsActive == true
+                            select t;
+
                 foreach (var data in datas)
                 {
                     list.Add(new SelectListItem
@@ -161,6 +165,30 @@ namespace VenueGo.Models.VenueModels
             }
             return list;
         }
+
+        //查出某個運動類型底下「存在的場地」名稱 >> 刪除運動類型、刪除價格規則前的連動檢查共用
+        //Venues 的 IsActive 是軟刪除用的系統欄位,IsActive = false 的場地已經不存在,不算連動
+        //回傳名稱清單(依 VenueId 排序),呼叫方可以用 Count 判斷有沒有連動,也可以把名稱放進錯誤訊息
+        public List<string> QueryActiveVenueNamesBySportType(int sportTypeId)
+        {
+            List<string> names = new List<string>();
+
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var datas = from v in db.Venues
+                            where v.SportTypeId == sportTypeId && v.IsActive == true
+                            orderby v.VenueId
+                            select v.VenueName;
+
+                foreach (string name in datas)
+                {
+                    names.Add(name);
+                }
+            }
+
+            return names;
+        }
+
 
         //場地編輯
         //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)

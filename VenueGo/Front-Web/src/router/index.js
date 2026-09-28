@@ -22,6 +22,12 @@ const router = createRouter({
       name: "booking",
       component: () => import("../views/BookingView.vue"),
     },
+    {
+      // 【POC】下拉選單比較範例
+      path: "/demo/select",
+      name: "demo-select",
+      component: () => import("../views/SelectDemoView.vue"),
+    },
   ],
 })
 

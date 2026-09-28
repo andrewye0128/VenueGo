@@ -38,3 +38,8 @@ __screenshots__/
 
 # Vite
 *.timestamp-*-*.mjs
+
+# Nuxt UI（自動產生）
+auto-imports.d.ts
+components.d.ts
+.nuxt-ui

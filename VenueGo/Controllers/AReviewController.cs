@@ -144,6 +144,28 @@ namespace VenueGo.Controllers
         };
 
         /// <summary>
+        /// 運動類型與場地篩選（9/29）。
+        ///
+        /// ⚠️ 只篩得到現場評論：場地資料在 ReviewPerVisit 上，預約評論沒有。
+        ///    所以選了運動類型或場地之後，預約評論一定不會出現——畫面上有一行字說明這件事。
+        ///
+        /// 用 Any(...) 而不是先把 id 查出來再 Contains：
+        /// EF Core 會把它翻成 SQL 的 EXISTS 子查詢，一次查完，不必先把一堆 id 拉回記憶體。
+        /// </summary>
+        private IQueryable<ReviewMain> ApplyVenue(IQueryable<ReviewMain> q, int? sportTypeId, int? venueId)
+        {
+            if (venueId != null)
+                return q.Where(r => r.ReviewPerVisitId != null
+                                 && _db.ReviewPerVisits.Any(v => v.ReviewPerVisitId == r.ReviewPerVisitId
+                                                              && v.VenueId == venueId));
+            if (sportTypeId != null)
+                return q.Where(r => r.ReviewPerVisitId != null
+                                 && _db.ReviewPerVisits.Any(v => v.ReviewPerVisitId == r.ReviewPerVisitId
+                                                              && v.SportTypeId == sportTypeId));
+            return q;   // 兩個都沒選：不篩
+        }
+
+        /// <summary>
         /// 時間範圍篩選。
         ///
         /// byRepliedAt 決定比哪個欄位：已完成清單關心「什麼時候處理的」（RepliedAt），
@@ -401,8 +423,8 @@ namespace VenueGo.Controllers
             // 所以 ids 是以參數送出去的，不是字串拼接。
             return _db.Database
                       .SqlQuery<ReviewRefRow>($@"
-                          SELECT [ReviewId], [OrderId], [OrderNo], [VenueName],
-                                 [RentStartTime], [UserName],
+                          SELECT [ReviewId], [OrderId], [OrderNo], [VenueName], [VenueId],
+[RentStartTime], [UserName],
                                  [ReadByEmployeeName], [RepliedByEmployeeName],
                                  [SpamMarkedByEmployeeName]
                           FROM   dbo.v_ReviewFullInfo")
@@ -457,6 +479,7 @@ namespace VenueGo.Controllers
 
                 IsBookingReview = r.ReviewPerBookingId != null,
                 VenueName       = x?.VenueName,
+                VenueId         = x?.VenueId,
                 RentStartTime   = x?.RentStartTime,
                 OrderId         = x?.OrderId,
                 OrderNo         = x?.OrderNo,
@@ -519,21 +542,87 @@ namespace VenueGo.Controllers
                         .ToList();
         }
 
+        /// <summary>
+        /// 依場地分組（9/29）。排序規則跟依訂單分組一樣：
+        ///   1. 組內有任一則被置頂 → 整組浮到最上面
+        ///   2. 追不到場地的排最後（資料異常，理論上不會發生：有選運動類型時只會有現場評論）
+        ///   3. 其餘用組內排最上面那一則的時間，方向跟該清單原本的排序一致
+        /// </summary>
+        private static List<ReviewQueueGroupVM> BuildVenueGroups(List<ReviewQueueItemVM> items, string tab)
+        {
+            bool byReplied = tab == QueueTab.Completed;
+
+            var groups = items
+                // 追不到場地的各自成一組：用「負的 ReviewId」當臨時分組鍵，VenueId 一定是正的，不會撞在一起
+                .GroupBy(i => i.VenueId ?? -i.ReviewId)
+                .Select(g => new ReviewQueueGroupVM
+                {
+                    Kind      = QueueGroupKind.Venue,
+                    VenueId   = g.Key > 0 ? g.Key : null,
+                    VenueName = g.Select(i => i.VenueName).FirstOrDefault(n => n != null),
+                    Items     = byReplied
+                                ? g.OrderByDescending(i => i.RepliedAt).ToList()
+                                : g.OrderBy(i => i.CreatedAt).ToList()
+                })
+                .ToList();
+
+            return byReplied
+                ? groups.OrderByDescending(g => g.HasPinned)
+                        .ThenBy(g => g.VenueId == null)
+                        .ThenByDescending(g => g.Items[0].RepliedAt)
+                        .ToList()
+                : groups.OrderByDescending(g => g.HasPinned)
+                        .ThenBy(g => g.VenueId == null)
+                        .ThenBy(g => g.Items[0].CreatedAt)
+                        .ToList();
+        }
+
+        /// <summary>
+        /// 運動類型與場地的查詢字串一樣不可信任（9/29）：
+        ///   場地找得到 → 運動類型一律改成「這個場地的運動類型」，兩個條件才不會互相矛盾
+        ///               （例如網址被改成「羽球＋網球場 C1」）
+        ///   場地找不到 → 當作沒選場地
+        ///   運動類型找不到 → 當作沒選
+        /// </summary>
+        private (int? SportTypeId, int? VenueId, string? VenueName) NormalizeVenue(int? sportTypeId, int? venueId)
+        {
+            if (venueId != null)
+            {
+                var venue = _db.Venues
+                               .Where(v => v.VenueId == venueId)
+                               .Select(v => new { v.VenueId, v.SportTypeId, v.VenueName })
+                               .FirstOrDefault();
+                if (venue != null) return (venue.SportTypeId, venue.VenueId, venue.VenueName);
+                // 找不到這個場地：往下走，只看運動類型
+            }
+
+            if (sportTypeId != null && _db.SportTypes.Any(st => st.SportTypeId == sportTypeId))
+                return (sportTypeId, null, null);
+
+            return (null, null, null);
+        }
+
         private ReviewQueueVM BuildQueueVm(
             string? tab, string? source, string? range,
-            string? field, string? keyword, bool grouped)
+            string? field, string? keyword, bool grouped,
+            int? sportTypeId, int? venueId)
         {
             string t = NormalizeTab(tab);
             string s = NormalizeSource(source);
             string rg = NormalizeRange(range);
             string f = NormalizeSearchField(field);
             var keywords = SplitKeywords(keyword);
+            var (sport, venue, venueName) = NormalizeVenue(sportTypeId, venueId);
+
+            // 選了運動類型就改成依場地分組，依訂單分組強制關掉（開關在畫面上也會停用）
+            bool groupByVenue = sport != null;
+            bool groupByOrder = grouped && !groupByVenue;
 
             // 今天 00:00。整個請求共用同一個基準，清單和三個數字才會一致。
             DateTime todayStart = _timeService.Today;
             DateTime now = _timeService.Now;
 
-            var bySource = ApplySource(_db.ReviewMains, s);
+            var bySource = ApplyVenue(ApplySource(_db.ReviewMains, s), sport, venue);
 
             // 分頁上的數字：套用來源、時間、搜尋，但不套用 tab
             //（因為它們本來就是「各個 tab 各有幾則」）。
@@ -561,10 +650,22 @@ namespace VenueGo.Controllers
                 SearchField = f,
                 Keyword     = keyword ?? "",
                 Keywords    = keywords,
-                Grouped     = grouped,
+                Grouped     = groupByOrder,
+
+                SportTypeId      = sport,
+                VenueId          = venue,
+                VenueFilterName  = venueName,
+                SportTypeOptions = _db.SportTypes
+                                      .OrderBy(st => st.SportTypeId)
+                                      .Select(st => new SportTypeOption(
+                                          st.SportTypeId,
+                                          st.IsActive ? st.SportName : st.SportName + "（已停用）"))
+                                      .ToList(),
 
                 Items  = items,
-                Groups = grouped ? BuildGroups(items, t) : new List<ReviewQueueGroupVM>(),
+                Groups = groupByVenue ? BuildVenueGroups(items, t)
+                       : groupByOrder ? BuildGroups(items, t)
+                       : new List<ReviewQueueGroupVM>(),
 
                 UnreadCount  = countBase.Count(UnreadRule),
                 PendingCount = countBase.Count(PendingRule),
@@ -612,17 +713,19 @@ namespace VenueGo.Controllers
         /// <summary>整頁。第一次進來、按 F5、從書籤打開都走這裡。</summary>
         [HttpGet]
         public IActionResult Index(string? tab, string? source, string? range,
-                                   string? field, string? keyword, bool grouped = false)
+                                   string? field, string? keyword, bool grouped = false,
+                                   int? sportTypeId = null, int? venueId = null)
         {
-            return View(BuildQueueVm(tab, source, range, field, keyword, grouped));
+            return View(BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId));
         }
 
         /// <summary>只有清單那一塊。切換篩選、搜尋、處理完一則之後，由 axios 呼叫。</summary>
         [HttpGet]
         public IActionResult QueueList(string? tab, string? source, string? range,
-                                       string? field, string? keyword, bool grouped = false)
+                                       string? field, string? keyword, bool grouped = false,
+                                       int? sportTypeId = null, int? venueId = null)
         {
-            return PartialView("_QueueList", BuildQueueVm(tab, source, range, field, keyword, grouped));
+            return PartialView("_QueueList", BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId));
         }
 
         /// <summary>
@@ -710,6 +813,7 @@ namespace VenueGo.Controllers
             return Ok(ApiResultVM.Ok("已標記為垃圾"));
         }
 
+#if DEBUG
         [HttpGet]
         public IActionResult CheckMyClaims()
         {
@@ -722,6 +826,6 @@ namespace VenueGo.Controllers
             // 可以在這裡打斷點（Breakpoint），看 roles 陣列裡面有沒有字串（例如 "Member", "Admin"）
             return Json(roles);
         }
-
+#endif
     }
 }

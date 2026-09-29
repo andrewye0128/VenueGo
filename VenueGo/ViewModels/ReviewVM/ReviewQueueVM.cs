@@ -1,6 +1,5 @@
 ﻿using System.Text.RegularExpressions;
 using VenueGo.Helpers;
-using static Microsoft.Extensions.Logging.EventSource.LoggingEventSource;
 
 namespace VenueGo.ViewModels.ReviewVM
 {
@@ -103,26 +102,53 @@ namespace VenueGo.ViewModels.ReviewVM
         Overdue     // 紅：已滿 7 天
     }
 
-    /// <summary>
-    /// 同一筆訂單的評論包成一組。只有「依訂單分組」開啟時才會用到。
-    ///
-    /// 一張訂單可能有好幾則評論：EntryTicket 是依訂單人數建立的，
-    /// N 個人就有 N 次現場評論的機會，再加上一則預約評論。
-    /// </summary>
-    public class ReviewQueueGroupVM
+    /// <summary>分組的依據。9/29 加：原本只有依訂單，現在多了依場地。</summary>
+    public enum QueueGroupKind
     {
-        /// <summary>null 代表這則評論追不到訂單（資料異常），單獨顯示、不畫框。</summary>
+        Order,
+        Venue
+    }
+
+    /// <summary>
+    /// 一組評論。兩種分組共用同一個類別，畫面的外框、置頂浮上來的規則都一樣。
+    ///
+    /// 依訂單：一張訂單可能有好幾則評論——EntryTicket 是依訂單人數建立的，
+    ///         N 個人就有 N 次現場評論的機會，再加上一則預約評論。
+    /// 依場地：選了運動類型時自動改用這個，把同一個場地的問題放在一起看（9/29）。
+    /// </summary>
+    public sealed class ReviewQueueGroupVM
+    {
+        public QueueGroupKind Kind { get; init; } = QueueGroupKind.Order;
+
+        /// <summary>依訂單時用。null 代表這則評論追不到訂單（資料異常），單獨顯示、不畫框。</summary>
         public int? OrderId { get; init; }
         public string? OrderNo { get; init; }
+
+        /// <summary>依場地時用。null 代表追不到場地（資料異常）。</summary>
+        public int? VenueId { get; init; }
+        public string? VenueName { get; init; }
 
         public List<ReviewQueueItemVM> Items { get; init; } = new();
 
         /// <summary>組內只要有一則被置頂，整組就浮到最上面。</summary>
         public bool HasPinned => Items.Any(i => i.IsPinned);
 
-        /// <summary>只有一則的時候不畫框：框起來是為了表達「這些是一起的」。</summary>
-        public bool IsRealGroup => OrderId != null && Items.Count > 1;
+        /// <summary>
+        /// 要不要畫框。
+        ///   依訂單：只有一則的時候不畫框——框起來是為了表達「這些是一起的」。
+        ///   依場地：只有一則也畫框——框的標題就是場地名稱，「這個場地只有 1 則」本身就是資訊，
+        ///           而且不畫的話，那一則會看起來像沒被分組。
+        /// </summary>
+        public bool IsRealGroup => Kind switch
+        {
+            QueueGroupKind.Order => OrderId != null && Items.Count > 1,
+            QueueGroupKind.Venue => VenueId != null,
+            _ => throw new ArgumentOutOfRangeException(nameof(Kind), Kind, "未定義的分組依據")
+        };
     }
+
+    /// <summary>運動類型下拉選單的一個選項。</summary>
+    public sealed record SportTypeOption(int SportTypeId, string Text);
 
     /// <summary>館方評論清單的整頁資料。Index 與 QueueList 共用同一份。</summary>
     public class ReviewQueueVM
@@ -143,8 +169,27 @@ namespace VenueGo.ViewModels.ReviewVM
         /// </summary>
         public List<string> Keywords { get; init; } = new();
 
-        /// <summary>依訂單分組。預設關閉。</summary>
+        /// <summary>
+        /// 依訂單分組。預設關閉。
+        /// ⚠️ 有選運動類型時一律是 false（改成依場地分組），開關也會停用。
+        /// </summary>
         public bool Grouped { get; init; }
+
+        // ── 運動類型與場地（9/29）──
+
+        /// <summary>選了哪個運動類型。null＝全部。只篩得到現場評論（預約評論沒有場地資料）。</summary>
+        public int? SportTypeId { get; init; }
+
+        /// <summary>只看某個場地。null＝不限。有值的時候，SportTypeId 一定是這個場地的運動類型。</summary>
+        public int? VenueId { get; init; }
+
+        /// <summary>目前篩選的場地名稱，給「正在篩選『某場地』的評論」那行字用。</summary>
+        public string? VenueFilterName { get; init; }
+
+        public List<SportTypeOption> SportTypeOptions { get; init; } = new();
+
+        /// <summary>選了運動類型就依場地分組，取代依訂單分組。</summary>
+        public bool GroupByVenue => SportTypeId != null;
 
         /// <summary>沒分組時看這個。</summary>
         public List<ReviewQueueItemVM> Items { get; init; } = new();
@@ -183,6 +228,8 @@ namespace VenueGo.ViewModels.ReviewVM
             || Range != QueueRange.Default
             || SearchField != QueueSearchField.Default
             || !string.IsNullOrEmpty(Keyword)
-            || Grouped;
+            || Grouped
+            || SportTypeId != null
+            || VenueId != null;
     }
 }

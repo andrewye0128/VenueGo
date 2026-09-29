@@ -46,6 +46,12 @@ const router = createRouter({
       name: "demo-api",
       component: () => import("../views/ApiDemoView.vue"),
     },
+    {
+      // 404：網址不符合上面任何路由時顯示（一定要放在最後一個）
+      path: "/:pathMatch(.*)*",
+      name: "not-found",
+      component: () => import("../views/NotFoundView.vue"),
+    },
   ],
 });
 

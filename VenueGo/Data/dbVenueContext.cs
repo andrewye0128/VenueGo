@@ -44,6 +44,10 @@ public partial class dbVenueContext : DbContext
 
     public virtual DbSet<ReviewPerVisit> ReviewPerVisits { get; set; }
 
+    public virtual DbSet<ReviewScreening> ReviewScreenings { get; set; }
+
+    public virtual DbSet<ReviewScreeningLabel> ReviewScreeningLabels { get; set; }
+
     public virtual DbSet<Role> Roles { get; set; }
 
     public virtual DbSet<RolePermission> RolePermissions { get; set; }
@@ -334,6 +338,39 @@ public partial class dbVenueContext : DbContext
                 .HasColumnName("QRToken");
             entity.Property(e => e.RentEndTime).HasPrecision(0);
             entity.Property(e => e.RentStartTime).HasPrecision(0);
+        });
+
+        modelBuilder.Entity<ReviewScreening>(entity =>
+        {
+            entity.HasKey(e => e.ReviewId);
+
+            entity.ToTable("ReviewScreening");
+
+            entity.HasIndex(e => new { e.AiStatus, e.NextAttemptAt }, "IX_ReviewScreening_AiPending").HasFilter("([AiStatus] IN ((0), (2)))");
+
+            entity.HasIndex(e => e.ReviewId, "IX_ReviewScreening_Priority").HasFilter("([IsPriority]=(1) AND [VerifiedAt] IS NULL)");
+
+            entity.Property(e => e.ReviewId).ValueGeneratedNever();
+            entity.Property(e => e.AiAnalyzedAt).HasPrecision(0);
+            entity.Property(e => e.AiModel)
+                .HasMaxLength(60)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_ReviewScreening_CreatedAt");
+            entity.Property(e => e.ManagerReason).HasMaxLength(40);
+            entity.Property(e => e.NextAttemptAt).HasPrecision(0);
+            entity.Property(e => e.Summary).HasMaxLength(60);
+            entity.Property(e => e.VerifiedAt).HasPrecision(0);
+        });
+
+        modelBuilder.Entity<ReviewScreeningLabel>(entity =>
+        {
+            entity.HasKey(e => new { e.ReviewId, e.LabelType, e.LabelCode, e.Source });
+
+            entity.ToTable("ReviewScreeningLabel");
+
+            entity.HasIndex(e => new { e.LabelType, e.LabelCode }, "IX_ReviewScreeningLabel_Code");
         });
 
         modelBuilder.Entity<Role>(entity =>

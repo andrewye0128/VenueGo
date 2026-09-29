@@ -23,6 +23,12 @@ namespace VenueGo.ViewModels.ReviewVM
         /// <summary>只有現場評論有。預約評論是 null。</summary>
         public string? VenueName { get; set; }
 
+        /// <summary>
+        /// 只有現場評論有。9/29 加：館方清單「點場地名稱只看這個場地」與「依場地分組」要用。
+        /// ⚠️ 上面的註解說過：SELECT 的欄位要跟這裡一一對應，所以 LoadRefs 的 SELECT 也同步加了 [VenueId]。
+        /// </summary>
+        public int? VenueId { get; set; }
+
         /// <summary>只有現場評論有。⚠️ 這個要顯示完整時間，不要用 TimeAgo。</summary>
         public DateTime? RentStartTime { get; set; }
 

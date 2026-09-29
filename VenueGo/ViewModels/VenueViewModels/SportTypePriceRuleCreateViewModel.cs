@@ -11,9 +11,6 @@ namespace VenueGo.ViewModels.VenueViewModels
         [Required(ErrorMessage ="運動類型不可為空白")]
         public int SportTypeId { get; set; }   // int 不可能是 null，不加 [Required]
 
-        [Display(Name = "尖峰起始時間")]
-        public TimeOnly? PeakStartTime { get; set; }   // 可為 null，代表不分尖峰/離峰
-
         [Display(Name = "尖峰價格")]
         [Required(ErrorMessage = "尖峰價格不可空白")]
         [Range(0, int.MaxValue, ErrorMessage = "尖峰價格不可為負數")]
@@ -28,10 +25,8 @@ namespace VenueGo.ViewModels.VenueViewModels
         [ValidateNever] //該欄位不參與驗證
         public IEnumerable<SelectListItem> SportTypes { get; set; }
 
-        // 尖峰起始時間下拉選單的選項(只會列出合法的整點時間),由 Controller 從
-        // CSportTypePriceRuleFactory.GetPeakStartTimeOptions() 帶入,View 不自己組選項
-        // ⚠️ 目前來源是【暫時寫死】的營業時間常數,見 CSportTypePriceRuleFactory 上方的 TODO 說明
-        [ValidateNever]
-        public IEnumerable<SelectListItem> PeakStartTimeOptions { get; set; }
+        //每週尖峰時段 7 列(週一~週日),每一列各自有當天營業時間範圍內的下拉選項
+        //新增時預設全部「不分尖峰/離峰」
+        public List<SportTypePeakHourRowViewModel> Days { get; set; } = new List<SportTypePeakHourRowViewModel>();
     }
 }

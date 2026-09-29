@@ -1,0 +1,202 @@
+﻿@model VenueGo.ViewModels.DashboardViewModels.DashboardIndexViewModel
+@{
+    ViewData["Title"] = "場館監控儀表板";
+}
+
+<style>
+    .venue-card {
+        border: 1px solid #e5e7eb;
+        border-radius: 16px;
+        overflow: hidden;
+        background: #fff;
+        height: 100%;
+        transition: transform .15s ease, box-shadow .15s ease;
+    }
+
+        .venue-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 24px rgba(17, 24, 39, .08);
+        }
+
+    .venue-card-header {
+        height: 100px;
+        background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 20px;
+        color: #fff;
+    }
+
+        .venue-card-header.is-over {
+            background: linear-gradient(135deg, #ef4444, #b91c1c);
+        }
+
+        .venue-card-header .venue-icon {
+            font-size: 28px;
+            opacity: .85;
+        }
+
+    .venue-card-body {
+        padding: 18px 20px 20px;
+    }
+
+    .venue-count {
+        font-size: 34px;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .venue-count-unit {
+        font-size: 14px;
+        font-weight: 500;
+        opacity: .85;
+        margin-left: 4px;
+    }
+
+    .occupancy-bar {
+        height: 8px;
+        border-radius: 999px;
+        background: #eef0f4;
+        overflow: hidden;
+        margin: 12px 0 8px;
+    }
+
+    .occupancy-bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: #22c55e;
+        transition: width .3s ease;
+    }
+
+        .occupancy-bar-fill.is-warn {
+            background: #f59e0b;
+        }
+
+        .occupancy-bar-fill.is-over {
+            background: #ef4444;
+        }
+
+    .status-badge {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 999px;
+    }
+</style>
+
+<div class="d-flex align-items-center justify-content-between mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-grid-1x2 me-2 text-primary"></i>場館即時人數</h4>
+    <a asp-action="Index" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-arrow-clockwise me-1"></i>重新整理
+    </a>
+</div>
+
+@if (Model.VenueOccupancies.Any(v => v.IsOverCapacity))
+{
+    <div class="alert alert-danger d-flex align-items-center gap-2 mb-4">
+        <i class="bi bi-exclamation-triangle-fill fs-5"></i>
+        <div><strong>@Model.VenueOccupancies.Count(v => v.IsOverCapacity) 個場館目前超收</strong>,請盡快前往現場確認。</div>
+    </div>
+}
+
+<div class="row g-4">
+    @foreach (var venue in Model.VenueOccupancies)
+    {
+        var barClass = venue.IsOverCapacity ? "is-over" : venue.OccupancyRate >= 80 ? "is-warn" : "";
+        var widthPercent = venue.OccupancyRate.HasValue ? Math.Min(venue.OccupancyRate.Value, 100) : 0;
+
+         <div class="col-sm-6 col-lg-4 col-xxl-3">
+            <div class="venue-card">
+                <div class="venue-card-header @(venue.IsOverCapacity ? "is-over" : "")">
+                    <div>
+                        <div class="fw-bold fs-5">@venue.VenueName</div>
+                        <div class="small opacity-75"><i class="bi bi-geo-alt me-1"></i>@venue.Location</div>
+                    </div>
+                    <i class="bi bi-building venue-icon"></i>
+                </div>
+                <div class="venue-card-body">
+                    <div class="d-flex align-items-end justify-content-between">
+                        <div>
+                            <span class="venue-count">@venue.CurrentCount</span>
+                            <span class="venue-count-unit">/ @(venue.Capacity?.ToString() ?? "未設定") 人</span>
+                        </div>
+                        @if (venue.IsOverCapacity)
+                        {
+                            <span class="status-badge bg-danger-subtle text-danger">超收</span>
+                        }
+                        else if (venue.OccupancyRate >= 80)
+                        {
+                            <span class="status-badge bg-warning-subtle text-warning-emphasis">接近額滿</span>
+                        }
+                        else
+                        {
+                            <span class="status-badge bg-success-subtle text-success">正常</span>
+                        }
+                    </div>
+                    @if (venue.Capacity.HasValue)
+                    {
+                        <div class="occupancy-bar">
+                            <div class="occupancy-bar-fill @barClass" style="width:@(widthPercent)%"></div>
+                        </div>
+                        <div class="small text-muted">使用率 @venue.OccupancyRate%</div>
+                    }
+                    else
+                    {
+                        <div class="small text-muted mt-2">尚未設定容留人數上限</div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<div class="d-flex align-items-center justify-content-between mt-5 mb-3">
+    <h4 class="fw-bold mb-0"><i class="bi bi-clock-history me-2 text-danger"></i>逾期未離場名單</h4>
+    <span class="badge bg-danger-subtle text-danger">@Model.OverdueTickets.Count 筆</span>
+</div>
+
+@if (!Model.OverdueTickets.Any())
+{
+    <div class="text-muted small">目前沒有逾期未離場的票券。</div>
+}
+else
+{
+    <div class="table-responsive">
+        <table class="table align-middle">
+            <thead class="table-light">
+                <tr>
+                    <th>場館</th>
+                    <th>會員</th>
+                    <th>預約時段</th>
+                    <th>逾期時間</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model.OverdueTickets)
+                {
+                    var overdueMinutes = (int)item.OverdueDuration.TotalMinutes;
+                    <tr>
+                        <td>@item.VenueName</td>
+                        <td>@item.UserName</td>
+                        <td>@item.StartTime.ToString("HH:mm") - @item.EndTime.ToString("HH:mm")</td>
+                        <td><span class="badge bg-danger">超時 @overdueMinutes 分鐘</span></td>
+                        <td>
+                            <a asp-controller="Ticket" asp-action="Detail" asp-route-id="@item.TicketId"
+                               class="btn btn-sm btn-outline-primary">處理</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (!Model.VenueOccupancies.Any())
+{
+    <div class="text-center text-muted py-5">
+        <i class="bi bi-building-slash fs-1 d-block mb-2"></i>
+        目前沒有啟用中的場館
+    </div>
+}

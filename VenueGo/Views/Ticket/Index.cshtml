@@ -21,7 +21,7 @@
                        asp-route-txtKeyword="@Model.Keyword" asp-route-venueId="@Model.SelectedVenueId" asp-route-status="@Model.SelectedStatus"
                        class="btn btn-outline-secondary"><i class="bi bi-chevron-left"></i></a>
                     <input type="date" name="selectedDate" value="@Model.SelectedDate.ToString("yyyy-MM-dd")"
-                           class="form-control" onchange="this.form.submit()"/>
+                           class="form-control" onchange="this.form.submit()" />
                     <a asp-action="Index" asp-route-selectedDate="@Model.SelectedDate.AddDays(1).ToString("yyyy-MM-dd")"
                        asp-route-txtKeyword="@Model.Keyword" asp-route-venueId="@Model.SelectedVenueId" asp-route-status="@Model.SelectedStatus"
                        class="btn btn-outline-secondary"><i class="bi bi-chevron-right"></i></a>
@@ -53,7 +53,7 @@
             </div>
             <div class="col-lg-2 d-flex align-items-end gap-2">
                 <button type="submit" class="btn btn-primary flex-fill">篩選</button>
-                
+
                 <a asp-action="Index" asp-route-selectedDate="@Model.SelectedDate.ToString("yyyy-MM-dd")" class="btn btn-outline-secondary">重置</a>
             </div>
         </form>
@@ -65,6 +65,7 @@
             <tr>
                 <th>票券編號</th>
                 <th>會員</th>
+                <th>電話</th>        <!-- ← 新增 -->
                 <th>場地</th>
                 <th>時段</th>
                 <th>QR Token</th>
@@ -76,7 +77,7 @@
             @if (!Model.Tickets.Any())
             {
                 <tr>
-                    <td colspan="7" class="text-center text-muted py-4">@Model.SelectedDate.ToString("yyyy/MM/dd") 查無符合條件的票券</td>
+                    <td colspan="8" class="text-center text-muted py-4">@Model.SelectedDate.ToString("yyyy/MM/dd") 查無符合條件的票券</td>
                 </tr>
 
             }
@@ -87,6 +88,18 @@
                     <tr class="@(item.IsCheckedIn ? "table-secondary" : "")">
                         <td>@item.TicketId</td>
                         <td>@item.UserName</td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(item.Phone))
+                            {
+                                <a href="tel:@item.Phone" class="text-decoration-none">
+                                    <i class="bi bi-telephone me-1"></i>@item.Phone
+                                </a>
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
                         <td>@item.VenueName</td>
                         <td>@item.TimeRange</td>
                         <td><code class="small">@item.Qrtoken</code></td>
@@ -104,10 +117,17 @@
                             </span>
                         </td>
                         <td class="text-nowrap">
-                            @if (item.Status == 1 && DateTime.Now <= item.BookingDate.ToDateTime(item.EndTime))
+                            @* @if (item.Status == 1 && DateTime.Now <= item.BookingDate.ToDateTime(item.EndTime)) *@
+                            @if (item.Status == 1)
                             {
                                 <form asp-action="QuickCheckIn" asp-route-id="@item.TicketId" method="post" class="d-inline">
-                                    <button type="submit" class="btn btn-sm btn-success">快速報到</button>
+                                    <button type="submit" class="btn btn-sm btn-success">快速入場</button>
+                                </form>
+                            }
+                            @if (item.Status == 2)
+                            {
+                                <form asp-action="QuickCheckOut" asp-route-id="@item.TicketId" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-success">快速出場</button>
                                 </form>
                             }
                             <a asp-action="Detail" asp-route-id="@item.TicketId" class="btn btn-sm btn-outline-primary">詳情</a>

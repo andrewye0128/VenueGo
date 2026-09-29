@@ -18,8 +18,9 @@ namespace VenueGo.ViewModels.CheckinViewModels
         {
             EntryTicketStatus.Valid => "有效",
             EntryTicketStatus.Used => "已使用",
-            EntryTicketStatus.Expired => "已逾期",
+            EntryTicketStatus.Expired => "已失效",
             EntryTicketStatus.Cancelled => "已取消",
+            EntryTicketStatus.Completed => "已完成",
             _ => $"未知({Status})"
         };
 

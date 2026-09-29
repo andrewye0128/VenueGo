@@ -1,0 +1,88 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+/* 放進 base 圖層，讓 Tailwind 的 utility class（例如 font-bold）可以正常覆蓋它 */
+@import "./base.css" layer(base);
+
+/* VenueGo Design System v1 — 色彩與字型 Token（改動前請先更新 Figma Design System） */
+@theme {
+  --font-sans: "Noto Sans TC", ui-sans-serif, system-ui, sans-serif;
+
+  --color-brand-primary: #1d5faf;
+  --color-brand-action: #c24e17;
+  --color-brand-background: #f3f5f8;
+  /* Footer 等深色區塊，需同步更新 Figma */
+  --color-brand-dark: #0d233e;
+  /* 運動類型 icon 等需要吸引目光的小元素，需同步更新 Figma */
+  --color-brand-accent: #f03010;
+
+  --color-neutral-surface: #ffffff;
+  --color-neutral-border: #d3dae3;
+  --color-neutral-text-primary: #1a2230;
+  --color-neutral-text-secondary: #4e5a6a;
+
+  --color-semantic-success: #1d6b3c;
+  --color-semantic-warning: #8a5300;
+  --color-semantic-error: #b42318;
+  --color-semantic-peak: #8c4a00;
+}
+
+/* 覆蓋 base.css 的 Inter 字型與深色模式背景（Design System v1 沒有深色模式） */
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    color: var(--color-neutral-text-primary);
+    background-color: var(--color-brand-background);
+  }
+}
+
+/* #app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  font-weight: normal;
+}
+
+a,
+.green {
+  text-decoration: none;
+  color: hsla(160, 100%, 37%, 1);
+  transition: 0.4s;
+  padding: 3px;
+}
+
+@media (hover: hover) {
+  a:hover {
+    background-color: hsla(160, 100%, 37%, 0.2);
+  }
+}
+
+@media (min-width: 1024px) {
+  body {
+    display: flex;
+    place-items: center;
+  }
+
+  #app {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    padding: 0 2rem;
+  }
+} */
+
+/* Nuxt UI 的語意變數對應到 Design System 色彩
+   直接覆蓋 --ui-*，不用替品牌色補 50–950 的深淺 */
+:root {
+  --ui-primary: var(--color-brand-primary);
+  /* action 為自訂顏色名稱（vite.config.js 的 theme.colors），對應 Brand / Action */
+  --ui-action: var(--color-brand-action);
+  --ui-error: var(--color-semantic-error);
+  --ui-radius: 0.25rem;
+  --ui-text-dimmed: var(--color-neutral-text-secondary);
+  --ui-text-muted: var(--color-neutral-text-secondary);
+  --ui-text: var(--color-neutral-text-primary);
+  --ui-text-highlighted: var(--color-neutral-text-primary);
+  --ui-bg: var(--color-neutral-surface);
+  --ui-bg-elevated: var(--color-brand-background);
+  --ui-border: var(--color-neutral-border);
+  --ui-border-accented: var(--color-neutral-border);
+}

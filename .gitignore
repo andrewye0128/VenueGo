@@ -500,3 +500,6 @@ VenueGo-HungYu.md
 
 # 場地上傳圖片
 /VenueGo/wwwroot/images/venues/
+
+VenueGo/Front-Web/auto-imports.d.ts
+VenueGo/Front-Web/components.d.ts

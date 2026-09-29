@@ -111,6 +111,10 @@ builder.Services.AddHostedService<TimeSyncHostedService>();
 // 註冊關於票券報到的服務：介面 → 實作
 builder.Services.AddScoped<ICheckInService, CheckInService>();
 
+// 註冊 Swagger 服務
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
 //builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
 
 var app = builder.Build();
@@ -124,6 +128,13 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Home/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
+}
+
+// 啟用 Swagger UI
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
@@ -145,5 +156,6 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
+app.MapControllers();   // 讓 [Route("api/...")] 的 API 路由生效
 
 app.Run();

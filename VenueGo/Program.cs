@@ -10,6 +10,7 @@ using VenueGo.Services.Orders;
 using VenueGo.Services.Reservations;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
+using VenueGo.Services.VenueSchedules;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using VenueGo.Services.Ticket;
 using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
@@ -67,6 +68,9 @@ builder.Services.AddScoped<IReservationDraftStore, SessionReservationDraftStore>
 
 // 註冊關於場地方法的服務：介面 → 實作
 builder.Services.AddScoped<IVenueQueryService, VenueQueryService>();
+
+// 註冊關於場地時段的服務(場地模組提供:營業時段、不開放時段、尖峰、單價、可使用的場地)：介面 → 實作
+builder.Services.AddScoped<IVenueScheduleService, VenueScheduleService>();
 
 // 註冊關於時段方法的服務：介面 → 實作
 builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();

@@ -354,6 +354,28 @@ namespace VenueGo.Models.VenueModels
         }
 
 
+        //判斷某一格時段是否為尖峰 >> 不查DB
+        //slotTime:這一格的開始時間;dayPeakStartTime:那一天的尖峰起始時間(null = 那天不分尖峰/離峰)
+        //規則:那天有尖峰起始時間,而且這一格的開始時間 >= 尖峰起始時間(含起始點),尖峰一路延續到打烊
+        //目前給場地時段服務(VenueScheduleService)計算每一格的尖峰與單價使用,是「哪一格算尖峰」這條規則唯一的一份
+        public bool IsPeakSlot(TimeOnly slotTime, TimeOnly? dayPeakStartTime)
+        {
+            if (!dayPeakStartTime.HasValue)
+            {
+                return false;
+            }
+
+            if (slotTime >= dayPeakStartTime.Value)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+
         //判斷某一天的尖峰起始時間是否合法 >> 後端驗證、列表的「超出營業時間」提示、編輯頁的橘色標示,全部共用這一個方法,
         //確保「畫面上選得到的」跟「存檔時允許的」永遠是同一套規則
         //營業時間由呼叫方傳入(不在這裡查DB),理由同 GetPeakStartTimeOptions

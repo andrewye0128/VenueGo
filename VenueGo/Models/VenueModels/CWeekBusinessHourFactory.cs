@@ -75,6 +75,33 @@ namespace VenueGo.Models.VenueModels
         }
 
 
+        //把某一天的營業時間切成一小時一格的時段清單(每格記錄開始時間) >> 不查DB,營業時間由呼叫方傳入
+        //例:營業 10:00~22:00 >> 10:00、11:00 ... 21:00 共 12 格(最後一格是 21:00~22:00,不會多出 22:00 那一格)
+        //公休日、查不到營業時間(businessHour 是 null)、或開始/打烊時間不完整 >> 回傳空清單
+        //目前給場地時段服務(VenueScheduleService)使用,是「營業時段怎麼切」這條規則唯一的一份
+        public List<TimeOnly> ExpandToSlots(CWeekBusinessHourWrap? businessHour)
+        {
+            List<TimeOnly> slots = new List<TimeOnly>();
+
+            if (businessHour == null || !businessHour.IsOpen || !businessHour.OpenTime.HasValue || !businessHour.CloseTime.HasValue)
+            {
+                return slots;
+            }
+
+            int openHour = businessHour.OpenTime.Value.Hour;
+            int closeHour = businessHour.CloseTime.Value.Hour;
+
+            //條件是 hour < closeHour(不是 <=):每一格代表「從這個時間開始的一小時」,打烊那個整點不能再開始一格
+            //用int控制迴圈,理由跟GetWholeHourOptions()一樣:TimeOnly過了23:00會繞回00:00,不能直接拿TimeOnly本身遞增比較
+            for (int hour = openHour; hour < closeHour; hour++)
+            {
+                slots.Add(new TimeOnly(hour, 0));
+            }
+
+            return slots;
+        }
+
+
         //批次修改 >> 一次把7天的營業時間設定存回去,7筆都在同一個DbContext裡處理,最後一次SaveChanges
         //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
         public void EditAll(List<CWeekBusinessHourWrap> wraps, int userId, DateTime now)

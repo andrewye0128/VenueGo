@@ -19,7 +19,7 @@
         new { Text = "訂單管理", Icon = "bi-receipt",          Controller = "Order",       Action = "Index", Roles = RoleNames.BackOffice.Split(",") },
         new { Text = "會員管理", Icon = "bi-people",           Controller = "Member",      Action = "Index", Roles =  RoleNames.BackOffice.Split(",") },
         new { Text = "付款管理", Icon = "bi-credit-card",      Controller = "Payment",     Action = "Index", Roles = new string[] { } },
-        new { Text = "票券管理", Icon = "bi-ticket-perforated", Controller = "Ticket",     Action = "Index", Roles = new string[] { } },
+        new { Text = "票券管理", Icon = "bi-ticket-perforated", Controller = "Ticket",     Action = "Index", Roles = RoleNames.BackOffice.Split(",") },
         // new { Text = "統計報表", Icon = "bi-bar-chart",        Controller = "Report",      Action = "Index", Roles = new string[] { } },
         new { Text = "統計報表", Icon = "bi-bar-chart",        Controller = "Analytics",   Action = "Index", Roles = RoleNames.ManagerOrAdmin.Split(",") },
         new { Text = "評論管理", Icon = "bi-chat-left-text",   Controller = "AReview",     Action = "Index", Roles = RoleNames.BackOffice.Split(",") },

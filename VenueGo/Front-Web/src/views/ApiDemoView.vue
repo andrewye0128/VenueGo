@@ -46,7 +46,8 @@ try {
       設定檔啟動後端（https://localhost:7078）。
     </p>
 
-    <div class="mt-8 grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+    <!-- grid-cols-1：手機一欄且寬度不超過螢幕，避免程式碼範例把整頁撐寬 -->
+    <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
       <section class="rounded border border-neutral-border bg-neutral-surface p-6">
         <h2 class="mb-4 font-semibold text-neutral-text-primary">測試</h2>
         <div class="flex flex-wrap gap-3">

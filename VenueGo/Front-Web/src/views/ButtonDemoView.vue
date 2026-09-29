@@ -100,7 +100,8 @@ const loadingCode = `<!-- 載入中：維持原本顏色 + 轉圈圖示，且不
       </div>
     </section>
 
-    <section class="mt-8 grid gap-8 md:grid-cols-2">
+    <!-- grid-cols-1：手機一欄且寬度不超過螢幕，避免程式碼範例把整頁撐寬 -->
+    <section class="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
       <!-- ② 尺寸 -->
       <div class="rounded border border-neutral-border bg-neutral-surface p-6">
         <h2 class="mb-4 font-semibold text-neutral-text-primary">② 尺寸：sm / md / lg</h2>

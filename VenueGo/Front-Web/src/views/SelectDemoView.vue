@@ -33,7 +33,8 @@ ${scriptEndTag}
       使用 &lt;SportTypeSelect&gt; 元件（底層為 Nuxt UI），選項、圖示、Label 都已內建。
     </p>
 
-    <section class="mt-8 grid gap-8 md:grid-cols-2">
+    <!-- grid-cols-1：手機一欄且寬度不超過螢幕，避免程式碼範例把整頁撐寬 -->
+    <section class="mt-8 grid grid-cols-1 gap-8 md:grid-cols-2">
       <div class="rounded border border-neutral-border bg-neutral-surface p-6">
         <h2 class="mb-4 font-semibold text-neutral-text-primary">① 預設（還沒選）</h2>
         <SportTypeSelect v-model="sportEmpty" />

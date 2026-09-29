@@ -104,7 +104,7 @@ export default defineConfig({
             },
           ],
         },
-        // UButton 對應 BaseButton：action / primary = solid、secondary = outline、text = ghost
+        // UButton 對應設計規範的按鈕類型：action / primary = solid、secondary = outline、text = ghost
         button: {
           // 全站按鈕預設開啟 loadingAuto：在 UForm 裡的送出按鈕，送出處理中會自動轉圈、不能重複按
           // （@click 綁定的是會等待的 async 函式時，也會自動轉圈）
@@ -136,7 +136,7 @@ export default defineConfig({
               class: "hover:bg-primary active:bg-primary text-white hover:brightness-120 active:brightness-65 disabled:bg-neutral-border aria-disabled:bg-neutral-border disabled:brightness-100 aria-disabled:brightness-100",
             },
             // 白底藍框（secondary）
-            // 用真正的 border 取代 Nuxt UI 預設的內側 ring，寬度才會跟 BaseButton 一樣（ring 不佔寬度，會少 2px）
+            // 用真正的 border 取代 Nuxt UI 預設的內側 ring：ring 不佔寬度，按鈕會比設計稿窄 2px
             {
               color: "primary",
               variant: "outline",

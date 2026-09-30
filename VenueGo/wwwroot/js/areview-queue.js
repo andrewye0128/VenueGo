@@ -21,9 +21,20 @@
     const flashBox = document.getElementById('queueFlash');
 
       // 所有會進網址、也會送給後端的條件
-      const FILTER_KEYS = ['tab', 'source', 'range', 'field', 'keyword', 'grouped'];
+      // 9/29：多了運動類型與場地。dataset 會把 data-sport-type-id 轉成 sportTypeId。
+      const FILTER_KEYS = ['tab', 'source', 'range', 'field', 'keyword', 'grouped', 'sportTypeId', 'venueId'];
 
       /* ── 共用工具 ─────────────────────────────────────── */
+
+    /* AI 草稿的重複產生上限。
+       這是「防手滑」不是「防惡意」——會按到這顆按鈕的人本來就得先有員工帳號，
+       真正的成本控制在後端。這裡只是避免有人連點十次把額度燒光。
+
+       ⚠️ Map 存在模組層級，清單被整塊換掉（切分頁、重新篩選）時不會清空，
+          這是刻意的：如果切個分頁再回來就能重刷，這個限制等於不存在。
+          重新整理整頁才會歸零，那不值得為它寫進資料庫。 */
+    const AI_DRAFT_LIMIT = 3;
+    const aiDraftCount = new Map();
 
     function pageToken() {
         const input = document.querySelector('input[name="__RequestVerificationToken"]');
@@ -122,18 +133,23 @@
                   return JSON.parse(st.dataset.defaults);
             } catch (e) {
                   // 萬一讀不到也要有得用，不能讓「重置」整個壞掉
-                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'false' };
+                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'false', sportTypeId: '', venueId: '' };
             }
       }
 
-      /* 篩選連結（tab、來源）上帶著完整條件，直接從 href 讀，
-         連結本身就是唯一的事實來源，不用在 JS 裡重組一次。 */
+      /* 篩選連結（tab、來源、場地）上帶著完整條件，直接從 href 讀，
+         連結本身就是唯一的事實來源，不用在 JS 裡重組一次。
+
+         9/29 改：網址上「沒有」這個條件，就當作空值，不再沿用目前的值。
+         原因是「取消場地篩選」的連結是把 venueId 拿掉（後端產生網址時，空值不會寫進去），
+         如果沿用目前的值，場地就永遠取消不掉。
+         其他條件不受影響：每個連結本來就帶著全部條件（見 _QueueList 的 CurrentRoute）。 */
       function filterFromHref(href) {
             const u = new URL(href, window.location.origin);
-            const f = currentFilter();
+            const f = {};
             FILTER_KEYS.forEach(function (k) {
                   const v = u.searchParams.get(k);
-                  if (v !== null) f[k] = v;
+                  f[k] = v !== null ? v : '';
             });
             return f;
       }
@@ -299,7 +315,11 @@
     let spamUrl = null;
     const spamModalEl = document.getElementById('spamModal');
     const spamModal = bootstrap.Modal.getOrCreateInstance(spamModalEl);
-    const spamReason = document.getElementById('spamReason');
+    // 9/29：理由改成單選清單，選中的那一個用 checked 找
+    function checkedSpamReason() {
+        const el = document.querySelector('input[name="spamReason"]:checked');
+        return el ? el.value : '';
+    }
     const spamError = document.getElementById('spamError');
     const spamConfirm = document.getElementById('spamConfirm');
 
@@ -346,11 +366,79 @@
             return;
         }
 
+        // 4b. AI 回覆草稿：後端產生 → 填進輸入框 → 員工改完才送出
+        //     ⚠️ 這支不會送出回覆，送出走的還是原本那條路。
+        const aiBtn = e.target.closest('.js-ai-draft');
+        if (aiBtn) {
+            const form = aiBtn.closest('form');
+            const textarea = form.querySelector('.js-reply-text');
+            const errorBox = form.querySelector('.js-error');
+            const note = form.querySelector('.js-ai-note');
+            const id = aiBtn.dataset.reviewId;
+
+            const used = aiDraftCount.get(id) || 0;
+            if (used >= AI_DRAFT_LIMIT) {
+                errorBox.textContent =
+                    '這則已經產生過 ' + used + ' 次草稿了。再生一次多半還是差不多，自己寫會比較快。';
+                return;
+            }
+
+            /* 已經打了字就先問一聲。
+               ⚠️ 這裡跟罐頭回覆的行為刻意不同：罐頭回覆是「接在後面」，
+                  因為它是一個句子；AI 草稿是一整則完整回覆，只能「取代」。
+                  接在後面會變成兩則回覆黏在一起。 */
+            if (textarea.value.trim() &&
+                !window.confirm('要用 AI 草稿取代目前輸入的內容嗎？')) {
+                return;
+            }
+
+            // ⚠️ 防連點：每一次點擊都在花錢，而且 LLM 慢起來可以好幾秒。
+            //    按鈕沒有鎖住的話，員工會以為沒反應而連按。
+            const label = aiBtn.innerHTML;
+            aiBtn.disabled = true;
+            aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 產生中⋯';
+            errorBox.textContent = '';
+
+            // post() 已經自動帶防偽 token，也會做 assertJson（擋 302 假成功）
+            post(aiBtn.dataset.url, { id: id })
+                .then(function (res) {
+                    // 後端回的是 ApiResult<string>：success / message / data
+                    if (!res.data.success) {
+                        throw new Error(res.data.message || 'AI 草稿產生失敗');
+                    }
+
+                    textarea.value = res.data.data;
+
+                    // 程式設定 value 不會觸發 input 事件，
+                    // 補發一次讓下面的字數計數器更新（跟罐頭回覆同一個道理）
+                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+
+                    textarea.focus();
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+                    // 標記「這段是機器寫的」。這行提示是責任界線，不是裝飾。
+                    if (note) note.classList.remove('d-none');
+
+                    aiDraftCount.set(id, used + 1);
+                })
+                .catch(function (err) {
+                    /* ⚠️ 失敗就是失敗，輸入框一個字都不要動。
+                       員工可能已經打了一半，被一個失敗的請求清空是最糟的結果。
+                       錯誤寫進表單自己的 .js-error，跟其他操作一致，不要用 alert。 */
+                    errorBox.textContent = errorMessage(err);
+                })
+                .finally(function () {
+                    aiBtn.disabled = false;
+                    aiBtn.innerHTML = label;
+                });
+            return;
+        }
+
           // 5. 打開標記垃圾的 modal
         const spamBtn = e.target.closest('.js-spam-open');
         if (spamBtn) {
             spamUrl = spamBtn.dataset.url;
-            spamReason.value = '';
+            document.querySelectorAll('input[name="spamReason"]').forEach(function (r) { r.checked = false; });
             spamError.textContent = '';
             spamModal.show();
         }
@@ -379,6 +467,17 @@
             if (e.target.matches('#groupToggle')) {
                   f.grouped = e.target.checked ? 'true' : 'false';
                   loadList(f, { focusId: 'groupToggle' });
+                  return;
+            }
+
+            // 9/29：換運動類型時，場地篩選一併取消——
+            // 從「羽球場 A1」換成「網球」，還留著羽球場的篩選只會得到空清單。
+            // 依訂單分組也關掉：選了運動類型就改成依場地分組（後端也會強制）。
+            if (e.target.matches('#sportTypeSelect')) {
+                  f.sportTypeId = e.target.value;
+                  f.venueId = '';
+                  f.grouped = 'false';
+                  loadList(f, { focusId: 'sportTypeSelect' });
             }
       });
 
@@ -470,13 +569,14 @@
     /* ── 確認標記垃圾（modal 在 root 外面，直接掛）──────── */
 
     spamConfirm.addEventListener('click', function () {
-        if (spamReason.value === '') {
+        const reason = checkedSpamReason();
+        if (reason === '') {
             spamError.textContent = '請選擇理由';
             return;
         }
         spamConfirm.disabled = true;
 
-        post(spamUrl, { reason: spamReason.value })
+        post(spamUrl, { reason: reason })
             .then(function (res) {
                 spamModal.hide();
                 flash(res.data.message || '已標記為垃圾');
@@ -496,3 +596,19 @@
       highlight();
 
 })();
+
+/* ───────────────────────────────────────────────────────────────────────
+   後端要回的格式（跟專案既有的 ApiResult 一致，不要自己另外發明）
+
+       成功： return Ok(ApiResult<string>.Ok(draft));
+              → { success: true, message: null, errorCode: null, data: "草稿內容" }
+
+       失敗： return StatusCode(502, ApiResultVM.Fail("AI 服務暫時無法使用，請稍後再試或自行撰寫"));
+              → axios 遇到 5xx 會進 catch，errorMessage() 會取出 message
+
+       未啟用：return StatusCode(503, ApiResultVM.Fail("AI 草稿功能未啟用"));
+       已回覆：return StatusCode(409, ApiResultVM.Fail("這則評論已經回覆過了"));
+
+   ⚠️ 不要把例外的 ex.Message 直接回給前端——裡面可能有金鑰或內部路徑。
+      詳細錯誤記進 log，回給前端的是給人看的那一句。
+   ─────────────────────────────────────────────────────────────────────── */

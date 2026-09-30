@@ -60,19 +60,27 @@ namespace VenueGo.Models.VenueModels
             db.SaveChanges();
         }
 
-        //Delete
-        public void Delete(int id)
+        //Delete(軟刪除)
+        //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
+        public void Delete(int id, int userId, DateTime now)
         {
             dbVenueContext db = new dbVenueContext();
             //依照取得的id去尋找對應的SportType
             var data = db.SportTypes.FirstOrDefault(item => item.SportTypeId == id);
             if (data != null)
+            {
                 data.IsActive = false;
+
+                //軟刪除也是一次更新 >> 記錄是誰、何時停用
+                data.UpdatedAt = now;
+                data.UpdatedBy = userId;
+            }
             db.SaveChanges();
         }
 
         //Edit
-        public void Edit(CSportTypeWrap Wrap)
+        //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
+        public void Edit(CSportTypeWrap Wrap, int userId, DateTime now)
         {
             dbVenueContext db = new dbVenueContext();
             //驗證傳入Wrap非null
@@ -84,6 +92,10 @@ namespace VenueGo.Models.VenueModels
             if (SportTypeDb != null)
             {
                 SportTypeDb.SportName = Wrap.SportName;
+
+                //稽核欄位:記錄最後修改時間與修改者
+                SportTypeDb.UpdatedAt = now;
+                SportTypeDb.UpdatedBy = userId;
             }
 
             db.SaveChanges();

@@ -47,6 +47,88 @@ namespace VenueGo.Models.VenueModels
         }
 
 
+        //場地依運動類型分組,再依分組做換頁 >> 專供 VenueIndex 頁面使用
+        //分頁的單位是「運動類型分組」,不是「場地」
+        //例如 pageSize = 3,代表一頁顯示 3 種運動類型,每種底下的場地都會整組顯示,不會被拆到下一頁
+        public VenueIndexViewModel QueryGroupedBySportType(int page, int pageSize)
+        {
+            //先撈出所有場地,沿用既有方法,不重複寫一次查詢邏輯
+            List<CVenueWrap> allVenues = QueryAll();
+
+            //撈運動類型清單,用來對照 SportTypeId 對應的名稱
+            List<SelectListItem> sportTypes = GetSportTypes();
+
+            //把場地依 SportTypeId 分組,一種運動類型一組
+            List<VenueGroupViewModel> allGroups = new List<VenueGroupViewModel>();
+
+            foreach (SelectListItem sportType in sportTypes)
+            {
+                int sportTypeId = int.Parse(sportType.Value);
+
+                //把屬於這個運動類型的場地一筆一筆挑出來
+                List<CVenueWrap> venuesInThisGroup = new List<CVenueWrap>();
+                foreach (CVenueWrap venue in allVenues)
+                {
+                    if (venue.SportTypeId == sportTypeId)
+                    {
+                        venuesInThisGroup.Add(venue);
+                    }
+                }
+
+                //這個運動類型底下如果沒有任何場地,就不用顯示這一組,略過
+                if (venuesInThisGroup.Count == 0)
+                {
+                    continue;
+                }
+
+                VenueGroupViewModel group = new VenueGroupViewModel();
+                group.SportTypeId = sportTypeId;
+                group.SportTypeName = sportType.Text;
+                group.Venues = venuesInThisGroup;
+
+                allGroups.Add(group);
+            }
+
+            //依 SportTypeId 排序,固定分組的順序
+            //如果沒有排序,換頁時分組的先後順序可能會不穩定,同一組今天在第1頁、明天卻跑到第2頁
+            allGroups.Sort((groupA, groupB) => groupA.SportTypeId.CompareTo(groupB.SportTypeId));
+
+            //頁碼防呆:小於1就修正回第1頁
+            if (page < 1)
+            {
+                page = 1;
+            }
+
+            VenueIndexViewModel vm = new VenueIndexViewModel();
+            vm.PageSize = pageSize;
+            vm.TotalGroupCount = allGroups.Count;
+
+            //頁碼超過總頁數(例如原本第3頁,結果分組被刪到只剩1頁),修正回最後一頁
+            //避免畫面直接空白,讓使用者以為資料不見了
+            if (page > vm.TotalPages)
+            {
+                page = vm.TotalPages;
+            }
+
+            vm.CurrentPage = page;
+
+            //從分組清單裡,把目前這一頁該顯示的分組挑出來
+            //例如page=2、pageSize=3 >> 從第4組開始挑,挑到第6組為止
+            int startIndex = (page - 1) * pageSize;
+
+            List<VenueGroupViewModel> groupsForThisPage = new List<VenueGroupViewModel>();
+            for (int i = startIndex; i < allGroups.Count && i < startIndex + pageSize; i++)
+            {
+                groupsForThisPage.Add(allGroups[i]);
+            }
+
+            vm.Groups = groupsForThisPage;
+
+            return vm;
+        }
+
+
+
         //場地新增
         public void Create(CVenueWrap Wrap)
         {
@@ -59,15 +141,19 @@ namespace VenueGo.Models.VenueModels
 
 
 
-        //撈取SportType提供給VenueCreate送到前端產生下拉選單
+        //撈取SportType提供給VenueCreate送到前端產生下拉選單(VenueIndex 的分組也使用)
+        //只列出存在的運動類型(IsActive == true):SportTypes 的 IsActive 是軟刪除用的系統欄位,
+        //已刪除的運動類型不能再被選來建立場地,否則會出現「場地還在、運動類型已被刪除」的資料
         public List<SelectListItem> GetSportTypes()
         {
             List<SelectListItem> list = new List<SelectListItem>();
 
             using (dbVenueContext db = new dbVenueContext())
             {
-                var datas = from t in db.SportTypes select t;
-                ;
+                var datas = from t in db.SportTypes
+                            where t.IsActive == true
+                            select t;
+
                 foreach (var data in datas)
                 {
                     list.Add(new SelectListItem
@@ -80,8 +166,33 @@ namespace VenueGo.Models.VenueModels
             return list;
         }
 
+        //查出某個運動類型底下「存在的場地」名稱 >> 刪除運動類型、刪除價格規則前的連動檢查共用
+        //Venues 的 IsActive 是軟刪除用的系統欄位,IsActive = false 的場地已經不存在,不算連動
+        //回傳名稱清單(依 VenueId 排序),呼叫方可以用 Count 判斷有沒有連動,也可以把名稱放進錯誤訊息
+        public List<string> QueryActiveVenueNamesBySportType(int sportTypeId)
+        {
+            List<string> names = new List<string>();
+
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var datas = from v in db.Venues
+                            where v.SportTypeId == sportTypeId && v.IsActive == true
+                            orderby v.VenueId
+                            select v.VenueName;
+
+                foreach (string name in datas)
+                {
+                    names.Add(name);
+                }
+            }
+
+            return names;
+        }
+
+
         //場地編輯
-        public void Edit(VenueEditViewModel vm)
+        //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
+        public void Edit(VenueEditViewModel vm, int userId, DateTime now)
         {
             using (dbVenueContext db = new dbVenueContext())
             {
@@ -98,14 +209,19 @@ namespace VenueGo.Models.VenueModels
 
                     if (vm.PhotoFile != null)
                         VenueDb.PhotoPath = vm.PhotoPath;
+
+                    //稽核欄位:記錄最後修改時間與修改者
+                    VenueDb.UpdatedAt = now;
+                    VenueDb.UpdatedBy = userId;
                 }
                 db.SaveChanges();
             }
         }
 
 
-        //場地刪除
-        public void Delete(int id)
+        //場地刪除(軟刪除)
+        //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
+        public void Delete(int id, int userId, DateTime now)
         {
             Venue data = null;
 
@@ -115,9 +231,18 @@ namespace VenueGo.Models.VenueModels
                 data = db.Venues.FirstOrDefault(p => p.VenueId == id);
 
                 if (data != null)
+                {
                     data.IsActive = false;
+
+                    //軟刪除也是一次更新 >> 記錄是誰、何時停用
+                    data.UpdatedAt = now;
+                    data.UpdatedBy = userId;
+                }
                 db.SaveChanges();
             }
         }
+
+
+        
     }
 }

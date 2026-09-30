@@ -11,6 +11,8 @@
     var userName = User.Identity?.IsAuthenticated == true ? User.Identity.Name : "訪客";
     var userEmail = User.FindFirst(ClaimTypes.Email)?.Value ?? "guest@venuego.com";
     var avatarChar = !string.IsNullOrEmpty(userName) ? userName.Substring(0, 1) : "G";
+    // 判斷是否為管理員（支援多種管理員角色名稱）
+    var isAdmin = User.IsInRole("Admin") || User.IsInRole("SuperAdmin");
 }
 
 <header class="admin-header">
@@ -48,7 +50,10 @@
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
                 <li><a class="dropdown-item" asp-controller="Member" asp-action="Profile">個人資料</a></li>
-                <li><a class="dropdown-item" asp-controller="Setting" asp-action="Index">系統設定</a></li>
+                @if (isAdmin)
+                {
+                    <li><a class="dropdown-item" asp-controller="Setting" asp-action="Index">系統設定</a></li>
+                }
                 <li><hr class="dropdown-divider" /></li>
                 @* <li><a class="dropdown-item text-danger" asp-controller="Account" asp-action="Logout">登出</a></li> *@
                 <li>

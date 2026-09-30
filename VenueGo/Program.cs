@@ -1,15 +1,24 @@
-using Microsoft.AspNetCore.Authentication.Cookies; // [新增] 引入 Cookie 認證命名空間
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Services;
+using VenueGo.Helpers;
+using VenueGo.Models.CheckinModels;
+using VenueGo.Models.DashboardModels;
+using VenueGo.Models.Options;
 using VenueGo.Models.ReviewModels;
+using VenueGo.Services;
 using VenueGo.Services.Auth;
+using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
 using VenueGo.Services.Members;
 using VenueGo.Services.Orders;
 using VenueGo.Services.Reservations;
+using VenueGo.Services.Ticket;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
-using VenueGo.Models.Options;
+using VenueGo.Services.VenueSchedules;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using VenueGo.Services.Ticket;
+using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,6 +55,13 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
 // 註冊 Session
 builder.Services.AddSession();
 
+//builder.Services.AddSession(options =>
+//{
+//    options.IdleTimeout = TimeSpan.FromMinutes(30);
+//    options.Cookie.HttpOnly = true;
+//    options.Cookie.IsEssential = true;
+//});
+
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
 
@@ -58,6 +74,9 @@ builder.Services.AddScoped<IReservationDraftStore, SessionReservationDraftStore>
 // 註冊關於場地方法的服務：介面 → 實作
 builder.Services.AddScoped<IVenueQueryService, VenueQueryService>();
 
+// 註冊關於場地時段的服務(場地模組提供:營業時段、不開放時段、尖峰、單價、可使用的場地)：介面 → 實作
+builder.Services.AddScoped<IVenueScheduleService, VenueScheduleService>();
+
 // 註冊關於時段方法的服務：介面 → 實作
 builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
 
@@ -68,7 +87,7 @@ builder.Services.AddScoped<ISlotSelectionValidator, SlotSelectionValidator>();
 builder.Services.AddScoped<IReservationPricingService, ReservationPricingService>();
 
 // 註冊關於目前登入者的服務：介面 → 實作
-builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUserService>();
 
 // 註冊關於訂單編號產生器的服務：介面 → 實作
 builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();
@@ -85,11 +104,13 @@ builder.Services.AddScoped<IReservationCommandService, ReservationCommandService
 builder.Services.Configure<ReservationRulesOptions>(
     builder.Configuration.GetSection(ReservationRulesOptions.SectionName));
 
+// 註冊關於票券的服務：介面 → 實作
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
+builder.Services.AddScoped<CTicketViewModelFactory>();
+
+builder.Services.AddScoped<VenueMonitorFactory>();
 
 // 評論系統使用
-builder.Services.AddScoped<ICurrentUser, HttpContextCurrentUser>();
-
 builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
 builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
 builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
@@ -99,7 +120,20 @@ builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = Time
 builder.Services.AddSingleton<ITimeService, TimeService>();
 builder.Services.AddHostedService<TimeSyncHostedService>();
 
+// 註冊關於票券報到的服務：介面 → 實作
+builder.Services.AddScoped<ICheckInService, CheckInService>();
+builder.Services.AddHostedService<TicketSettlementHostedService>();
+
+// 註冊 Swagger 服務
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+//builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
+
 var app = builder.Build();
+
+// 在應用程式啟動時，將單例 TimeService 橋接給靜態類別
+TimeAgo.TimeService = app.Services.GetRequiredService<ITimeService>();  
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -107,6 +141,13 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Home/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
+}
+
+// 啟用 Swagger UI
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
@@ -128,5 +169,6 @@ app.MapControllerRoute(
     pattern: "{controller=Home}/{action=Index}/{id?}")
     .WithStaticAssets();
 
+app.MapControllers();   // 讓 [Route("api/...")] 的 API 路由生效
 
 app.Run();

@@ -490,12 +490,20 @@ $RECYCLE.BIN/
 appsettings.Local.json
 
 # User uploaded files
-wwwroot/uploads/*
-!wwwroot/uploads/.gitkeep
+VenueGo/wwwroot/uploads/*
+!VenueGo/wwwroot/uploads/.gitkeep
 
 # Claude Code personal instructions/settings (not shared)
 CLAUDE.local.md
-.claude/settings.local.json
+.claude/
+VenueGo-HungYu.md
 
 # 場地上傳圖片
-/VenueGo/wwwroot/images/venues/
+/VenueGo/wwwroot/images/venues/ 
+
+
+# 發佈測試輸出
+VenueGo/publish-test/
+
+# 前台 Vue 打包輸出（部署用，由 npm run build 產生）
+VenueGo/wwwroot/app/

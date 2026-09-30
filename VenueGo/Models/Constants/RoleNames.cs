@@ -1,4 +1,6 @@
-﻿namespace VenueGo.Models.Constants
+﻿using System.Collections.ObjectModel;
+
+namespace VenueGo.Models.Constants
 {
     /// <summary>
     /// 角色名稱常數，對應 Roles.RoleName 欄位的值。
@@ -31,7 +33,6 @@
         /// </para>
         /// </summary>
         public const string BackOffice = $"{Staff},{Manager},{Admin}";
-
 
         /// <summary>場館營運管理者與系統管理員 </summary>
         public const string ManagerOrAdmin = $"{Manager},{Admin}";

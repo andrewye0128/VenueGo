@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using VenueGo.Data;
@@ -9,7 +10,7 @@ using VenueGo.ViewModels.MemberViewModels;
 
 namespace VenueGo.Controllers
 {
-    [EmployeeAuthorize("Admin", "Manager")] // 👈 傳入兩個獨立字串
+    [EmployeeAuthorize()] 
     public class MemberController : Controller
     {
         private readonly dbVenueContext _db;
@@ -20,7 +21,7 @@ namespace VenueGo.Controllers
         }
 
         // GET: Member/Index (僅列出擁有「會員角色」的使用者)
-        public async Task<IActionResult> Index(string? keyword, string? status)
+        public async Task<IActionResult> Index(string? keyword, string? status, int page = 1, int pageSize = 10)
         {
             // 1. 查詢所有擁有 "Member" 角色的 UserId 集合
             var memberUserIds = _db.UserRoles
@@ -38,7 +39,7 @@ namespace VenueGo.Controllers
                 baseQuery = baseQuery.Where(u =>
                     u.Name.ToLower().Contains(trimKeyword) ||
                     u.Email.ToLower().Contains(trimKeyword) ||
-                    u.Phone.Contains(trimKeyword)
+                    (u.Phone != null && u.Phone.Contains(trimKeyword))
                 );
             }
 
@@ -48,9 +49,16 @@ namespace VenueGo.Controllers
                 baseQuery = baseQuery.Where(u => u.Status == status);
             }
 
-            // 5. 投影到 UserListItemDto，並計算是否同時為員工
+            // 5. 計算總筆數與總頁數
+            var totalCount = await baseQuery.CountAsync();
+            var totalPages = (int)Math.Ceiling(totalCount / (double)pageSize);
+            page = Math.Max(1, page); // 防止傳入小於 1 的頁碼
+
+            // 6. 加入排序與分頁 Skip/Take
             var rawList = await baseQuery
                 .OrderByDescending(u => u.CreatedAt)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(u => new UserListItemDto
                 {
                     UserId = u.UserId,
@@ -69,12 +77,15 @@ namespace VenueGo.Controllers
                 Keyword = keyword,
                 SelectedStatus = status,
                 SelectedUserType = "member",
-                Users = rawList
+                Users = rawList,
+                // 傳遞分頁資訊給 View
+                CurrentPage = page,
+                TotalPages = totalPages,
+                TotalCount = totalCount
             };
 
             return View(model);
         }
-
         // POST: Member/UpdateMemberStatus (變更會員狀態，如停權/啟用)
         [EmployeeAuthorize("Admin")] // 僅限管理員存取
         [HttpPost]
@@ -373,6 +384,122 @@ namespace VenueGo.Controllers
                     Status = r.Status
                 }).ToListAsync();
         }
+
+        // GET: Member/Profile
+        [HttpGet]
+        public async Task<IActionResult> Profile()
+        {
+            var userEmail = User.FindFirstValue(ClaimTypes.Email);
+            if (string.IsNullOrEmpty(userEmail))
+            {
+                return RedirectToAction("Login", "Account");
+            }
+
+            // 1. 透過 UserId 連接 Users 與 Employees 資料表
+            var userData = await (from u in _db.Users
+                                  join e in _db.Employees on u.UserId equals e.UserId into empGroup
+                                  from emp in empGroup.DefaultIfEmpty() // Left Join
+                                  where u.Email == userEmail
+                                  select new
+                                  {
+                                      User = u,
+                                      Employee = emp
+                                  }).FirstOrDefaultAsync();
+
+            if (userData == null)
+            {
+                return NotFound("找不到使用者資料");
+            }
+
+            var user = userData.User;
+            var employee = userData.Employee;
+
+            // 2. 取得使用者角色列表
+            var userRoles = await (from ur in _db.UserRoles
+                                   join r in _db.Roles on ur.RoleId equals r.RoleId
+                                   where ur.UserId == user.UserId
+                                   select r.RoleName).ToListAsync();
+
+            var model = new UserProfileViewModel
+            {
+                UserId = user.UserId,
+                Name = user.Name,
+                Email = user.Email,
+                Phone = user.Phone,
+                // 從相應的 Employee 取得資料
+                EmployeeNo = employee?.EmployeeNo ?? "無",
+                JobTitle = employee?.JobTitle ?? "一般會員",
+                Roles = userRoles
+            };
+
+            return View(model);
+        }
+
+        // POST: Member/Profile
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Profile(UserProfileViewModel model)
+        {
+            if (!ModelState.IsValid)
+            {
+                return View(model);
+            }
+
+            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == model.UserId);
+            if (user == null)
+            {
+                return NotFound();
+            }
+
+            // 1. 更新基本資料
+            user.Name = model.Name;
+            user.Phone = model.Phone;
+            user.UpdatedAt = DateTime.Now;
+
+            // 查詢對應的 Employee 資料（用於驗證失敗時重新呈現 View）
+            var employee = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == user.UserId);
+
+            // 2. 處理密碼修改邏輯
+            if (!string.IsNullOrEmpty(model.NewPassword))
+            {
+                if (string.IsNullOrEmpty(model.CurrentPassword))
+                {
+                    ModelState.AddModelError(nameof(model.CurrentPassword), "欲修改密碼，請輸入舊密碼。");
+                    model.EmployeeNo = employee?.EmployeeNo ?? "無";
+                    model.JobTitle = employee?.JobTitle ?? "一般會員";
+                    return View(model);
+                }
+
+                bool isPasswordValid = PasswordHelper.VerifyPassword(model.CurrentPassword, user.PasswordHash);
+                if (!isPasswordValid)
+                {
+                    ModelState.AddModelError(nameof(model.CurrentPassword), "舊密碼輸入錯誤。");
+                    model.EmployeeNo = employee?.EmployeeNo ?? "無";
+                    model.JobTitle = employee?.JobTitle ?? "一般會員";
+                    return View(model);
+                }
+
+                user.PasswordHash = PasswordHelper.HashPassword(model.NewPassword);
+            }
+
+            // 3. 紀錄 AuditLog
+            int currentUserId = GetCurrentUserId();
+            _db.AuditLogs.Add(new AuditLog
+            {
+                UserId = currentUserId,
+                Action = "UpdateProfile",
+                EntityType = "User",
+                EntityId = user.UserId.ToString(),
+                NewValue = $"Updated profile for {user.Email}",
+                CreatedAt = DateTime.Now
+            });
+
+            await _db.SaveChangesAsync();
+
+            TempData["SuccessMessage"] = "個人資料已成功更新！";
+            return RedirectToAction(nameof(Profile));
+        }
+
 
         #endregion
     }

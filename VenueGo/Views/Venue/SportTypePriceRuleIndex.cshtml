@@ -1,7 +1,30 @@
-@model IEnumerable<VenueGo.ViewModels.VenueViewModels.SportTypePriceRuleIndexViewModel>
+@model VenueGo.ViewModels.VenueViewModels.SportTypePriceRuleIndexPageViewModel
+@using VenueGo.Helpers
+@using VenueGo.Models.Constants
+@using VenueGo.Data
+@inject dbVenueContext Db
 
 @{
     ViewData["Title"] = "價格規則管理";
+
+    //是否有新增/編輯/刪除的權限,只有Admin跟Manager可以,Staff看得到列表但不能異動
+    bool canManage = await AuthHelper.HasRoleAsync(User, Db, RoleNames.Admin, RoleNames.Manager);
+}
+
+@section Styles {
+    <style>
+        /* 明細的 7 格(週一~週日):公休灰色虛線框、超出營業時間橘色 */
+        .peak-week { display: grid; grid-template-columns: repeat(7, minmax(88px, 1fr)); gap: .5rem; }
+        .peak-day { border: 1px solid var(--bs-border-color); border-radius: .375rem; background: var(--bs-body-bg); padding: .5rem .625rem; display: flex; flex-direction: column; gap: .125rem; min-height: 76px; }
+        .peak-day .peak-day-name { font-weight: 700; font-size: .8125rem; }
+        .peak-day .peak-day-hours { font-size: .75rem; color: var(--bs-secondary-color); }
+        .peak-day .peak-day-time { margin-top: auto; font-size: .9375rem; }
+        .peak-day.is-closed { background: var(--bs-tertiary-bg); border-style: dashed; color: var(--bs-secondary-color); }
+        .peak-day.is-out-of-range { background: var(--bs-warning-bg-subtle); border-color: var(--bs-warning-border-subtle); }
+        .peak-day.is-out-of-range .peak-day-time, .peak-day.is-out-of-range .peak-day-msg { color: var(--bs-warning-text-emphasis); }
+        .peak-day .peak-day-msg { font-size: .6875rem; }
+        .peak-detail-cell { background: var(--bs-tertiary-bg); }
+    </style>
 }
 
 <!-- 功能頁籤 -->
@@ -24,52 +47,72 @@
             <i class="bi bi-cash-coin me-1"></i>價格規則管理
         </a>
     </li>
-    <li class="nav-item">
-        <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "WeekBusinessHourIndex" ? "active" : "")"
-           asp-controller="Venue" asp-action="WeekBusinessHourIndex">
-            <i class="bi bi-clock me-1"></i>營業時間管理
-        </a>
-    </li>
+    @if (canManage)
+    {
+        <li class="nav-item">
+            <a class="nav-link @(ViewContext.RouteData.Values["action"]?.ToString() == "WeekBusinessHourIndex" ? "active" : "")"
+               asp-controller="Venue" asp-action="WeekBusinessHourIndex">
+                <i class="bi bi-clock me-1"></i>營業時間管理
+            </a>
+        </li>
+    }
 </ul>
 
-@if (TempData["SuccessMessage"] != null)
+@if (TempData["VenueSuccessMessage"] != null)
 {
     <div class="alert alert-success alert-dismissible fade show" role="alert">
-        <i class="bi bi-check-circle-fill me-2"></i>@TempData["SuccessMessage"]
+        <i class="bi bi-check-circle-fill me-2"></i>@TempData["VenueSuccessMessage"]
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
-@if (TempData["ErrorMessage"] != null)
+@if (TempData["VenueErrorMessage"] != null)
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
-        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["ErrorMessage"]
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["VenueErrorMessage"]
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+@* 場館公休日提醒:全場館共用,只在頁面頂端顯示一次;沒有公休日就不顯示 *@
+@if (!string.IsNullOrEmpty(Model.ClosedDaysText))
+{
+    @* 提醒底色用淺黃色(bg-warning-subtle),比一般 alert 更淡,只做提醒不搶眼 *@
+    <div class="alert bg-warning-subtle border-warning-subtle text-warning-emphasis d-flex flex-wrap align-items-center gap-2 py-2" role="note">
+        <strong>場館公休日</strong>
+        <span class="badge rounded-pill text-bg-light border">@Model.ClosedDaysText</span>
+        @if (canManage)
+        {
+            <a asp-action="WeekBusinessHourIndex" class="btn btn-primary btn-sm ms-auto">前往營業時間管理</a>
+        }
     </div>
 }
 
 <div class="card shadow-sm">
     <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
         <h5 class="mb-0 fw-bold">價格規則列表</h5>
-        <a asp-action="SportTypePriceRuleCreate" class="btn btn-primary btn-sm">
-            <i class="bi bi-plus-lg me-1"></i>新增價格規則
-        </a>
+        @if (canManage)
+        {
+            <a asp-action="SportTypePriceRuleCreate" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-lg me-1"></i>新增價格規則
+            </a>
+        }
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-4" style="width: 8%;">序</th>
-                        <th>@Html.DisplayNameFor(model => model.SportName)</th>
-                        <th>@Html.DisplayNameFor(model => model.PeakStartTime)</th>
-                        <th>@Html.DisplayNameFor(model => model.PeakPrice)</th>
-                        <th>@Html.DisplayNameFor(model => model.OffPeakPrice)</th>
-                        <th style="width: 12%;">狀態</th>
-                        <th class="text-center" style="width: 20%;">操作</th>
+                        <th class="ps-4" style="width: 6%;">序</th>
+                        <th style="width: 11%;">運動種類</th>
+                        <th>尖峰時段</th>
+                        <th style="width: 10%;">尖峰價格</th>
+                        <th style="width: 10%;">離峰價格</th>
+                        <th style="width: 9%;">狀態</th>
+                        <th class="text-center" style="width: 18%;">操作</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @if (!Model.Any())
+                    @if (!Model.Rules.Any())
                     {
                         <tr>
                             <td colspan="7" class="text-center py-4 text-muted">目前尚無價格規則資料</td>
@@ -78,23 +121,59 @@
                     else
                     {
                         int count = 0;
-                        foreach (var item in Model)
+                        foreach (var item in Model.Rules)
                         {
                             count++;
+                            //明細列的 id,讓「明細」按鈕用 Bootstrap collapse 展開/收合
+                            string detailId = "peak-detail-" + item.SportTypePriceRuleId;
+                            //有尖峰而且已經設定過每日資料,才有明細可以看
+                            bool showDetail = item.HasAnyPeak && !item.IsPeakNotConfigured;
+
                             <tr>
                                 <td class="ps-4">@count</td>
                                 <td>@item.SportName</td>
                                 <td>
-                                    @if (item.PeakStartTime.HasValue)
+                                    @if (item.IsPeakNotConfigured)
                                     {
-                                        @item.PeakStartTime.Value.ToString("HH:mm")
+                                        @* 改版前的舊價格規則,還沒有每日尖峰資料,提醒管理者進去編輯儲存一次 *@
+                                        <span class="text-warning-emphasis">
+                                            --未設置尖峰時段--
+                                        </span>
                                     }
-                                    else
+                                    else if (!item.HasAnyPeak)
                                     {
                                         <span class="text-muted">不分尖/離峰</span>
                                     }
+                                    else
+                                    {
+                                        <div class="d-flex flex-wrap align-items-center gap-2">
+                                            <span class="fw-medium">@item.PeakSummary</span>
+                                            @if (item.HasOutOfRange)
+                                            {
+                                                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                                                      title="有日子的尖峰起始時間超出當天營業時間">
+                                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>超出營業時間
+                                                </span>
+                                            }
+                                            <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none"
+                                                    data-bs-toggle="collapse" data-bs-target="#@detailId"
+                                                    aria-expanded="false" aria-controls="@detailId">
+                                                明細 <i class="bi bi-chevron-down"></i>
+                                            </button>
+                                        </div>
+                                    }
                                 </td>
-                                <td>@item.PeakPrice 元</td>
+                                <td>
+                                    @* 7 天都沒有尖峰(或還沒設定)時,尖峰價格沒有意義,不顯示金額 *@
+                                    @if (item.HasAnyPeak)
+                                    {
+                                        <span>@item.PeakPrice 元</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">--</span>
+                                    }
+                                </td>
                                 <td>@item.OffPeakPrice 元</td>
                                 <td>
                                     @if (item.IsActive)
@@ -107,17 +186,61 @@
                                     }
                                 </td>
                                 <td class="text-center">
-                                    <a asp-action="SportTypePriceRuleEdit" asp-route-id="@item.SportTypePriceRuleId"
-                                       class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-pencil-square me-1"></i>編輯
-                                    </a>
-                                    <a asp-action="SportTypePriceRuleDelete" asp-route-id="@item.SportTypePriceRuleId"
-                                       class="btn btn-sm btn-outline-danger"
-                                       onclick="return confirm('確定要刪除「@item.SportName」的價格規則嗎?此動作無法復原')">
-                                        <i class="bi bi-trash me-1"></i>刪除
-                                    </a>
+                                    @if (canManage)
+                                    {
+                                        <a asp-action="SportTypePriceRuleEdit" asp-route-id="@item.SportTypePriceRuleId"
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-pencil-square me-1"></i>編輯
+                                        </a>
+                                        <a asp-action="SportTypePriceRuleDelete" asp-route-id="@item.SportTypePriceRuleId"
+                                           class="btn btn-sm btn-outline-danger"
+                                           onclick="return confirm('確定要刪除「@item.SportName」的價格規則嗎?此動作無法復原')">
+                                            <i class="bi bi-trash me-1"></i>刪除
+                                        </a>
+                                    }
                                 </td>
                             </tr>
+
+                            if (showDetail)
+                            {
+                                @* 明細列:預設收合,點「明細」展開;資料隨頁面載入,不用 AJAX *@
+                                <tr class="collapse" id="@detailId">
+                                    <td colspan="7" class="peak-detail-cell px-4 pb-3 pt-2">
+                                        <div class="peak-week">
+                                            @foreach (var day in item.Days)
+                                            {
+                                                if (!day.IsBusinessDay)
+                                                {
+                                                    <div class="peak-day is-closed">
+                                                        <span class="peak-day-name">@day.DayName</span>
+                                                        <span class="peak-day-hours">公休</span>
+                                                        <span class="peak-day-time">—</span>
+                                                    </div>
+                                                }
+                                                else
+                                                {
+                                                    <div class="peak-day @(day.IsOutOfRange ? "is-out-of-range" : "")">
+                                                        <span class="peak-day-name">@day.DayName</span>
+                                                        <span class="peak-day-hours">@day.OpenTime?.ToString("HH:mm")–@day.CloseTime?.ToString("HH:mm")</span>
+                                                        @* 不分尖峰/離峰的日子,尖峰處留空 *@
+                                                        <span class="peak-day-time">@(day.PeakStartTime.HasValue ? day.PeakStartTime.Value.ToString("HH:mm") + " 起" : "")&nbsp;</span>
+                                                        @if (day.IsOutOfRange && day.CloseTime.HasValue)
+                                                        {
+                                                            <span class="peak-day-msg">超出營業時間(最晚 @day.CloseTime.Value.AddHours(-1).ToString("HH:mm"))</span>
+                                                        }
+                                                    </div>
+                                                }
+                                            }
+                                        </div>
+                                        <div class="d-flex flex-wrap gap-3 mt-2 small text-muted">
+                                            <span><i class="bi bi-square me-1"></i>有尖峰(顯示起始時間)</span>
+                                            <span>空白:不分尖峰/離峰</span>
+                                            <span>灰色虛線:公休</span>
+                                            <span class="text-warning-emphasis">橘色:超出當天營業時間</span>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
                         }
                     }
                 </tbody>

@@ -7,6 +7,7 @@ namespace VenueGo.ViewModels.CheckinViewModels
         public int TicketId { get; set; }
         public string Qrtoken { get; set; } = string.Empty;
         public string UserName { get; set; } = string.Empty;
+        public string? Phone { get; set; }        // ← 新增。用 string? 是因為會員可能沒留電話
         public string VenueName { get; set; } = string.Empty;
         public DateOnly BookingDate { get; set; }
         public TimeOnly StartTime { get; set; }
@@ -18,8 +19,9 @@ namespace VenueGo.ViewModels.CheckinViewModels
         {
             EntryTicketStatus.Valid => "有效",
             EntryTicketStatus.Used => "已使用",
-            EntryTicketStatus.Expired => "已逾期",
+            EntryTicketStatus.Expired => "已失效",
             EntryTicketStatus.Cancelled => "已取消",
+            EntryTicketStatus.Completed => "已完成",
             _ => $"未知({Status})"
         };
 

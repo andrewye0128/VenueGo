@@ -80,7 +80,7 @@ namespace VenueGo.Models.VenueModels
 
         //Edit
         //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
-        public void Edit(CSportTypeWrap Wrap, int userId, DateTime now)
+        public void Edit(CSportTypeWrap Wrap, string? newPhotoPath, int userId, DateTime now)
         {
             dbVenueContext db = new dbVenueContext();
             //驗證傳入Wrap非null
@@ -92,6 +92,16 @@ namespace VenueGo.Models.VenueModels
             if (SportTypeDb != null)
             {
                 SportTypeDb.SportName = Wrap.SportName;
+
+                //注意事項:後台清空就存 null,保留使用者輸入的換行
+                SportTypeDb.Notice = Wrap.Notice;
+
+                //代表照片:有上傳新照片才換,沒上傳就保留資料庫原本的路徑
+                //不用 Wrap.PhotoPath >> Wrap 直接接表單,這個值可能被竄改
+                if (newPhotoPath != null)
+                {
+                    SportTypeDb.PhotoPath = newPhotoPath;
+                }
 
                 //稽核欄位:記錄最後修改時間與修改者
                 SportTypeDb.UpdatedAt = now;

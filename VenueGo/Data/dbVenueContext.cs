@@ -404,6 +404,8 @@ public partial class dbVenueContext : DbContext
                 .HasPrecision(0)
                 .HasDefaultValueSql("(sysdatetime())", "DF_SportTypes_CreatedAt");
             entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_SportTypes_IsActive");
+            entity.Property(e => e.Notice).HasMaxLength(3000);
+            entity.Property(e => e.PhotoPath).HasMaxLength(500);
             entity.Property(e => e.SportName).HasMaxLength(20);
             entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });

@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Net.WebSockets;
 using System.Reflection.Metadata.Ecma335;
 using VenueGo.Data;
+using VenueGo.Extensions;
 using VenueGo.Helpers;
 using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;

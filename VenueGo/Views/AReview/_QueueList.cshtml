@@ -78,16 +78,18 @@
             return r;
       }
 
-      // 只看某個場地。運動類型交給後端依場地補上（NormalizeVenue），這裡清掉，網址才不會出現互相矛盾的組合
+      // （9/29 舊說明）只看某個場地。運動類型交給後端依場地補上（NormalizeVenue），這裡清掉，網址才不會出現互相矛盾的組合
+      // v2：運動類型維持目前的選擇，不跟著場地改。矛盾的組合（只有網址被改過才會出現）由後端 NormalizeVenue 改成「全部」
       RouteValueDictionary RouteForVenue(int venueId)
       {
             var r = CurrentRoute();
             r["venueId"] = venueId;
-            r["sportTypeId"] = null;
+            // 原本：r["sportTypeId"] = null;
             return r;
       }
 
-      // 取消場地篩選：只清場地，運動類型保留（回到「依場地分組」看同類型的全部場地）
+      // （9/29 舊說明）取消場地篩選：只清場地，運動類型保留（回到「依場地分組」看同類型的全部場地）
+      // v2：因為點場地時沒動運動類型，只清場地就等於回到點場地之前的樣子
       RouteValueDictionary RouteWithoutVenue()
       {
             var r = CurrentRoute();
@@ -463,8 +465,14 @@
       <div class="d-flex align-items-center gap-3">
             @* 選了運動類型時停用：清單會自動改成依場地分組，說明在下方「目前條件」那一行（9/29） *@
             <div class="form-check form-switch mb-0">
+                  @* 原本：勾選狀態看 Model.Grouped。v2 起 Grouped 是「使用者的選擇」，被場地分組擋住時也可能是 true，改看 GroupByOrder
                   <input class="form-check-input" type="checkbox" id="groupToggle"
                          checked="@(Model.Grouped ? "checked" : null)"
+                         disabled="@(Model.GroupByVenue ? "disabled" : null)"
+                         aria-describedby="@(Model.GroupByVenue ? "venueGroupNote" : null)">
+                  *@
+                  <input class="form-check-input" type="checkbox" id="groupToggle"
+                         checked="@(Model.GroupByOrder ? "checked" : null)"
                          disabled="@(Model.GroupByVenue ? "disabled" : null)"
                          aria-describedby="@(Model.GroupByVenue ? "venueGroupNote" : null)">
                   <label class="form-check-label small text-nowrap" for="groupToggle">依訂單分組</label>
@@ -572,7 +580,8 @@
 {
       <p class="small text-muted mb-2" id="venueGroupNote">
             <i class="bi bi-info-circle"></i>
-            已依場地分組（選了運動類型時，「依訂單分組」會停用）。只包含現場評論——預約評論沒有場地資料。
+            @* 原本：已依場地分組（選了運動類型時，「依訂單分組」會停用）。只包含現場評論——預約評論沒有場地資料。 *@
+            已依場地分組（選了運動類型或場地時，「依訂單分組」會暫時停用，取消後恢復）。只包含現場評論——預約評論沒有場地資料。
             @if (Model.VenueId == null)
             {
                   <span>點場地名稱可以只看該場地。</span>

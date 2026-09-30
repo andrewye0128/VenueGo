@@ -579,8 +579,11 @@ namespace VenueGo.Controllers
 
         /// <summary>
         /// 運動類型與場地的查詢字串一樣不可信任（9/29）：
-        ///   場地找得到 → 運動類型一律改成「這個場地的運動類型」，兩個條件才不會互相矛盾
+        ///   （9/29 舊規則，v2 已停用）場地找得到 → 運動類型一律改成「這個場地的運動類型」，兩個條件才不會互相矛盾
         ///               （例如網址被改成「羽球＋網球場 C1」）
+        ///   v2：場地找得到 → 運動類型「不跟著改」：原本是全部或這個場地的類型就照舊，
+        ///       其他類型（只有網址被改過才會發生，例如「羽球＋網球場 C1」）改成全部，兩個條件才不會互相矛盾。
+        ///       這樣「取消場地篩選」一步就回到點場地之前的樣子。
         ///   場地找不到 → 當作沒選場地
         ///   運動類型找不到 → 當作沒選
         /// </summary>
@@ -592,7 +595,13 @@ namespace VenueGo.Controllers
                                .Where(v => v.VenueId == venueId)
                                .Select(v => new { v.VenueId, v.SportTypeId, v.VenueName })
                                .FirstOrDefault();
-                if (venue != null) return (venue.SportTypeId, venue.VenueId, venue.VenueName);
+                // 原本（9/29）：運動類型跟著場地走
+                // if (venue != null) return (venue.SportTypeId, venue.VenueId, venue.VenueName);
+                if (venue != null)
+                {
+                    int? sport = sportTypeId == venue.SportTypeId ? sportTypeId : null;
+                    return (sport, venue.VenueId, venue.VenueName);
+                }
                 // 找不到這個場地：往下走，只看運動類型
             }
 
@@ -615,7 +624,9 @@ namespace VenueGo.Controllers
             var (sport, venue, venueName) = NormalizeVenue(sportTypeId, venueId);
 
             // 選了運動類型就改成依場地分組，依訂單分組強制關掉（開關在畫面上也會停用）
-            bool groupByVenue = sport != null;
+            // 原本：bool groupByVenue = sport != null;
+            // v2：在「全部」底下點場地，運動類型會維持 null，所以場地也要算進來
+            bool groupByVenue = sport != null || venue != null;
             bool groupByOrder = grouped && !groupByVenue;
 
             // 今天 00:00。整個請求共用同一個基準，清單和三個數字才會一致。
@@ -650,7 +661,10 @@ namespace VenueGo.Controllers
                 SearchField = f,
                 Keyword     = keyword ?? "",
                 Keywords    = keywords,
-                Grouped     = groupByOrder,
+                // 原本：Grouped     = groupByOrder,
+                // v2：記住「使用者的選擇」，被場地分組擋住時也不丟掉，取消篩選後才回得去。
+                //     實際有沒有依訂單分組，看 ReviewQueueVM.GroupByOrder
+                Grouped     = grouped,
 
                 SportTypeId      = sport,
                 VenueId          = venue,

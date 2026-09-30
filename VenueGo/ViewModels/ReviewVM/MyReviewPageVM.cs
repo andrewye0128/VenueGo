@@ -22,6 +22,7 @@ namespace VenueGo.ViewModels.ReviewVM
         [DisplayName("QR 條碼")]
         public string? Qrtoken { get; init; }
         public int? ReviewPerBookingId { get; init; }
+        public int? OrderId { get; init; }
         public string? OrderNo { get; init; }
         [DisplayName("評分")]
         public byte StarRating { get; init; }

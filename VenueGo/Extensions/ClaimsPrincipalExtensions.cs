@@ -1,6 +1,6 @@
 ﻿using System.Security.Claims;
 
-namespace VenueGo.Helpers
+namespace VenueGo.Extensions
 {
     public static class ClaimsPrincipalExtensions
     {

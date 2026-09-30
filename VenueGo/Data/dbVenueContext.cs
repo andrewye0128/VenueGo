@@ -483,6 +483,9 @@ public partial class dbVenueContext : DbContext
                 .HasColumnName("TicketQRToken");
             entity.Property(e => e.TicketStatusName).HasMaxLength(17);
             entity.Property(e => e.UserName).HasMaxLength(100);
+            entity.Property(e => e.UserPhone)
+                .HasMaxLength(20)
+                .IsUnicode(false);
             entity.Property(e => e.VenueName).HasMaxLength(40);
         });
 

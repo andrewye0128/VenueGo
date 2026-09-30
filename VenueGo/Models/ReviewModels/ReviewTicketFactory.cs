@@ -49,7 +49,7 @@ namespace VenueGo.Models.ReviewModels
                 RentEndTime = reservation.BookingDate.ToDateTime(reservation.EndTime),
                 ActualEndTime = null,
                 CreatedAt = _timeService.Now,
-                ExpiredAt = _timeService.Now.AddDays(CDictionary.DAY_評論資格期限天數)
+                ExpiredAt = _timeService.Now.AddDays(ReviewPolicy.TicketValidDays)
             };
 
             // Add 不是 I/O，不需要 async；AddAsync 只有在用特殊主鍵產生策略時才需要。
@@ -73,9 +73,13 @@ namespace VenueGo.Models.ReviewModels
                                      select s).FirstOrDefaultAsync();
             if (reservation == null) return false;
 
+            // 刻意不分入場／離場、成功／失敗：只取這張票「最新」的一筆紀錄。
+            // 呼叫時機由刷退方法決定，這裡不重做組員的進出判斷，他那邊的判斷有問題也不會牽連到這裡。
+            // ActionTime 只存到秒，同一秒有兩筆時再用 LogId（流水號，後寫的比較大）決定誰是最新。
             var latestLog = await _db.CheckInLogs
                                      .Where(c => c.TicketId == ticketId)
                                      .OrderByDescending(c => c.ActionTime)
+                                     .ThenByDescending(c => c.LogId)
                                      .FirstOrDefaultAsync();
             if (latestLog == null) return false;
 
@@ -83,7 +87,15 @@ namespace VenueGo.Models.ReviewModels
             if (latestLog.ActionTime < rentStartTime) return false; // 離場時間不可能早於租借開始時間
 
             var visitTicket = await _db.ReviewPerVisits.FirstOrDefaultAsync(v => v.Qrtoken == entry.Qrtoken);
-            if (visitTicket == null) return false;
+            // 補償：入場時沒建立評論憑證（例如票券清單的「快速報到」不會呼叫工廠），就在這裡補建一次。
+            // 條件跟 CreateReviewPerVisitAsync 一樣（票券狀態要是 Used），不符合就照舊回 false。
+            // 補建的 CreatedAt／ExpiredAt 從現在起算，會比入場時建立晚一點。
+            if (visitTicket == null)
+            {
+                if (!await CreateReviewPerVisitAsync(entry.Qrtoken)) return false;
+                visitTicket = await _db.ReviewPerVisits.FirstOrDefaultAsync(v => v.Qrtoken == entry.Qrtoken);
+                if (visitTicket == null) return false;
+            }
 
             visitTicket.ActualEndTime = latestLog.ActionTime;
             await _db.SaveChangesAsync();
@@ -113,7 +125,7 @@ namespace VenueGo.Models.ReviewModels
                 OrderId = order.OrderId,
                 PaymentMethod = payment.PaymentMethod,
                 CreatedAt = _timeService.Now,
-                ExpiredAt = _timeService.Now.AddDays(CDictionary.DAY_評論資格期限天數)
+                ExpiredAt = _timeService.Now.AddDays(ReviewPolicy.TicketValidDays)
             };
 
             _db.ReviewPerBookings.Add(newBooking);

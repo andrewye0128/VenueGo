@@ -16,9 +16,6 @@ using VenueGo.Services.Ticket;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
 using VenueGo.Services.VenueSchedules;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using VenueGo.Services.Ticket;
-using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +29,8 @@ builder.Configuration.AddJsonFile(
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
+    o.InvalidModelStateResponseFactory = ApiResponses.InvalidModelState);
 
 // 註冊 EF Core DbContext
 builder.Services.AddDbContext<dbVenueContext>(options =>
@@ -50,6 +49,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.ExpireTimeSpan = TimeSpan.FromHours(8);    // Cookie 預設有效時間
         options.Cookie.HttpOnly = true;                    // 防範 XSS 存取 Cookie
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // 限定 HTTPS 傳輸
+        options.Events.OnRedirectToLogin = ApiResponses.RedirectToLogin;
+        options.Events.OnRedirectToAccessDenied = ApiResponses.RedirectToAccessDenied;
     });
 
 // 註冊 Session
@@ -87,7 +88,7 @@ builder.Services.AddScoped<ISlotSelectionValidator, SlotSelectionValidator>();
 builder.Services.AddScoped<IReservationPricingService, ReservationPricingService>();
 
 // 註冊關於目前登入者的服務：介面 → 實作
-builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUserService>();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
 // 註冊關於訂單編號產生器的服務：介面 → 實作
 builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();

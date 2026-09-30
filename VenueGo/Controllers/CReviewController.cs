@@ -12,13 +12,12 @@ using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
-    public class CReviewController(dbVenueContext db, ICurrentUserService currentUserService, IVisitReviewTicketFactory factory, ITimeService timeService) : Controller
+    public class CReviewController(dbVenueContext db, ICurrentUserService currentUserService, IVisitReviewTicketFactory visitFactory, IBookingReviewTicketFactory bookingFactory, ITimeService timeService) : Controller
     {
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUserService _currentUser = currentUserService;
-        // 只注入「現場評論」那個介面：這支 Controller 的補償邏輯只會用到
-        // CreateReviewPerVisitAsync，不該看得到預約評論的方法。
-        private readonly IVisitReviewTicketFactory _reviewTicketFactory = factory;
+        private readonly IVisitReviewTicketFactory _visitTicketFactory = visitFactory;
+        private readonly IBookingReviewTicketFactory _bookingTicketFactory = bookingFactory;
         private readonly ITimeService _timeService = timeService;
 
         // ════════════════════════════════════════════════════════
@@ -68,7 +67,7 @@ namespace VenueGo.Controllers
             {
                 // 補償：報到系統可能漏了呼叫工廠。這張票如果確實已經報到過，
                 // 就在這裡當場補建憑證，顧客不會因為上游漏呼叫而評不了論。
-                if (await _reviewTicketFactory.CreateReviewPerVisitAsync(qrToken))
+                if (await _visitTicketFactory.CreateReviewPerVisitAsync(qrToken))
                 {
                     ticket = await _db.ReviewPerVisits.FirstOrDefaultAsync(v => v.Qrtoken == qrToken);
                     if (ticket == null) 
@@ -92,21 +91,41 @@ namespace VenueGo.Controllers
         }
 
         /// <summary>
-        /// 預約評論：用 ReviewPerBookingId 判定資格。
-        /// 現場評論靠 QRToken 守門（64 字元猜不到），預約評論的 id 是連號整數，
-        /// 所以必須額外比對擁有者。
+        /// 預約評論：用 OrderId 判定資格（9/30 起，原本用 ReviewPerBookingId）。
+        ///
+        /// 改用 OrderId 的兩個好處：
+        ///   1. 訂單頁面本來就有 OrderId，連結直接帶它就好，不必先查憑證編號。
+        ///   2. 查不到憑證時可以當場補建（付款系統漏呼叫工廠時，顧客不會因此評不了論），
+        ///      跟現場評論用 QRToken 補建是同一個做法。ReviewPerBooking.OrderId 有唯一索引，一張訂單只會有一張憑證。
+        ///
+        /// OrderId 是連號整數，所以必須比對擁有者，而且要在「補建之前」就比對——
+        /// 不然任何登入的人都能拿別人的訂單編號觸發補建。
         /// ⚠️ 不是本人時回傳 NotFound 而不是另開一個「無權限」狀態——
-        ///    不要讓人從錯誤訊息分辨出「這張憑證存在但不是你的」。
+        ///    不要讓人從錯誤訊息分辨出「這張訂單存在但不是你的」。
         /// </summary>
-        private async Task<BookingTicket> ResolveBookingTicketAsync(int? id)
+        private async Task<BookingTicket> ResolveBookingTicketAsync(int? orderId)
         {
-            if (id == null || id <= 0)
+            if (orderId == null || orderId <= 0)
                 return new(EligState.NotFound, null, null);          // 無效輸入 ❌
 
             var ticket = await _db.ReviewPerBookings
-                                  .FirstOrDefaultAsync(b => b.ReviewPerBookingId == id);
+                                  .FirstOrDefaultAsync(b => b.OrderId == orderId);
             if (ticket == null)
-                return new(EligState.NotFound, null, null);          // 查無憑證 ❌
+            {
+                // 補償前先確認訂單是本人的（未登入時 UserId 是 null，比對一定不成立）
+                bool isOwner = await _db.Orders
+                                        .AnyAsync(o => o.OrderId == orderId && o.UserId == _currentUser.UserId);
+                if (!isOwner)
+                    return new(EligState.NotFound, null, null);      // 查無訂單或不是你的 ❌
+
+                // 補償：付款系統可能漏了呼叫工廠。有已付款紀錄就當場補建憑證。
+                if (!await _bookingTicketFactory.CreateReviewPerBookingAsync(orderId))
+                    return new(EligState.NotFound, null, null);      // 還沒付款，或補建失敗 ❌
+
+                ticket = await _db.ReviewPerBookings.FirstOrDefaultAsync(b => b.OrderId == orderId);
+                if (ticket == null)
+                    return new(EligState.NotFound, null, null);      // 憑證補建失敗 ❌
+            }
 
             // TODO: 登入方提供驗證方法後換掉這一行
             if (_currentUser.UserId != ticket.UserId)
@@ -172,7 +191,7 @@ namespace VenueGo.Controllers
 
                 case EligState.AlreadyReviewed:
                     return RedirectToAction(nameof(ShowMyReviewPage),
-                                            new { bookingId = r.Ticket!.ReviewPerBookingId });
+                                            new { orderId = r.Ticket!.OrderId });
 
                 default:
                     return null;    // Ok
@@ -250,6 +269,7 @@ namespace VenueGo.Controllers
             ReviewMain review,
             string? token,          // 現場評論才有
             int? bookingId,         // 預約評論才有
+            int? orderId,           // 預約評論才有（網址與表單用它）
             string? venueName,      // 預約評論為 null
             DateTime? rentStartTime,
             string? orderNo)        // 現場評論為 null
@@ -259,6 +279,7 @@ namespace VenueGo.Controllers
                 ReviewId = review.ReviewId,
                 Qrtoken = token,
                 ReviewPerBookingId = bookingId,
+                OrderId = orderId,
 
                 StarRating = review.StarRating,
                 ReviewContent = review.ReviewContent,
@@ -604,6 +625,7 @@ namespace VenueGo.Controllers
 
         // ── 預約評論撰寫 ────────────────────────────────────
 
+        // id 是 OrderId（9/30 起，原本是 ReviewPerBookingId）。網址：/CReview/CreateForBooking/{OrderId}
         [HttpGet]
         [Authorize(Roles = RoleNames.Member)]
         public async Task<IActionResult> CreateForBooking(int? id)
@@ -650,22 +672,22 @@ namespace VenueGo.Controllers
             await _db.SaveChangesAsync();
 
             return RedirectToAction(nameof(ShowMyReviewPage),
-                                    new { bookingId = r.Ticket.ReviewPerBookingId });
+                                    new { orderId = r.Ticket.OrderId });
         }
 
         // ── 檢視頁 ──────────────────────────────────────────
 
         /// <summary>
-        /// 兩種評論共用一個頁面。token 有值走現場、bookingId 有值走預約。
+        /// 兩種評論共用一個頁面。token 有值走現場、orderId 有值走預約。
         /// </summary>
         [HttpGet]
-        public async Task<IActionResult> ShowMyReviewPage(string? token, int? bookingId)
+        public async Task<IActionResult> ShowMyReviewPage(string? token, int? orderId)
         {
             if (!string.IsNullOrWhiteSpace(token))
                 return await ShowVisitReviewAsync(token);
 
-            if (bookingId != null)
-                return await ShowBookingReviewAsync(bookingId);
+            if (orderId != null)
+                return await ShowBookingReviewAsync(orderId);
 
             TempData[CDictionary.TK_MSG_Input錯誤] = "載入時發生異常，請重試";
             return RedirectToAction(nameof(Index));
@@ -690,15 +712,16 @@ namespace VenueGo.Controllers
             var vm = await BuildMyReviewVmAsync(review,
                                      token: r.Ticket!.Qrtoken,
                                      bookingId: null,
+                                     orderId: null,
                                      venueName: venue?.VenueName,
                                      rentStartTime: r.Ticket.RentStartTime,
                                      orderNo: null);
             return View(nameof(ShowMyReviewPage), vm);
         }
 
-        private async Task<IActionResult> ShowBookingReviewAsync(int? bookingId)
+        private async Task<IActionResult> ShowBookingReviewAsync(int? orderId)
         {
-            var r = await ResolveBookingTicketAsync(bookingId);
+            var r = await ResolveBookingTicketAsync(orderId);
 
             if (r.State != EligState.AlreadyReviewed)
             {
@@ -714,6 +737,7 @@ namespace VenueGo.Controllers
             var vm = await BuildMyReviewVmAsync(review,
                                      token: null,
                                      bookingId: r.Ticket!.ReviewPerBookingId,
+                                     orderId: r.Ticket.OrderId,
                                      venueName: null,
                                      rentStartTime: null,
                                      orderNo: order?.OrderNo);
@@ -756,7 +780,7 @@ namespace VenueGo.Controllers
         ///    而進入檢視頁時 MarkReplyViewedIfNeededAsync 已經記過了。
         /// </summary>
         [HttpPost, ValidateAntiForgeryToken]
-        public async Task<IActionResult> SetSatisfaction(string? token, int? bookingId, byte satisfaction)
+        public async Task<IActionResult> SetSatisfaction(string? token, int? orderId, byte satisfaction)
         {
             if (satisfaction > 2)
             {
@@ -777,11 +801,11 @@ namespace VenueGo.Controllers
             }
             else
             {
-                var r = await ResolveBookingTicketAsync(bookingId);
+                var r = await ResolveBookingTicketAsync(orderId);
                 if (r.State != EligState.AlreadyReviewed)
                     return RedirectToAction(nameof(Index));
                 review = r.ExistingReview;
-                routeValues = new { bookingId = r.Ticket!.ReviewPerBookingId };
+                routeValues = new { orderId = r.Ticket!.OrderId };
             }
 
             // 沒有回覆就沒有滿意度可言；已表態過不給改（按鈕本來就不會出現）

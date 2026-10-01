@@ -2,6 +2,7 @@
 // 改網址只要改這裡，Header 和 Footer 會一起更新
 // 目前只有 /booking 有頁面，其他路由由負責的組員補上
 
+const about = { label: "關於我們", to: "/about" };
 const booking = { label: "場地預約", to: "/booking" };
 const pricing = { label: "收費標準", to: "/pricing" };
 const venues = { label: "場館資訊", to: "/venues" };
@@ -11,7 +12,7 @@ const reviews = { label: "會員評價", to: "/reviews" };
 const faq = { label: "常見問題", to: "/faq" };
 
 // Header 主選單
-export const mainNavItems = [booking, pricing, venues, news, reviews, faq];
+export const mainNavItems = [about, booking, pricing, venues, news, reviews, faq];
 
 // Footer 連結分組
 export const footerLinkGroups = [

@@ -47,6 +47,19 @@ const router = createRouter({
       component: () => import("../views/ApiDemoView.vue"),
     },
     {
+      path: "/member",
+      name: "member",
+      component: () => import("../views/member/MemberLayout.vue"),
+      children: [
+        // 我的票券
+        {
+          path: "tickets",
+          name: "tickets",
+          component: () => import("../views/member/MyTicketsView.vue"),
+        },
+      ],
+    },
+    {
       // 404：網址不符合上面任何路由時顯示（一定要放在最後一個）
       path: "/:pathMatch(.*)*",
       name: "not-found",

@@ -10,6 +10,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
 using VenueGo.Models.ReservationModels;
 using VenueGo.Models.ReviewModels;
+using VenueGo.Services.Ticket;
 
 namespace VenueGo.Services.Reservations
 {
@@ -25,12 +26,20 @@ namespace VenueGo.Services.Reservations
 
         private readonly IBookingReviewTicketFactory _bookingFactory;
 
-        public ReservationCommandService(dbVenueContext db, IBookingReviewTicketFactory bookingFactory)
+        private readonly IEntryTicketService _entryTicketService;
+
+        public ReservationCommandService(
+            dbVenueContext db,
+            IBookingReviewTicketFactory bookingFactory,
+            IEntryTicketService entryTicketService)
         {
             _db = db;
 
             // 注入 IBookingReviewTicketFactory 介面，讓這裡可以呼叫 CreateReviewPerBookingAsync 建立評論憑證。
             _bookingFactory = bookingFactory;
+
+            // 注入 IEntryTicketService 介面，讓標記已付款時可以一併建立入場票券。
+            _entryTicketService = entryTicketService;
         }
 
         // ══ 標記為已付款 ═══════════════════════════════
@@ -71,6 +80,8 @@ namespace VenueGo.Services.Reservations
             var oldValue = SerializeStatuses(
                 reservation.ReservationStatus, order.OrderStatus, payment.PaymentStatus);
 
+            (string Message, int TicketCount) ticketResult = default;
+
             var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             await using (transaction)
             {
@@ -92,6 +103,17 @@ namespace VenueGo.Services.Reservations
                     AuditActions.MarkOrderAsPaid, oldValue, newValue);
 
                 await _db.SaveChangesAsync(cancellationToken);
+
+                // 建立入場票券。票券是會員實際進場使用場地的憑證，
+                // 建立失敗時整個操作都不算數：不呼叫 CommitAsync，
+                // using 區塊結束時交易會自動回滾，剛剛改的付款/訂單/預約狀態也會一併復原，
+                // 不會出現「已標記付款，但票券建立失敗」這種不一致的狀態。
+                ticketResult = await _entryTicketService.CreateForOrderAsync(order.OrderId);
+                if (ticketResult.TicketCount == 0)
+                {
+                    return ReservationCommandResult.Fail(ticketResult.Message);
+                }
+
                 await transaction.CommitAsync(cancellationToken);
             }
 
@@ -99,7 +121,7 @@ namespace VenueGo.Services.Reservations
             await _bookingFactory.CreateReviewPerBookingAsync(order.OrderId);
 
             return ReservationCommandResult.Success(
-                $"已將訂單 {order.OrderNo} 標記為已付款，預約狀態更新為已確認。");
+                $"已將訂單 {order.OrderNo} 標記為已付款，預約狀態更新為已確認，已產生 {ticketResult.TicketCount} 張票券。");
         }
 
         // ══ 取消與作廢 ════════════════════════════════

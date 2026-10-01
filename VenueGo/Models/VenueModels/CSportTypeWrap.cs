@@ -32,5 +32,14 @@ namespace VenueGo.Models.VenueModels
 
 
         public int? UpdatedBy { get { return _sportType.UpdatedBy; } set { _sportType.UpdatedBy = value; } }
+
+        [Display(Name = "代表照片")]
+        public string? PhotoPath { get { return _sportType.PhotoPath; } set { _sportType.PhotoPath = value; } }
+
+
+        [StringLength(3000, ErrorMessage = "注意事項最多 3000 字")]
+        [Display(Name = "注意事項")]
+        public string? Notice { get { return _sportType.Notice; } set { _sportType.Notice = value; } }
     }
+
 }

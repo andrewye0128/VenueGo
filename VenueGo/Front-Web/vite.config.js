@@ -205,6 +205,13 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // 後台上傳的圖片（例如運動類型照片 /images/sporttypes/xxx.jpg）存在後端 wwwroot，一樣轉給後端
+      // 前台自己的圖片請放 src/assets/images/，不要放 public/images/（會被這裡轉走而讀不到）
+      '/images': {
+        target: 'https://localhost:7078',
+        changeOrigin: true,
+        secure: false,
+      },
     },
   },
 })

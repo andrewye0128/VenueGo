@@ -67,4 +67,12 @@
 
   <ProjectExtensions><VisualStudio><UserProperties wwwroot_4lib_4bootstrap_4dist_4css_4bootstrap-grid_1css_1map__JsonSchema="" /></VisualStudio></ProjectExtensions>
 
+  <ItemGroup>
+    <EditorConfigFiles Remove="C:\Users\user\source\repos\andrewye0128\VenueGo\VenueGo\.editorconfig" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="C:\Users\user\source\repos\andrewye0128\VenueGo\VenueGo\.editorconfig" />
+  </ItemGroup>
+
 </Project>

@@ -8,17 +8,19 @@ using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
+using VenueGo.Services.Reviews;
 using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Controllers
 {
-    public class CReviewController(dbVenueContext db, ICurrentUserService currentUserService, IVisitReviewTicketFactory visitFactory, IBookingReviewTicketFactory bookingFactory, ITimeService timeService) : Controller
+    public class CReviewController(dbVenueContext db, ICurrentUserService currentUserService, IVisitReviewTicketFactory visitFactory, IBookingReviewTicketFactory bookingFactory, ITimeService timeService, IReviewScreeningService screening) : Controller
     {
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUserService _currentUser = currentUserService;
         private readonly IVisitReviewTicketFactory _visitTicketFactory = visitFactory;
         private readonly IBookingReviewTicketFactory _bookingTicketFactory = bookingFactory;
         private readonly ITimeService _timeService = timeService;
+        private readonly IReviewScreeningService _screening = screening;
 
         // ════════════════════════════════════════════════════════
         //  關於 async：為什麼整支改成非同步
@@ -618,6 +620,7 @@ namespace VenueGo.Controllers
 
             _db.ReviewMains.Add(newReview);
             await _db.SaveChangesAsync();
+            await _screening.CreateForReviewAsync(newReview);   // 評論預審：建立預審紀錄（沒設定金鑰時什麼都不做）
 
             return RedirectToAction(nameof(ShowMyReviewPage),
                                     new { token = r.Ticket.Qrtoken });
@@ -670,6 +673,7 @@ namespace VenueGo.Controllers
 
             _db.ReviewMains.Add(newReview);
             await _db.SaveChangesAsync();
+            await _screening.CreateForReviewAsync(newReview);   // 評論預審：建立預審紀錄（沒設定金鑰時什麼都不做）
 
             return RedirectToAction(nameof(ShowMyReviewPage),
                                     new { orderId = r.Ticket.OrderId });

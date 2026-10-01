@@ -16,6 +16,7 @@ using VenueGo.Services.Ticket;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
 using VenueGo.Services.VenueSchedules;
+using VenueGo.Services.Reviews;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -120,6 +121,13 @@ builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 C
 builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<ITimeService, TimeService>();
 builder.Services.AddHostedService<TimeSyncHostedService>();
+
+// 評論預審：AI 設定、呼叫 AI 用的連線（30 秒逾時）、AI 服務
+builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
+builder.Services.AddHttpClient(GeminiScreeningClient.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddScoped<IReviewScreeningAi, GeminiScreeningClient>();
+builder.Services.AddScoped<IReviewScreeningService, ReviewScreeningService>();
+builder.Services.AddHostedService<ReviewScreeningHostedService>();
 
 // 註冊關於票券報到的服務：介面 → 實作
 builder.Services.AddScoped<ICheckInService, CheckInService>();

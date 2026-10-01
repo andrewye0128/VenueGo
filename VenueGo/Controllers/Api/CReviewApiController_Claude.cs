@@ -1,8 +1,8 @@
-﻿using System.ComponentModel.DataAnnotations;
-using System.Reflection;
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
+using System.Reflection;
 using VenueGo.Data;
 using VenueGo.Dtos.Reviews;
 using VenueGo.Helpers;
@@ -12,6 +12,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
+using VenueGo.Services.Reviews;
 using VenueGo.ViewModels;
 using VenueGo.ViewModels.ReviewVM;
 
@@ -55,12 +56,14 @@ namespace VenueGo.Controllers.Api
         dbVenueContext db,
         ICurrentUserService currentUserService,
         IVisitReviewTicketFactory factory,
-        ITimeService timeService) : ControllerBase
+        ITimeService timeService,
+        IReviewScreeningService screening) : ControllerBase
     {
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUserService _currentUser = currentUserService;
         private readonly IVisitReviewTicketFactory _reviewTicketFactory = factory;
         private readonly ITimeService _timeService = timeService;
+        private readonly IReviewScreeningService _screening = screening;
 
         private const string KindVisit = ReviewKind.Visit;
         private const string KindBooking = ReviewKind.Booking;
@@ -523,8 +526,10 @@ namespace VenueGo.Controllers.Api
             if (userId == null)
                 vm.IsAnonymous = true;   // 前端鎖住擋不住直接送請求的人
 
-            _db.ReviewMains.Add(BuildNewReview(vm, r.Ticket!.ReviewPerVisitId, null, userId));
+            var review = BuildNewReview(vm, r.Ticket!.ReviewPerVisitId, null, userId);
+            _db.ReviewMains.Add(review);
             await _db.SaveChangesAsync();
+            await _screening.CreateForReviewAsync(review);   // 評論預審：建立預審紀錄（沒設定金鑰時什麼都不做）
 
             return Ok(ApiResultVM.Ok("評論已送出"));
         }
@@ -543,8 +548,10 @@ namespace VenueGo.Controllers.Api
             vm.IsPublic = false;
             vm.IsAnonymous = false;
 
-            _db.ReviewMains.Add(BuildNewReview(vm, null, r.Ticket!.ReviewPerBookingId, _currentUser.UserId));
+            var review = BuildNewReview(vm, null, r.Ticket!.ReviewPerBookingId, _currentUser.UserId);
+            _db.ReviewMains.Add(review);
             await _db.SaveChangesAsync();
+            await _screening.CreateForReviewAsync(review);   // 評論預審：建立預審紀錄（沒設定金鑰時什麼都不做）
 
             return Ok(ApiResultVM.Ok("評論已送出"));
         }

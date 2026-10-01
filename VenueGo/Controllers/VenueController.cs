@@ -50,7 +50,7 @@ namespace VenueGo.Controllers
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //新增運動類型 >> 資料回傳存入DB
         [HttpPost]
-        public IActionResult SportTypeCreate(CSportTypeWrap Wrap)
+        public async Task<IActionResult> SportTypeCreate(CSportTypeWrap Wrap, IFormFile? PhotoFile)
         {
             //先檢查填寫是否通過
             if (!ModelState.IsValid)
@@ -65,6 +65,9 @@ namespace VenueGo.Controllers
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
                 return RedirectToAction("SportTypeIndex");
             }
+
+            //存取照片路徑
+            Wrap.PhotoPath = await SaveSportTypePhotoAsync(PhotoFile);
 
             //稽核欄位由後端決定
             Wrap.CreatedAt = _timeService.Now;
@@ -86,9 +89,11 @@ namespace VenueGo.Controllers
         //運動類型編輯 >> 頁面產生
         public IActionResult SportTypeEdit(int? id)
         {
+
             //驗證id非null
             if (id == null)
                 return RedirectToAction("SportTypeIndex");
+
 
             //用id取出對應資料送到前端 >> 傳入 Factory 操作 Query
             CSportTypeFactory SportTypeFactory = new CSportTypeFactory();
@@ -102,11 +107,15 @@ namespace VenueGo.Controllers
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //運動類型編輯 >> 參數送回
         [HttpPost]
-        public IActionResult SportTypeEdit(CSportTypeWrap Wrap)
+        public async Task<IActionResult> SportTypeEdit(CSportTypeWrap Wrap, IFormFile? PhotoFile)
         {
             //驗證送回的資料非null
-            if (!ModelState.IsValid)
+            if (!ModelState.IsValid) 
+            { 
+                //表單沒有送回照片路徑 >> 只從DB補回照片,其他欄位保留使用者剛剛填的內容
+                Wrap.PhotoPath = new CSportTypeFactory().QueryById(Wrap.SportTypeId).PhotoPath;
                 return View(Wrap);
+            }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
             int? userId = User.GetUserId();
@@ -116,9 +125,12 @@ namespace VenueGo.Controllers
                 return RedirectToAction("SportTypeIndex");
             }
 
+            //有上傳新照片才會有路徑,沒上傳是 null(Factory 會保留原本的照片)
+            string? newPhotoPath = await SaveSportTypePhotoAsync(PhotoFile);
+
             //將前端填寫資料送入 Factory 進行 Edit CRUD
             CSportTypeFactory SportTypeFactory = new CSportTypeFactory();
-            SportTypeFactory.Edit(Wrap, userId.Value, _timeService.Now);
+            SportTypeFactory.Edit(Wrap, newPhotoPath, userId.Value, _timeService.Now);
 
             return RedirectToAction("SportTypeIndex");
         }
@@ -159,7 +171,7 @@ namespace VenueGo.Controllers
                 return RedirectToAction("SportTypeIndex");
             }
 
-            //檢查二:還有價格規則 >> 擋下,請使用者先到價格規則管理刪除(2026-09-29 決定:不自動一起刪除價格規則)
+            //檢查二:還有價格規則 >> 擋下,請使用者先到價格規則管理刪除
             if (new CSportTypePriceRuleFactory().HasPriceRule((int)id))
             {
                 TempData["VenueErrorMessage"] = $"「{sportType.SportName}」還有價格規則,請先到「價格規則管理」刪除它的價格規則,才能刪除運動類型。";
@@ -1067,5 +1079,28 @@ namespace VenueGo.Controllers
 
             return list;
         }
+
+
+        //存運動類型代表照片 >> 回傳網頁相對路徑;沒有檔案回傳 null
+        private async Task<string?> SaveSportTypePhotoAsync(IFormFile? photoFile)
+        {
+            if (photoFile == null || photoFile.Length == 0)
+                return null;
+
+            string fileName = Guid.NewGuid() + Path.GetExtension(photoFile.FileName);
+            string folderPath = Path.Combine(_env.WebRootPath, "images", "sporttypes");
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
+
+            using (var stream = new FileStream(Path.Combine(folderPath, fileName), FileMode.Create))
+            {
+                await photoFile.CopyToAsync(stream);
+            }
+            return "/images/sporttypes/" + fileName;
+        }
+
+
     }
 }

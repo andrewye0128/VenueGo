@@ -48,6 +48,14 @@ const router = createRouter({
       name: "demo-api",
       component: () => import("../views/ApiDemoView.vue"),
     },
+    {
+      // 場館資訊：/venues/1 顯示運動類型 Id 1；不帶 Id 時由頁面導到第一項
+      // (\\d+) 限定只接受數字，避免吃掉 /venues/transport 之類的其他頁面
+      path: "/venues/:sportTypeId(\\d+)?",
+      name: "venues",
+      component: () => import("../views/VenueIntro.vue"),
+    },
+    {
         // 顧客端評論（昱）：要放在 404 前面
         ...reviewRoutes,
         {

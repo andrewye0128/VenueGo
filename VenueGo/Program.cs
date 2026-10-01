@@ -16,9 +16,6 @@ using VenueGo.Services.Ticket;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
 using VenueGo.Services.VenueSchedules;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using VenueGo.Services.Ticket;
-using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
 
 var builder = WebApplication.CreateBuilder(args);
 

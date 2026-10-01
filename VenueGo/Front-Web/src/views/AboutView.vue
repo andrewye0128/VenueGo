@@ -1,7 +1,7 @@
 <template>
-  <div class="about">
-    <h1>This is an about page</h1>
-  </div>
+  <main class="mx-auto max-w-7xl px-4 py-10 md:px-6">
+    <h1 class="text-2xl font-bold text-neutral-text-primary">這是關於我們</h1>
+  </main>
 </template>
 
 <style>

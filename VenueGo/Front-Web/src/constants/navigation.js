@@ -8,7 +8,7 @@ const pricing = { label: "收費標準", to: "/pricing" };
 const venues = { label: "場館資訊", to: "/venues" };
 const transport = { label: "交通方式", to: "/venues/transport" };
 const news = { label: "最新消息", to: "/news" };
-const reviews = { label: "會員評價", to: "/reviews" };
+const reviews = { label: "會員評論", to: "/reviews" };
 const faq = { label: "常見問題", to: "/faq" };
 
 // Header 主選單
@@ -27,7 +27,7 @@ export const footerLinkGroups = [
       { label: "我的預約", to: "/member/reservations" },
       { label: "訂單付款", to: "/member/orders" },
       { label: "我的票券", to: "/member/tickets" },
-      { label: "我的評價", to: "/member/reviews" },
+      { label: "我的評論", to: "/member/reviews" },
     ],
   },
   {

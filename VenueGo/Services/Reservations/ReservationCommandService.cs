@@ -1,14 +1,15 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
 using VenueGo.Models.ReservationModels;
+using VenueGo.Models.ReviewModels;
 
 namespace VenueGo.Services.Reservations
 {
@@ -22,9 +23,14 @@ namespace VenueGo.Services.Reservations
 
         private readonly dbVenueContext _db;
 
-        public ReservationCommandService(dbVenueContext db)
+        private readonly IBookingReviewTicketFactory _bookingFactory;
+
+        public ReservationCommandService(dbVenueContext db, IBookingReviewTicketFactory bookingFactory)
         {
             _db = db;
+
+            // 注入 IBookingReviewTicketFactory 介面，讓這裡可以呼叫 CreateReviewPerBookingAsync 建立評論憑證。
+            _bookingFactory = bookingFactory;
         }
 
         // ══ 標記為已付款 ═══════════════════════════════
@@ -88,6 +94,9 @@ namespace VenueGo.Services.Reservations
                 await _db.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
             }
+
+            // 收到款項後要建立「預約評論憑證」，讓使用者可以在評論頁面留下評價。
+            await _bookingFactory.CreateReviewPerBookingAsync(order.OrderId);
 
             return ReservationCommandResult.Success(
                 $"已將訂單 {order.OrderNo} 標記為已付款，預約狀態更新為已確認。");

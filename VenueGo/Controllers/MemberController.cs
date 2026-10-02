@@ -5,6 +5,8 @@ using System.Security.Claims;
 using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Entities;
+using VenueGo.Services;
+using VenueGo.Services.Auth;
 using VenueGo.ViewModels;
 using VenueGo.ViewModels.MemberViewModels;
 
@@ -14,10 +16,14 @@ namespace VenueGo.Controllers
     public class MemberController : Controller
     {
         private readonly dbVenueContext _db;
+        private readonly ICurrentUserService _currentUser ;
+        private readonly ITimeService _timeService ;
 
-        public MemberController(dbVenueContext db)
+        public MemberController(dbVenueContext db ,ICurrentUserService currentUserService, ITimeService timeService)
         {
             _db = db;
+            _currentUser = currentUserService;
+            _timeService= timeService;
         }
 
         // GET: Member/Index (僅列出擁有「會員角色」的使用者)
@@ -92,7 +98,7 @@ namespace VenueGo.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateMemberStatus(int userId, string status)
         {
-            int currentUserId = GetCurrentUserId();
+            int currentUserId =(int)_currentUser.UserId;
 
             var user = await _db.Users.FindAsync(userId);
             if (user == null)
@@ -152,7 +158,7 @@ namespace VenueGo.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ConvertToEmployee(ConvertEmployeeViewModel model)
         {
-            int currentUserId = GetCurrentUserId();
+            int currentUserId = (int) _currentUser.UserId;
 
             if (!string.IsNullOrEmpty(model.EmployeeNo) &&
                 await _db.Employees.AnyAsync(e => e.EmployeeNo == model.EmployeeNo))
@@ -256,7 +262,7 @@ namespace VenueGo.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ResetMemberPassword(int userId)
         {
-            int currentUserId = GetCurrentUserId();
+            int currentUserId = (int)_currentUser.UserId;
             var user = await _db.Users.FindAsync(userId);
             if (user == null)
             {
@@ -291,7 +297,7 @@ namespace VenueGo.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UnlockAccount(int userId)
         {
-            int currentUserId = GetCurrentUserId();
+            int currentUserId = (int)_currentUser.UserId;
             var user = await _db.Users.FindAsync(userId);
             if (user == null) return NotFound();
 
@@ -345,11 +351,6 @@ namespace VenueGo.Controllers
 
         #region Private Helpers
 
-        private int GetCurrentUserId()
-        {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            return int.TryParse(userIdClaim, out int userId) ? userId : 0;
-        }
 
         private async Task<string> GenerateNextEmployeeNoAsync()
         {
@@ -483,7 +484,7 @@ namespace VenueGo.Controllers
             }
 
             // 3. 紀錄 AuditLog
-            int currentUserId = GetCurrentUserId();
+            int currentUserId = (int)_currentUser.UserId;
             _db.AuditLogs.Add(new AuditLog
             {
                 UserId = currentUserId,

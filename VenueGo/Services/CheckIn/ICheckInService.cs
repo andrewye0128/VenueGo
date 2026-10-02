@@ -25,5 +25,8 @@ namespace VenueGo.Services.CheckIn
         Task<CheckInResult> ExpireAsync(int ticketId, int operatorId, bool isManualOverride);
 
         Task SettleTicketAsync(int ticketId);
+
+        // 新增:排程用,掃過所有 Valid/Used 的票,把到期的結算掉
+        Task<int> SettleAllDueTicketsAsync();
     }
 }

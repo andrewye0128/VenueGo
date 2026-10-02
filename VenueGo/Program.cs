@@ -1,13 +1,18 @@
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Helpers;
+using VenueGo.Models.CheckinModels;
+using VenueGo.Models.DashboardModels;
 using VenueGo.Models.Options;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
+using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
 using VenueGo.Services.Members;
 using VenueGo.Services.Orders;
 using VenueGo.Services.Reservations;
+using VenueGo.Services.Ticket;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -16,6 +21,7 @@ using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using VenueGo.Services.VenueSchedules;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -109,6 +115,11 @@ builder.Services.AddSession();
 //    options.Cookie.IsEssential = true;
 //});
 
+// [重構搬移] 原本寫在 SettingController 裡的角色管理、員工帳號管理邏輯，
+// 拆成這兩個 Service，Controller 現在只負責呼叫 + 轉換 ServiceResult 成對應的 View/Redirect。
+builder.Services.AddScoped<IRoleManagementService, RoleManagementService>();
+builder.Services.AddScoped<IEmployeeAccountService, EmployeeAccountService>();
+
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
 
@@ -120,6 +131,9 @@ builder.Services.AddScoped<IReservationDraftStore, SessionReservationDraftStore>
 
 // 註冊關於場地方法的服務：介面 → 實作
 builder.Services.AddScoped<IVenueQueryService, VenueQueryService>();
+
+// 註冊關於場地時段的服務(場地模組提供:營業時段、不開放時段、尖峰、單價、可使用的場地)：介面 → 實作
+builder.Services.AddScoped<IVenueScheduleService, VenueScheduleService>();
 
 // 註冊關於時段方法的服務：介面 → 實作
 builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
@@ -153,6 +167,9 @@ builder.Services.Configure<ReservationRulesOptions>(
 
 // 註冊關於票券的服務：介面 → 實作
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
+builder.Services.AddScoped<CTicketViewModelFactory>();
+
+builder.Services.AddScoped<VenueMonitorFactory>();
 
 // 評論系統使用
 builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
@@ -166,6 +183,7 @@ builder.Services.AddHostedService<TimeSyncHostedService>();
 
 // 註冊關於票券報到的服務：介面 → 實作
 builder.Services.AddScoped<ICheckInService, CheckInService>();
+builder.Services.AddHostedService<TicketSettlementHostedService>();
 
 // 註冊 Swagger 服務
 builder.Services.AddEndpointsApiExplorer();
@@ -176,7 +194,7 @@ builder.Services.AddSwaggerGen();
 var app = builder.Build();
 
 // 在應用程式啟動時，將單例 TimeService 橋接給靜態類別
-TimeAgo.TimeService = app.Services.GetRequiredService<ITimeService>();
+TimeAgo.TimeService = app.Services.GetRequiredService<ITimeService>();  
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

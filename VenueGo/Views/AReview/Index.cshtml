@@ -40,14 +40,25 @@
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
                   </div>
                   <div class="modal-body">
-                        <label for="spamReason" class="form-label">理由</label>
-                        <select id="spamReason" class="form-select">
-                              <option value="" selected disabled>請選擇理由</option>
-                              @for (int i = 0; i < ReviewPolicy.SpamReasons.Length; i++)
+                        @* 9/29：下拉選單改成單選清單，每個理由底下附上判斷標準（ReviewPolicy.SpamReasonInfos 的 StaffHint）。
+                           下拉選單沒辦法在每個選項底下放說明，員工只看得到「謾罵」兩個字，
+                           很難判斷一則激烈的負評到底算不算。
+                           value 仍然是陣列索引，送到後端的內容跟原本一樣。 *@
+                        <fieldset id="spamReasonList">
+                              <legend class="form-label fs-6">理由</legend>
+                              @for (int i = 0; i < ReviewPolicy.SpamReasonInfos.Length; i++)
                               {
-                                    <option value="@i">@ReviewPolicy.SpamReasons[i]</option>
+                                    var info = ReviewPolicy.SpamReasonInfos[i];
+                                    <div class="form-check mb-2">
+                                          <input class="form-check-input" type="radio" name="spamReason"
+                                                 id="spamReason-@i" value="@i" aria-describedby="spamReasonHint-@i">
+                                          <label class="form-check-label" for="spamReason-@i">
+                                                <span class="fw-semibold">@info.Label</span>
+                                                <span id="spamReasonHint-@i" class="d-block small text-muted">@info.StaffHint</span>
+                                          </label>
+                                    </div>
                               }
-                        </select>
+                        </fieldset>
                         <div class="form-text">
                               標記後這則評論會強制不公開，也不能再回覆。<strong>此操作無法復原。</strong>
                         </div>

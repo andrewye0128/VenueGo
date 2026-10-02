@@ -23,6 +23,11 @@ const router = createRouter({
       component: () => import("../views/BookingView.vue"),
     },
     {
+      path: "/login",
+      name: "login",
+      component: () => import("../views/LoginView.vue"),
+    },
+    {
       // SportTypeSelect 元件使用說明頁
       path: "/demo/select",
       name: "demo-select",
@@ -47,9 +52,11 @@ const router = createRouter({
       component: () => import("../views/ApiDemoView.vue"),
     },
     {
-      path: "/login",
-      name: "login",
-      component: () => import("../views/LoginView.vue"),
+      // 場館資訊：/venues/1 顯示運動類型 Id 1；不帶 Id 時由頁面導到第一項
+      // (\\d+) 限定只接受數字，避免吃掉 /venues/transport 之類的其他頁面
+      path: "/venues/:sportTypeId(\\d+)?",
+      name: "venues",
+      component: () => import("../views/VenueIntro.vue"),
     },
     {
       // 404：網址不符合上面任何路由時顯示（一定要放在最後一個）

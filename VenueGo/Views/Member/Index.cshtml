@@ -131,7 +131,7 @@
                                         @if (User.IsInRole("Admin"))
                                         {
                                             <!-- 根據是否已具備員工身分判斷顯示按鈕 -->
-                                            @if (user.IsEmployee)
+                                            @if (user.IsEmployee) 
                                             {
                                                 <a asp-controller="Setting" asp-action="EditUser" asp-route-id="@user.UserId"
                                                    class="btn btn-outline-secondary" title="該使用者已是員工，點擊前往後台編輯權限與職稱">

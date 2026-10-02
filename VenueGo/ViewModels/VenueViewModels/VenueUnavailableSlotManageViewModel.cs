@@ -11,6 +11,8 @@ namespace VenueGo.ViewModels.VenueViewModels
 
         public DateOnly Date { get; set; }                     //目前查看的日期,日期切換連結靠它算前一天/後一天
 
+        public DateOnly Today { get; set; }                    //今天(ITimeService 校時後),由 Controller 帶入,View 不自己取時間
+
         public bool IsBusinessDay { get; set; }                //這天有沒有營業,false就不畫任何時段按鈕
 
         public List<VenueUnavailableSlotHourViewModel> Hours { get; set; } = new List<VenueUnavailableSlotHourViewModel>();  //這天全部的時段按鈕

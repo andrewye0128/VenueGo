@@ -21,7 +21,8 @@
     const flashBox = document.getElementById('queueFlash');
 
       // 所有會進網址、也會送給後端的條件
-      const FILTER_KEYS = ['tab', 'source', 'range', 'field', 'keyword', 'grouped'];
+      // 9/29：多了運動類型與場地。dataset 會把 data-sport-type-id 轉成 sportTypeId。
+      const FILTER_KEYS = ['tab', 'source', 'range', 'field', 'keyword', 'grouped', 'sportTypeId', 'venueId'];
 
       /* ── 共用工具 ─────────────────────────────────────── */
 
@@ -132,18 +133,23 @@
                   return JSON.parse(st.dataset.defaults);
             } catch (e) {
                   // 萬一讀不到也要有得用，不能讓「重置」整個壞掉
-                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'false' };
+                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'false', sportTypeId: '', venueId: '' };
             }
       }
 
-      /* 篩選連結（tab、來源）上帶著完整條件，直接從 href 讀，
-         連結本身就是唯一的事實來源，不用在 JS 裡重組一次。 */
+      /* 篩選連結（tab、來源、場地）上帶著完整條件，直接從 href 讀，
+         連結本身就是唯一的事實來源，不用在 JS 裡重組一次。
+
+         9/29 改：網址上「沒有」這個條件，就當作空值，不再沿用目前的值。
+         原因是「取消場地篩選」的連結是把 venueId 拿掉（後端產生網址時，空值不會寫進去），
+         如果沿用目前的值，場地就永遠取消不掉。
+         其他條件不受影響：每個連結本來就帶著全部條件（見 _QueueList 的 CurrentRoute）。 */
       function filterFromHref(href) {
             const u = new URL(href, window.location.origin);
-            const f = currentFilter();
+            const f = {};
             FILTER_KEYS.forEach(function (k) {
                   const v = u.searchParams.get(k);
-                  if (v !== null) f[k] = v;
+                  f[k] = v !== null ? v : '';
             });
             return f;
       }
@@ -309,7 +315,11 @@
     let spamUrl = null;
     const spamModalEl = document.getElementById('spamModal');
     const spamModal = bootstrap.Modal.getOrCreateInstance(spamModalEl);
-    const spamReason = document.getElementById('spamReason');
+    // 9/29：理由改成單選清單，選中的那一個用 checked 找
+    function checkedSpamReason() {
+        const el = document.querySelector('input[name="spamReason"]:checked');
+        return el ? el.value : '';
+    }
     const spamError = document.getElementById('spamError');
     const spamConfirm = document.getElementById('spamConfirm');
 
@@ -428,7 +438,7 @@
         const spamBtn = e.target.closest('.js-spam-open');
         if (spamBtn) {
             spamUrl = spamBtn.dataset.url;
-            spamReason.value = '';
+            document.querySelectorAll('input[name="spamReason"]').forEach(function (r) { r.checked = false; });
             spamError.textContent = '';
             spamModal.show();
         }
@@ -457,6 +467,17 @@
             if (e.target.matches('#groupToggle')) {
                   f.grouped = e.target.checked ? 'true' : 'false';
                   loadList(f, { focusId: 'groupToggle' });
+                  return;
+            }
+
+            // 9/29：換運動類型時，場地篩選一併取消——
+            // 從「羽球場 A1」換成「網球」，還留著羽球場的篩選只會得到空清單。
+            // 依訂單分組也關掉：選了運動類型就改成依場地分組（後端也會強制）。
+            if (e.target.matches('#sportTypeSelect')) {
+                  f.sportTypeId = e.target.value;
+                  f.venueId = '';
+                  f.grouped = 'false';
+                  loadList(f, { focusId: 'sportTypeSelect' });
             }
       });
 
@@ -548,13 +569,14 @@
     /* ── 確認標記垃圾（modal 在 root 外面，直接掛）──────── */
 
     spamConfirm.addEventListener('click', function () {
-        if (spamReason.value === '') {
+        const reason = checkedSpamReason();
+        if (reason === '') {
             spamError.textContent = '請選擇理由';
             return;
         }
         spamConfirm.disabled = true;
 
-        post(spamUrl, { reason: spamReason.value })
+        post(spamUrl, { reason: reason })
             .then(function (res) {
                 spamModal.hide();
                 flash(res.data.message || '已標記為垃圾');

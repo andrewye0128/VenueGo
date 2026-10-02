@@ -8,6 +8,7 @@
     <!-- 前台 Vue 專案所在資料夾（相對於此 .csproj） -->
     <SpaRoot>Front-Web\</SpaRoot>
     <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**;$(SpaRoot)dist\**</DefaultItemExcludes>
+    <UserSecretsId>e6b7ebab-4d60-491d-a38b-5af9cb94721d</UserSecretsId>
   </PropertyGroup>
 
   <!-- 前台 Vue 專案：不當成網站內容發佈，只在方案總管顯示原始碼 -->

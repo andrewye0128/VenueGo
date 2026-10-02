@@ -805,6 +805,7 @@ namespace VenueGo.Controllers
             throw new NotImplementedException();
         }
 
+#if DEBUG
         [HttpGet]
         public IActionResult CheckMyClaims()
         {
@@ -817,5 +818,6 @@ namespace VenueGo.Controllers
             // 可以在這裡打斷點（Breakpoint），看 roles 陣列裡面有沒有字串（例如 "Member", "Admin"）
             return Json(roles);
         }
+#endif
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using VenueGo.Models.Enums;
 
 namespace VenueGo.ViewModels.ReservationViewModels
 {
@@ -24,21 +25,13 @@ namespace VenueGo.ViewModels.ReservationViewModels
         public string TimeRange => $"{StartTime:HH\\:mm} ~ {EndTime:HH\\:mm}";
 
         [DisplayName("預約狀態")]
-        public byte ReservationStatus { get; set; }
+        public ReservationStatus ReservationStatus { get; set; }
+
+        public string ReservationStatusText => ReservationStatus.GetDisplayName();
 
         [DisplayName("付款狀態")]
-        public byte? PaymentStatus { get; set; }
+        public PaymentStatus? PaymentStatus { get; set; }
 
-        public string PaymentStatusText => PaymentStatus switch
-        {
-            null => "尚未成立訂單",
-            0 => "未付款",
-            1 => "已付款",
-            2 => "付款失敗",
-            3 => "付款取消",
-            4 => "退款處理中",
-            5 => "已退款",
-            _ => $"未知({PaymentStatus})"
-        };
+        public string PaymentStatusText => PaymentStatus?.GetDisplayName() ?? "尚未成立訂單";
     }
 }

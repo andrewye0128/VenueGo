@@ -2,7 +2,8 @@
 
 @{
     ViewData["Title"] = "場地開放時間設定";
-    DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+    //今天由 Controller 用 ITimeService 取得後帶入,跟後端判斷過去時段用的是同一個時間
+    DateOnly today = Model.Today;
 }
 
 <div class="mb-3">

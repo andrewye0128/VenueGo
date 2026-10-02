@@ -18,4 +18,8 @@ public partial class SportType
     public DateTime? UpdatedAt { get; set; }
 
     public int? UpdatedBy { get; set; }
+
+    public string? PhotoPath { get; set; }
+
+    public string? Notice { get; set; }
 }

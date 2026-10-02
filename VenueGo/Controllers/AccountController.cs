@@ -6,20 +6,21 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using VenueGo.Data;
 using VenueGo.Helpers;
-using VenueGo.Models;
 using VenueGo.Models.Entities;
 using VenueGo.ViewModels.MemberViewModels;
-
+using VenueGo.Services.Auth;
 namespace VenueGo.Controllers
 {
     [AllowAnonymous] // 確保登入控制器完全公開，不觸發任何攔截
     public class AccountController : Controller
     {
         private readonly dbVenueContext _db;
+        private readonly VenueGo.Services.Auth.IAuthenticationService _authenticationService;
 
-        public AccountController(dbVenueContext db)
+        public AccountController(dbVenueContext db, VenueGo.Services.Auth.IAuthenticationService authenticationService)
         {
             _db = db;
+            _authenticationService = authenticationService;
         }
 
         [HttpGet]
@@ -46,134 +47,181 @@ namespace VenueGo.Controllers
             // 1. 搜尋使用者帳號（Email 統一以不分大小寫比對，避免與 SettingController
             //    新建/編輯帳號時小寫正規化後的資料兜不起來，同時相容舊有混合大小寫的資料）
             // -------------------------------------------------------------
-            var normalizedEmail = model.Email?.Trim().ToLowerInvariant();
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
-
-            if (user == null)
+            
+            var loginResult = await _authenticationService.LoginAsync(
+                model.Email,
+                model.Password,
+                 ipAddress
+            );
+            if (!loginResult.Success)
             {
-                await WriteLoginLogAsync(null, model.Email, ipAddress, false, "帳號不存在");
-                ModelState.AddModelError(string.Empty, "帳號或密碼錯誤。");
+                ModelState.AddModelError(
+                    string.Empty,
+                    loginResult.ErrorMessage ?? "登入失敗。"
+                );
+
                 return View(model);
             }
 
-            // -------------------------------------------------------------
-            // 2. 檢查資料庫鎖定狀態 (LockedUntil)
-            // -------------------------------------------------------------
-            if (user.LockedUntil.HasValue && user.LockedUntil.Value > DateTime.Now)
-            {
-                var remainingMinutes = Math.Ceiling((user.LockedUntil.Value - DateTime.Now).TotalMinutes);
+            //var normalizedEmail = model.Email?.Trim().ToLowerInvariant();
+            //var user = await _db.Users.FirstOrDefaultAsync(u => u.Email.ToLower() == normalizedEmail);
+            //if (user == null)
+            //{
+            //    await WriteLoginLogAsync(null, model.Email, ipAddress, false, "帳號不存在");
+            //    ModelState.AddModelError(string.Empty, "帳號或密碼錯誤。");
+            //    return View(model);
+            //}
 
-                await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, $"帳號鎖定中（剩餘 {remainingMinutes} 分鐘）");
-                ModelState.AddModelError(string.Empty, $"登入失敗次數過多，帳號鎖定中，請於 {remainingMinutes} 分鐘後再試。");
-                return View(model);
-            }
-            else if (user.LockedUntil.HasValue)
-            {
-                // 鎖定時間已過期，重新給予乾淨的嘗試次數
-                user.FailedLoginCount = 0;
-                user.LockedUntil = null;
-                await _db.SaveChangesAsync();
-            }
+            //// -------------------------------------------------------------
+            //// 2. 檢查資料庫鎖定狀態 (LockedUntil)
+            //// -------------------------------------------------------------
+            //if (user.LockedUntil.HasValue && user.LockedUntil.Value > DateTime.Now)
+            //{
+            //    var remainingMinutes = Math.Ceiling((user.LockedUntil.Value - DateTime.Now).TotalMinutes);
+
+            //    await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, $"帳號鎖定中（剩餘 {remainingMinutes} 分鐘）");
+            //    ModelState.AddModelError(string.Empty, $"登入失敗次數過多，帳號鎖定中，請於 {remainingMinutes} 分鐘後再試。");
+            //    return View(model);
+            //}
+            //else if (user.LockedUntil.HasValue)
+            //{
+            //    // 鎖定時間已過期，重新給予乾淨的嘗試次數
+            //    user.FailedLoginCount = 0;
+            //    user.LockedUntil = null;
+            //    await _db.SaveChangesAsync();
+            //}
             // -------------------------------------------------------------
             // 3. 密碼驗證與失敗計數處理
             // -------------------------------------------------------------
-            bool isPasswordValid = PasswordHelper.VerifyPassword(model.Password, user.PasswordHash);
+            //bool isPasswordValid = PasswordHelper.VerifyPassword(model.Password, user.PasswordHash);
 
-            if (!isPasswordValid)
-            {
-                user.FailedLoginCount = user.FailedLoginCount + 1;
-                string reason;
+            //if (!isPasswordValid)
+            //{
+            //    user.FailedLoginCount = user.FailedLoginCount + 1;
+            //    string reason;
 
-                if (user.FailedLoginCount >= 5)
-                {
-                    user.LockedUntil = DateTime.Now.AddMinutes(15);
-                    reason = "密碼連續錯誤達 5 次，觸發帳號鎖定 15 分鐘";
-                    ModelState.AddModelError(string.Empty, "密碼錯誤達 5 次，帳號已鎖定 15 分鐘！");
-                }
-                else
-                {
-                    int remainingAttempts = 5 - user.FailedLoginCount;
-                    reason = $"帳號或密碼錯誤（連續失敗第 {user.FailedLoginCount} 次）";
-                    ModelState.AddModelError(string.Empty, $"帳號或密碼錯誤（剩餘可嘗試次數：{remainingAttempts} 次）。");
-                }
+            //    if (user.FailedLoginCount >= 5)
+            //    {
+            //        user.LockedUntil = DateTime.Now.AddMinutes(15);
+            //        reason = "密碼連續錯誤達 5 次，觸發帳號鎖定 15 分鐘";
+            //        ModelState.AddModelError(string.Empty, "密碼錯誤達 5 次，帳號已鎖定 15 分鐘！");
+            //    }
+            //    else
+            //    {
+            //        int remainingAttempts = 5 - user.FailedLoginCount;
+            //        reason = $"帳號或密碼錯誤（連續失敗第 {user.FailedLoginCount} 次）";
+            //        ModelState.AddModelError(string.Empty, $"帳號或密碼錯誤（剩餘可嘗試次數：{remainingAttempts} 次）。");
+            //    }
 
-                user.UpdatedAt = DateTime.Now;
-                await _db.SaveChangesAsync();
+            //    user.UpdatedAt = DateTime.Now;
+            //    await _db.SaveChangesAsync();
 
-                await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, reason);
-                return View(model);
-            }
+            //await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, reason);
+            //    return View(model);
+            //}
 
             // -------------------------------------------------------------
             // 4. 檢查帳號狀態與員工權限
             // -------------------------------------------------------------
             // 4a. 檢查會員基礎帳號狀態
-            if (user.Status != "Active")
-            {
-                await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, "會員帳號已被停用");
-                ModelState.AddModelError(string.Empty, "此帳號已被停用，請聯繫系統管理員。");
-                return View(model);
-            }
+            //if (user.Status != "Active")
+            //{
+            //    await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, "會員帳號已被停用");
+            //    ModelState.AddModelError(string.Empty, "此帳號已被停用，請聯繫系統管理員。");
+            //    return View(model);
+            //}
 
-            // 4b. 取得員工資料與後台管理角色
-            // 目前系統角色僅有 Member / Staff / Manager / Admin，後台登入僅排除 Member 這個一般會員角色
-            var employee = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == user.UserId);
-            var userRoles = await (from ur in _db.UserRoles
-                                   join r in _db.Roles on ur.RoleId equals r.RoleId
-                                   where ur.UserId == user.UserId && r.RoleName != "Member"
-                                   select r.RoleName).ToListAsync();
+            //// 4b. 取得員工資料與後台管理角色
+            //// 目前系統角色僅有 Member / Staff / Manager / Admin，後台登入僅排除 Member 這個一般會員角色
+            //var employee = await _db.Employees.FirstOrDefaultAsync(e => e.UserId == user.UserId);
+            //var userRoles = await (from ur in _db.UserRoles
+            //                       join r in _db.Roles on ur.RoleId equals r.RoleId
+            //                       where ur.UserId == user.UserId && r.RoleName != "Member"
+            //                       select r.RoleName).ToListAsync();
 
-            // 4c. 檢查是否為員工資料與在職狀態 (限制必須為 Active)
-            if (employee == null)
-            {
-                await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, "非後台員工帳號嘗試登入");
-                ModelState.AddModelError(string.Empty, "登入失敗：此帳號非系統員工帳號。");
-                return View(model);
-            }
+            //// 4c. 檢查是否為員工資料與在職狀態 (限制必須為 Active)
+            //if (employee == null)
+            //{
+            //    await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, "非後台員工帳號嘗試登入");
+            //    ModelState.AddModelError(string.Empty, "登入失敗：此帳號非系統員工帳號。");
+            //    return View(model);
+            //}
 
-            if (employee.Status != "Active")
-            {
-                string statusText = employee.Status switch
-                {
-                    "Resigned" => "已離職",
-                    "OnLeave" => "留職停薪",
-                    _ => "狀態異常"
-                };
+            //if (employee.Status != "Active")
+            //{
+            //    string statusText = employee.Status switch
+            //    {
+            //        "Resigned" => "已離職",
+            //        "OnLeave" => "留職停薪",
+            //        _ => "狀態異常"
+            //    };
 
-                await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, $"員工狀態非啟用 ({statusText})");
-                ModelState.AddModelError(string.Empty, $"登入失敗：該員工帳號目前為「{statusText}」狀態，無法登入後台。");
-                return View(model);
-            }
+            //    await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, $"員工狀態非啟用 ({statusText})");
+            //    ModelState.AddModelError(string.Empty, $"登入失敗：該員工帳號目前為「{statusText}」狀態，無法登入後台。");
+            //    return View(model);
+            //}
 
-            // 4d. 檢查是否擁有後台管理角色
-            if (!userRoles.Any())
-            {
-                await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, "員工未配給後台角色權限");
-                ModelState.AddModelError(string.Empty, "登入失敗：此帳號未具備後台操作權限。");
-                return View(model);
-            }
+            //// 4d. 檢查是否擁有後台管理角色
+            //if (!userRoles.Any())
+            //{
+            //    await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, false, "員工未配給後台角色權限");
+            //    ModelState.AddModelError(string.Empty, "登入失敗：此帳號未具備後台操作權限。");
+            //    return View(model);
+            //}
 
             // -------------------------------------------------------------
             // 5. 登入成功：歸零失敗計數、寫入 LoginLog 與更新最後登入時間
             // -------------------------------------------------------------
-            user.FailedLoginCount = 0;
-            user.LockedUntil = null;
-            user.LastLoginAt = DateTime.Now;
-            user.UpdatedAt = DateTime.Now;
-            await _db.SaveChangesAsync();
+            //user.FailedLoginCount = 0;
+            //user.LockedUntil = null;
+            //user.LastLoginAt = DateTime.Now;
+            //user.UpdatedAt = DateTime.Now;
+            //await _db.SaveChangesAsync();
 
-            await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, true, null);
+            //await WriteLoginLogAsync(user.UserId, model.Email, ipAddress, true, null);
 
+            //var claims = new List<Claim>
+            //{
+            //    new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
+            //    new Claim(ClaimTypes.Name, user.Name),
+            //    new Claim(ClaimTypes.Email, user.Email),
+            //    new Claim(ClaimsPrincipalExtensions.EmployeeIdClaimType, employee.EmployeeId.ToString()), // 評論用
+            //    new Claim("EmployeeNo", employee.EmployeeNo ?? "")
+            //};
+
+            //foreach (var role in userRoles)
+            //{
+            //    claims.Add(new Claim(ClaimTypes.Role, role));
+            //}
             var claims = new List<Claim>
             {
-                new Claim(ClaimTypes.NameIdentifier, user.UserId.ToString()),
-                new Claim(ClaimTypes.Name, user.Name),
-                new Claim(ClaimTypes.Email, user.Email),
-                new Claim(ClaimsPrincipalExtensions.EmployeeIdClaimType, employee.EmployeeId.ToString()), // 評論用
-                new Claim("EmployeeNo", employee.EmployeeNo ?? "")
+                new Claim(
+                    ClaimTypes.NameIdentifier,
+                    loginResult.UserId!.Value.ToString()
+                ),
+
+                new Claim(
+                    ClaimTypes.Name,
+                    loginResult.UserName ?? ""
+                ),
+
+                new Claim(
+                    ClaimTypes.Email,
+                    loginResult.Email ?? ""
+                ),
+
+                new Claim(
+                    ClaimsPrincipalExtensions.EmployeeIdClaimType,
+                    loginResult.EmployeeId!.Value.ToString()
+                ),
+
+                new Claim(
+                    "EmployeeNo",
+                    loginResult.EmployeeNo ?? ""
+                )
             };
 
-            foreach (var role in userRoles)
+            foreach (var role in loginResult.Roles)
             {
                 claims.Add(new Claim(ClaimTypes.Role, role));
             }
@@ -196,7 +244,7 @@ namespace VenueGo.Controllers
             {
                 return Redirect(returnUrl);
             }
-            TempData["SuccessMessage"] = $"歡迎回來，{user.Name}！";
+            //TempData["SuccessMessage"] = $"歡迎回來，{user.Name}！";
             return RedirectToAction("Index", "Home");
 
         }

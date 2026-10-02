@@ -15,10 +15,6 @@ namespace VenueGo.ViewModels.VenueViewModels
         public string SportTypeName { get; set; } = string.Empty;
         public int SportTypeId { get; set; }
 
-        [Display(Name = "尖峰起始時間")]
-
-        public TimeOnly? PeakStartTime { get; set; }   //可為 null，代表不分尖峰/離峰
-
         [Display(Name = "尖峰價格")]
         [Required(ErrorMessage = "尖峰價格不可空白")]
         [Range(0, int.MaxValue, ErrorMessage = "尖峰價格不可為負數")]
@@ -32,8 +28,8 @@ namespace VenueGo.ViewModels.VenueViewModels
         [Display(Name = "啟用狀態")]
         public bool IsActive { get; set; }
 
-        //尖峰起始時間下拉選單的選項(只會列出合法的整點時間)
-        [ValidateNever]
-        public IEnumerable<SelectListItem> PeakStartTimeOptions { get; set; }
+        //每週尖峰時段 7 列(週一~週日),帶入目前的設定
+        //改版前的舊價格規則還沒有每日資料時,營業日會先用舊欄位的尖峰起始時間當預設值
+        public List<SportTypePeakHourRowViewModel> Days { get; set; } = new List<SportTypePeakHourRowViewModel>();
     }
 }

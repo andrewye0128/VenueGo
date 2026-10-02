@@ -16,6 +16,10 @@ namespace VenueGo.ViewModels.ReviewVM
         // ── 來源：現場評論有場地與時段，預約評論有訂單編號 ──
         public bool IsBookingReview { get; init; }
         public string? VenueName { get; init; }
+
+        /// <summary>只有現場評論有。場地名稱做成「只看這個場地」的按鈕時要用。</summary>
+        public int? VenueId { get; init; }
+
         public DateTime? RentStartTime { get; init; }
 
         /// <summary>

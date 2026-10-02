@@ -50,16 +50,27 @@
 
 <div class="tab-content border border-top-0 p-3">
     <div class="tab-pane fade show active" id="venueInfo">
-        <dl class="row">
-            <dt class="col-sm-2">場地</dt>
-            <dd class="col-sm-10">@Model.VenueName (@Model.Location)</dd>
-            <dt class="col-sm-2">日期</dt>
-            <dd class="col-sm-10">@Model.BookingDate</dd>
-            <dt class="col-sm-2">時段</dt>
-            <dd class="col-sm-10">@Model.TimeRange</dd>
-            <dt class="col-sm-2">QR Token</dt>
-            <dd class="col-sm-10"><code>@Model.Qrtoken</code></dd>
-        </dl>
+        <div class="row">
+            <div class="col-md-8">
+                <dl class="row">
+                    <dt class="col-sm-2">場地</dt>
+                    <dd class="col-sm-10">@Model.VenueName (@Model.Location)</dd>
+                    <dt class="col-sm-2">日期</dt>
+                    <dd class="col-sm-10">@Model.BookingDate</dd>
+                    <dt class="col-sm-2">時段</dt>
+                    <dd class="col-sm-10">@Model.TimeRange</dd>
+                    <dt class="col-sm-2">QR Token</dt>
+                    <dd class="col-sm-10"><code>@Model.Qrtoken</code></dd>
+                </dl>
+            </div>
+            <div class="col-md-4 text-center">
+                <img src="@Url.Action("QrImage", new { id = Model.TicketId })"
+                    alt="報到 QR Code"
+                    class="img-fluid border rounded p-2"
+                    style="max-width: 200px;" />
+                    <div class="text-muted small mt-2">請出示此 QR Code 供人員掃描</div>
+            </div>
+        </div>
     </div>
     <div class="tab-pane fade" id="checkinManage">
         <div class="mb-3 d-flex flex-wrap gap-2">
@@ -69,7 +80,7 @@
             </form>
             <form asp-action="ManualCheckOut" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
                 <input type="text" name="remark" placeholder="原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
-                <button type="submit" class="btn btn-sm btn-outline-secondary disabled="@(!Model.CanCheckOut)">手動離場</button>
+                <button type="submit" class="btn btn-sm btn-outline-secondary" disabled="@(!Model.CanCheckOut)">手動離場</button>
             </form>
             <form asp-action="ManualCancel" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
                 <input type="text" name="remark" placeholder="取消原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
@@ -77,7 +88,7 @@
             </form>
             <form asp-action="ManualExpire" asp-route-id="@Model.TicketId" method="post" class="d-flex gap-1">
                 <input type="text" name="remark" placeholder="原因(暫不存檔)" class="form-control form-control-sm" style="width:200px" />
-                <button type="submit" class="btn btn-sm btn-warning disabled="@(!Model.CanInvalidate)">手動轉失效</button>
+                <button type="submit" class="btn btn-sm btn-warning" disabled="@(!Model.CanInvalidate)">手動轉失效</button>
             </form>
         </div>
 

@@ -2,10 +2,12 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System.Net.WebSockets;
+using System.Reflection.Metadata.Ecma335;
 using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;
+using VenueGo.Services;
 using VenueGo.ViewModels.VenueViewModels;
 
 namespace VenueGo.Controllers
@@ -15,9 +17,14 @@ namespace VenueGo.Controllers
     {
         //取得照片路徑 >> 取得wwwroot的實際路徑(Controller建構子注入)
         private readonly IWebHostEnvironment _env;
-        public VenueController(IWebHostEnvironment env)
+
+        //取得校時後的系統時間(取代 DateTime.Now,Controller建構子注入)
+        private readonly ITimeService _timeService;
+
+        public VenueController(IWebHostEnvironment env, ITimeService timeService)
         {
             _env = env;
+            _timeService = timeService;
         }
 
 
@@ -42,7 +49,7 @@ namespace VenueGo.Controllers
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //新增運動類型 >> 資料回傳存入DB
         [HttpPost]
-        public IActionResult SportTypeCreate(CSportTypeWrap Wrap)
+        public async Task<IActionResult> SportTypeCreate(CSportTypeWrap Wrap, IFormFile? PhotoFile)
         {
             //先檢查填寫是否通過
             if (!ModelState.IsValid)
@@ -50,8 +57,23 @@ namespace VenueGo.Controllers
                 return View(Wrap);
             }
 
-            //設定暫時預設欄位值 >> 要回來改
-            Wrap.CreatedBy = 1; //尚未整合會員ID追蹤,先給1
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
+            //存取照片路徑
+            Wrap.PhotoPath = await SaveSportTypePhotoAsync(PhotoFile);
+
+            //稽核欄位由後端決定
+            Wrap.CreatedAt = _timeService.Now;
+            Wrap.CreatedBy = userId.Value;
+            //Wrap 直接接表單,可能被夾帶修改紀錄 >> 新增時強制清空
+            Wrap.UpdatedAt = null;
+            Wrap.UpdatedBy = null;
             Wrap.IsActive = true;
 
             //存入DB >> 呼叫 Factory 進行 CRUD
@@ -66,9 +88,11 @@ namespace VenueGo.Controllers
         //運動類型編輯 >> 頁面產生
         public IActionResult SportTypeEdit(int? id)
         {
+
             //驗證id非null
             if (id == null)
                 return RedirectToAction("SportTypeIndex");
+
 
             //用id取出對應資料送到前端 >> 傳入 Factory 操作 Query
             CSportTypeFactory SportTypeFactory = new CSportTypeFactory();
@@ -82,32 +106,80 @@ namespace VenueGo.Controllers
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         //運動類型編輯 >> 參數送回
         [HttpPost]
-        public IActionResult SportTypeEdit(CSportTypeWrap Wrap)
+        public async Task<IActionResult> SportTypeEdit(CSportTypeWrap Wrap, IFormFile? PhotoFile)
         {
             //驗證送回的資料非null
-            if (!ModelState.IsValid)
+            if (!ModelState.IsValid) 
+            { 
+                //表單沒有送回照片路徑 >> 只從DB補回照片,其他欄位保留使用者剛剛填的內容
+                Wrap.PhotoPath = new CSportTypeFactory().QueryById(Wrap.SportTypeId).PhotoPath;
                 return View(Wrap);
+            }
+
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
+            //有上傳新照片才會有路徑,沒上傳是 null(Factory 會保留原本的照片)
+            string? newPhotoPath = await SaveSportTypePhotoAsync(PhotoFile);
 
             //將前端填寫資料送入 Factory 進行 Edit CRUD
             CSportTypeFactory SportTypeFactory = new CSportTypeFactory();
-            SportTypeFactory.Edit(Wrap);
+            SportTypeFactory.Edit(Wrap, newPhotoPath, userId.Value, _timeService.Now);
 
             return RedirectToAction("SportTypeIndex");
         }
 
 
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
-        //運動類型刪除
+        //運動類型刪除(軟刪除) >> 刪除前必須確認沒有任何資料還在使用這個運動類型
+        //刪除順序:先刪場地 >> 再刪價格規則 >> 最後才能刪運動類型
+        //(價格規則的刪除本身也會檢查底下有沒有場地,所以三者的刪除順序是一致的)
         public IActionResult SportTypeDelete(int? id)
         {
             //驗證變數是否為null
             if (id == null)
                 return RedirectToAction("SportTypeIndex");
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypeIndex");
+            }
 
-            //把回傳變數送入 factory 執行軟刪除
+            //確認運動類型存在(查不到或已經刪除過,就不用再刪),順便取得名稱放進訊息
             CSportTypeFactory SportTypeFactory = new CSportTypeFactory();
-            SportTypeFactory.Delete((int)id);
+            CSportTypeWrap sportType = SportTypeFactory.QueryById(id);
+            if (sportType.SportTypeId == 0 || !sportType.IsActive)
+            {
+                TempData["VenueErrorMessage"] = "找不到這個運動類型,可能已經被刪除。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
+            //檢查一:底下還有存在的場地 >> 擋下(已刪除的場地不算),訊息列出場地名稱,讓使用者知道要先處理哪些場地
+            List<string> activeVenueNames = new CVenueFactory().QueryActiveVenueNamesBySportType((int)id);
+            if (activeVenueNames.Count > 0)
+            {
+                TempData["VenueErrorMessage"] = $"「{sportType.SportName}」底下還有 {activeVenueNames.Count} 個場地({string.Join("、", activeVenueNames)}),請先刪除這些場地,才能刪除運動類型。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
+            //檢查二:還有價格規則 >> 擋下,請使用者先到價格規則管理刪除
+            if (new CSportTypePriceRuleFactory().HasPriceRule((int)id))
+            {
+                TempData["VenueErrorMessage"] = $"「{sportType.SportName}」還有價格規則,請先到「價格規則管理」刪除它的價格規則,才能刪除運動類型。";
+                return RedirectToAction("SportTypeIndex");
+            }
+
+            //檢查通過 >> 執行軟刪除
+            SportTypeFactory.Delete((int)id, userId.Value, _timeService.Now);
+            TempData["VenueSuccessMessage"] = $"已成功刪除運動類型「{sportType.SportName}」";
 
             return RedirectToAction("SportTypeIndex");
         }
@@ -153,6 +225,15 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            //放在照片上傳之前檢查,取不到就不存照片,避免留下沒人用的檔案
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("VenueIndex");
+            }
+
             //照片上傳
             // null >> 表單有夾帶檔案欄位
             // PhotoFile.Length > 0 >> 確認檔案內容不是空檔案（避免選到大小為 0 byte 的檔案）
@@ -188,7 +269,8 @@ namespace VenueGo.Controllers
             VenueWrap.IsActive = true;
             VenueWrap.Capacity = vm.Capacity;
             VenueWrap.PhotoPath = vm.PhotoPath;
-            VenueWrap.CreatedBy = 1;//尚未整合會員權限,先設為1
+            VenueWrap.CreatedAt = _timeService.Now;
+            VenueWrap.CreatedBy = userId.Value;
 
             //送進Factory執行新增
             CVenueFactory VenueFactory = new CVenueFactory();
@@ -243,6 +325,14 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("VenueIndex");
+            }
+
             //先處理照片路徑改變 >> 若有上傳照片,就要改變vm的PhotoPath
             if (vm.PhotoFile != null && vm.PhotoFile.Length > 0)
             {
@@ -272,7 +362,7 @@ namespace VenueGo.Controllers
 
             //執行場地資料編輯 >> 送進Factory處理
             CVenueFactory VenueFactory = new CVenueFactory();
-            VenueFactory.Edit(vm);
+            VenueFactory.Edit(vm, userId.Value, _timeService.Now);
 
 
 
@@ -289,10 +379,17 @@ namespace VenueGo.Controllers
             if (id == null)
                 return RedirectToAction("VenueIndex");
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("VenueIndex");
+            }
 
             //把回傳變數送入 factory 執行軟刪除
             CVenueFactory VenueFactory = new CVenueFactory();
-            VenueFactory.Delete((int)id);
+            VenueFactory.Delete((int)id, userId.Value, _timeService.Now);
 
             return RedirectToAction("VenueIndex");
         }
@@ -300,11 +397,14 @@ namespace VenueGo.Controllers
 
         /*SporTypePriceRule*/
 
-        //列出所有價格規則
+        //列出所有價格規則 >> 每一筆含尖峰時段摘要與 7 天明細,頁面頂端另外顯示一次場館公休日
         public IActionResult SportTypePriceRuleIndex()
         {
             CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
-            List<SportTypePriceRuleIndexViewModel> vm = SportTypePriceRuleFactory.QueryAll();
+
+            SportTypePriceRuleIndexPageViewModel vm = new SportTypePriceRuleIndexPageViewModel();
+            vm.Rules = SportTypePriceRuleFactory.QueryAll();
+            vm.ClosedDaysText = SportTypePriceRuleFactory.BuildClosedDaysText(new CWeekBusinessHourFactory().QueryAll());
 
             return View(vm);
         }
@@ -314,12 +414,17 @@ namespace VenueGo.Controllers
         //價格規則新增 >> 頁面產生
         public IActionResult SportTypePriceRuleCreate()
         {
-            //傳運動類型名稱到前端
+            CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+
             SportTypePriceRuleCreateViewModel vm = new SportTypePriceRuleCreateViewModel();
             //撈出尚未設定價格規則的啟用中運動類型
-            vm.SportTypes = new CSportTypePriceRuleFactory().GetAvailableSportTypes();
-            //尖峰起始時間下拉選單選項(只列出合法的整點時間,UI 上就不會選得出不合法的值)
-            vm.PeakStartTimeOptions = new CSportTypePriceRuleFactory().GetPeakStartTimeOptions();
+            vm.SportTypes = SportTypePriceRuleFactory.GetAvailableSportTypes();
+
+            //每週尖峰時段 7 列:新增時沒有任何資料,也不需要舊欄位當預設值,所以 7 天都預設「不分尖峰/離峰」
+            //每一列的下拉選項依當天營業時間產生,公休日沒有選項
+            List<CWeekBusinessHourWrap> businessHours = new CWeekBusinessHourFactory().QueryAll();
+            vm.Days = SportTypePriceRuleFactory.BuildPeakRows(new List<CSportTypePeakHourWrap>(), businessHours, null);
+
             return View(vm);
         }
 
@@ -331,20 +436,22 @@ namespace VenueGo.Controllers
         {
             CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
 
-            //整點檢查 >> PeakStartTime 有值時,分鐘/秒數必須是0
-            //前端已經改成下拉選單、選項本身就只有整點,這裡是防止有人跳過前端直接送 POST(例如用 Postman)
-            if (!IsWholeHour(vm.PeakStartTime))
-            {
-                ModelState.AddModelError(nameof(vm.PeakStartTime), "尖峰起始時間只能設定整點");
-            }
+            //營業時間查一次,整理、驗證、失敗重新顯示表單都共用這一份
+            List<CWeekBusinessHourWrap> businessHours = new CWeekBusinessHourFactory().QueryAll();
 
-            //營業時間範圍檢查 >> PeakStartTime 有值時,必須落在營業時間內,且不能晚於打烊前一小時
-            //⚠️【暫時寫死,待接續開發】範圍目前來自 CSportTypePriceRuleFactory 裡寫死的營業時間常數,
-            //還沒有真正查詢 WeekBusinessHour,等那個功能做完要回來把這段檢查改成查表
-            if (!IsWithinBusinessHours(vm.PeakStartTime))
+            //整理送回來的 7 列(照週一~週日排好、處理缺漏或重複的日子、公休日強制清成 null)
+            vm.Days = NormalizePeakDays(vm.Days, businessHours);
+
+            //逐天檢查尖峰起始時間(整點、在當天營業時間內),回傳是否有任何一天設定了尖峰
+            bool hasAnyPeak = ValidatePeakDays(vm.Days, businessHours);
+
+            //價格填寫檢查 >> 只要有任何一天有尖峰,尖峰價格就必須大於離峰價格
+            if (hasAnyPeak)
             {
-                ModelState.AddModelError(nameof(vm.PeakStartTime),
-                    $"尖峰起始時間需介於 {CSportTypePriceRuleFactory.BusinessOpenTime:HH:mm} ~ {CSportTypePriceRuleFactory.LatestPeakStartTime:HH:mm} 之間");
+                if (vm.PeakPrice <= vm.OffPeakPrice)
+                {
+                    ModelState.AddModelError(nameof(vm.PeakPrice), "尖峰價格應大於離峰價格");
+                }
             }
 
             //防呆 >> 避免同一個運動類型設定兩筆價格規則,違反唯一索引
@@ -356,29 +463,39 @@ namespace VenueGo.Controllers
             //先檢查填寫是否通過
             if (!ModelState.IsValid)
             {
+                //驗證沒過要重新顯示表單:運動類型下拉選單重新帶回;
+                //7 列用使用者送回的值重新組出來(保留使用者選的值,超出範圍的值也會顯示並標示)
                 vm.SportTypes = SportTypePriceRuleFactory.GetAvailableSportTypes();
-                //驗證沒過要重新顯示表單,下拉選單選項也要重新帶回去,不然畫面上的選單會是空的
-                vm.PeakStartTimeOptions = SportTypePriceRuleFactory.GetPeakStartTimeOptions();
+                vm.Days = SportTypePriceRuleFactory.BuildPeakRows(ToPeakHourWraps(vm.Days), businessHours, null);
                 return View(vm);
             }
 
-            //尖峰起始時間沒填,代表不分尖峰/離峰,尖峰價格沒有意義,強制清成0
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypePriceRuleIndex");
+            }
+
+            //7 天都不分尖峰/離峰,尖峰價格沒有意義,強制清成0
             //不管前端有沒有正確disable掉輸入框,後端都要保證資料一致(跟WeekBusinessHour的IsOpen=false邏輯一樣)
-            if (!vm.PeakStartTime.HasValue)
+            if (!hasAnyPeak)
             {
                 vm.PeakPrice = 0;
             }
 
             //回傳的資料存入Wrap
+            //舊欄位 PeakStartTime 刻意不寫入(舊欄位不同步);UpdatedAt/UpdatedBy 由 Factory 寫入
             CSportTypePriceRuleWrap Wrap = new CSportTypePriceRuleWrap();
             Wrap.SportTypeId = vm.SportTypeId;
-            Wrap.PeakStartTime = vm.PeakStartTime;
             Wrap.PeakPrice = vm.PeakPrice;
             Wrap.OffPeakPrice = vm.OffPeakPrice;
             Wrap.IsActive = true;
 
-            //存入DB >> 呼叫 Factory 進行 CRUD
-            SportTypePriceRuleFactory.Create(Wrap);
+            //存入DB >> 價格規則與 7 天尖峰時間由 Factory 在同一次存檔中一起新增
+            //時間用 ITimeService 校時後的時間,由 Controller 取得後傳入 Factory
+            SportTypePriceRuleFactory.Create(Wrap, ToPeakHourWraps(vm.Days), userId.Value, _timeService.Now);
 
             return RedirectToAction("SportTypePriceRuleIndex");
         }
@@ -396,12 +513,10 @@ namespace VenueGo.Controllers
             CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
 
             //用id取出對應資料送到前端
+            //QueryById 已經組好 7 列(含每天的選項;改版前的舊價格規則會用舊欄位當預設值)
             SportTypePriceRuleEditViewModel vm = SportTypePriceRuleFactory.QueryById((int)id);
             if (vm == null)
                 return RedirectToAction("SportTypePriceRuleIndex");
-
-            //尖峰起始時間下拉選單選項
-            vm.PeakStartTimeOptions = SportTypePriceRuleFactory.GetPeakStartTimeOptions();
 
             return View(vm);
         }
@@ -413,49 +528,61 @@ namespace VenueGo.Controllers
         {
             CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
 
-            //整點檢查 >> PeakStartTime 有值時,分鐘/秒數必須是0
-            if (!IsWholeHour(vm.PeakStartTime))
+            //營業時間查一次,整理、驗證、失敗重新顯示表單都共用這一份
+            List<CWeekBusinessHourWrap> businessHours = new CWeekBusinessHourFactory().QueryAll();
+
+            //整理送回來的 7 列(照週一~週日排好、處理缺漏或重複的日子、公休日強制清成 null)
+            vm.Days = NormalizePeakDays(vm.Days, businessHours);
+
+            //逐天檢查尖峰起始時間;編輯時遇到已經超出營業時間的舊值,也會在這裡被擋下,必須改成範圍內或不分尖峰/離峰
+            bool hasAnyPeak = ValidatePeakDays(vm.Days, businessHours);
+
+            //價格填寫檢查 >> 只要有任何一天有尖峰,尖峰價格就必須大於離峰價格
+            if (hasAnyPeak)
             {
-                ModelState.AddModelError(nameof(vm.PeakStartTime), "尖峰起始時間只能設定整點");
+                if (vm.PeakPrice <= vm.OffPeakPrice)
+                {
+                    ModelState.AddModelError(nameof(vm.PeakPrice), "尖峰價格應大於離峰價格");
+                }
             }
 
-            //營業時間範圍檢查 >> PeakStartTime 有值時,必須落在營業時間內,且不能晚於打烊前一小時
-            //⚠️【暫時寫死,待接續開發】範圍目前來自 CSportTypePriceRuleFactory 裡寫死的營業時間常數,
-            //還沒有真正查詢 WeekBusinessHour,等那個功能做完要回來把這段檢查改成查表
-            if (!IsWithinBusinessHours(vm.PeakStartTime))
-            {
-                ModelState.AddModelError(nameof(vm.PeakStartTime),
-                    $"尖峰起始時間需介於 {CSportTypePriceRuleFactory.BusinessOpenTime:HH:mm} ~ {CSportTypePriceRuleFactory.LatestPeakStartTime:HH:mm} 之間");
-            }
-
-            //驗證送回的資料非null
+            //驗證送回的資料
             if (!ModelState.IsValid)
             {
-                //驗證沒過要重新顯示表單,下拉選單選項跟運動類型名稱都要重新帶回去
-                vm.PeakStartTimeOptions = SportTypePriceRuleFactory.GetPeakStartTimeOptions();
+                //驗證沒過要重新顯示表單:7 列用使用者送回的值重新組出來,運動類型名稱也要重新帶回去(表單沒有送回名稱)
+                vm.Days = SportTypePriceRuleFactory.BuildPeakRows(ToPeakHourWraps(vm.Days), businessHours, null);
                 var data = SportTypePriceRuleFactory.QueryById(vm.SportTypePriceRuleId);
                 if (data != null)
                     vm.SportTypeName = data.SportTypeName;
                 return View(vm);
             }
 
-            //尖峰起始時間沒填,代表不分尖峰/離峰,尖峰價格沒有意義,強制清成0
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("SportTypePriceRuleIndex");
+            }
+
+            //7 天都不分尖峰/離峰,尖峰價格沒有意義,強制清成0
             //不管前端有沒有正確disable掉輸入框,後端都要保證資料一致(跟WeekBusinessHour的IsOpen=false邏輯一樣)
-            if (!vm.PeakStartTime.HasValue)
+            if (!hasAnyPeak)
             {
                 vm.PeakPrice = 0;
             }
 
             //回傳的資料存入Wrap
+            //舊欄位 PeakStartTime 刻意不寫入(舊欄位不同步);UpdatedAt/UpdatedBy 由 Factory 寫入
             CSportTypePriceRuleWrap EditWrap = new CSportTypePriceRuleWrap();
             EditWrap.SportTypePriceRuleId = vm.SportTypePriceRuleId;
-            EditWrap.PeakStartTime = vm.PeakStartTime;
             EditWrap.PeakPrice = vm.PeakPrice;
             EditWrap.OffPeakPrice = vm.OffPeakPrice;
             EditWrap.IsActive = vm.IsActive;
 
-            //將前端填寫資料送入 Factory 進行 Edit CRUD
-            SportTypePriceRuleFactory.Edit(EditWrap);
+            //將前端填寫資料送入 Factory:價格規則與 7 天尖峰時間在同一次存檔中更新(只更新有變動的日子、缺的日子補上)
+            //時間用 ITimeService 校時後的時間,由 Controller 取得後傳入 Factory
+            SportTypePriceRuleFactory.Edit(EditWrap, ToPeakHourWraps(vm.Days), userId.Value, _timeService.Now);
 
             return RedirectToAction("SportTypePriceRuleIndex");
         }
@@ -573,6 +700,14 @@ namespace VenueGo.Controllers
                 return View(vm);
             }
 
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToAction("WeekBusinessHourIndex");
+            }
+
             //驗證通過,轉成Wrap存回去
             List<CWeekBusinessHourWrap> wraps = new List<CWeekBusinessHourWrap>();
 
@@ -599,7 +734,7 @@ namespace VenueGo.Controllers
                 wraps.Add(wrap);
             }
 
-            WeekBusinessHourFactory.EditAll(wraps);
+            WeekBusinessHourFactory.EditAll(wraps, userId.Value, _timeService.Now);
             TempData["VenueSuccessMessage"] = "營業時間設定已儲存";
 
             return RedirectToAction("WeekBusinessHourIndex");
@@ -649,7 +784,9 @@ namespace VenueGo.Controllers
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager,RoleNames.Staff)]
         public IActionResult VenueUnavailableSlotManage(int venueId, DateOnly? date)
         {
-            DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+            //今天跟現在時間都從同一個校時後的時間拆出來,避免跨午夜時兩者對不上
+            DateTime currentTime = _timeService.Now;
+            DateOnly today = DateOnly.FromDateTime(currentTime);
 
             //date防呆 >> 沒帶就設為今天,早於今天就拉回今天,不管網址是不是被手動改過
             DateOnly targetDate;
@@ -679,6 +816,7 @@ namespace VenueGo.Controllers
             vm.VenueName = venue.VenueName;
             vm.PhotoPath = venue.PhotoPath;
             vm.Date = targetDate;
+            vm.Today = today;   //View 用來判斷日期選擇器最小值、是否顯示前一天,不在 View 自己取時間
 
             //理論上7天資料都已經存在,查不到就當作沒營業處理(異常情況防呆)
             if (businessHour == null || !businessHour.IsOpen)
@@ -708,7 +846,7 @@ namespace VenueGo.Controllers
             }
 
             //現在的時間,只有targetDate是今天時才會用來判斷IsPast
-            TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
+            TimeOnly now = TimeOnly.FromDateTime(currentTime);
 
             foreach (TimeOnly time in hourSlots)
             {
@@ -748,13 +886,23 @@ namespace VenueGo.Controllers
         [HttpPost]
         public IActionResult VenueUnavailableSlotToggle(int venueId, DateOnly date, TimeOnly time, string? reason)
         {
-            DateOnly today = DateOnly.FromDateTime(DateTime.Now);
-            TimeOnly now = TimeOnly.FromDateTime(DateTime.Now);
+            //今天跟現在時間都從同一個校時後的時間拆出來,新增時的 CreatedAt 也用同一個值
+            DateTime currentTime = _timeService.Now;
+            DateOnly today = DateOnly.FromDateTime(currentTime);
+            TimeOnly now = TimeOnly.FromDateTime(currentTime);
 
             //防呆 >> 不能對過去的日期時間做切換,不管前端有沒有正確把按鈕disable掉
             if (date < today || (date == today && time <= now))
             {
                 TempData["VenueErrorMessage"] = "已經過去的時段無法設定";
+                return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
+            }
+
+            //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
+            int? userId = User.GetUserId();
+            if (userId == null)
+            {
+                TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
                 return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
             }
 
@@ -782,8 +930,8 @@ namespace VenueGo.Controllers
                 wrap.UnavailableDate = date;
                 wrap.UnavailableTime = time;
                 wrap.Reason = reason;
-                wrap.CreatedAt = DateTime.Now;
-                wrap.CreatedBy = 1; //尚未整合會員權限,先設為1
+                wrap.CreatedAt = currentTime;
+                wrap.CreatedBy = userId.Value;
 
                 VenueUnavailableSlotFactory.Create(wrap);
             }
@@ -792,29 +940,166 @@ namespace VenueGo.Controllers
         }
 
 
-        //整點檢查 >> null 視為合法(代表不分尖峰/離峰),非null時 分鐘/秒數必須是0
-        //Create/Edit 兩個 Action 共用同一份檢查邏輯
-        private bool IsWholeHour(TimeOnly? time)
-        {
-            if (!time.HasValue)
-                return true;
+        /***** 價格規則「每週尖峰時段」共用的私有方法(SportTypePriceRuleCreate / Edit 的 POST 共用) *****/
 
-            return time.Value.Minute == 0 && time.Value.Second == 0;
+        //整理表單送回來的 7 列 >> 不相信畫面送回的結構,一律重新整理成「週一~週日各一列」
+        //1. 照週一~週日的順序重新排好
+        //2. 某一天沒有送回(表單被竄改或欄位遺失) >> 當作不分尖峰/離峰(null)
+        //3. 同一天送回好幾列 >> 只取第一列
+        //4. 公休日(依資料庫的營業時間判斷,不看畫面) >> 不管送回什麼,一律強制清成 null
+        //   (跟 WeekBusinessHourIndex 的 IsOpen=false 強制清空 OpenTime/CloseTime 是同一個做法)
+        private List<SportTypePeakHourRowViewModel> NormalizePeakDays(List<SportTypePeakHourRowViewModel> postedDays, List<CWeekBusinessHourWrap> businessHours)
+        {
+            DayOfWeek[] displayOrder = new DayOfWeek[]
+            {
+                DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday,
+                DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+            };
+
+            CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+            List<SportTypePeakHourRowViewModel> result = new List<SportTypePeakHourRowViewModel>();
+
+            foreach (DayOfWeek day in displayOrder)
+            {
+                SportTypePeakHourRowViewModel row = new SportTypePeakHourRowViewModel();
+                row.DayOfWeek = day;
+                row.DayName = SportTypePriceRuleFactory.GetShortDayName(day);
+
+                //找出送回的資料中同一天的第一列(postedDays 可能是 null:表單完全沒送 Days)
+                row.PeakStartTime = null;
+                if (postedDays != null)
+                {
+                    foreach (SportTypePeakHourRowViewModel posted in postedDays)
+                    {
+                        if (posted.DayOfWeek == day)
+                        {
+                            row.PeakStartTime = posted.PeakStartTime;
+                            break;
+                        }
+                    }
+                }
+
+                //依資料庫的營業時間判斷是否營業,公休日強制清成 null
+                //判斷規則跟 Factory 的 BuildPeakRows 一致:IsOpen=true 而且開始/打烊時間都有值才算營業
+                row.IsBusinessDay = false;
+                foreach (CWeekBusinessHourWrap businessHour in businessHours)
+                {
+                    if (businessHour.DayOfWeek == day && businessHour.IsOpen && businessHour.OpenTime.HasValue && businessHour.CloseTime.HasValue)
+                    {
+                        row.IsBusinessDay = true;
+                        row.OpenTime = businessHour.OpenTime;
+                        row.CloseTime = businessHour.CloseTime;
+                    }
+                }
+
+                if (!row.IsBusinessDay)
+                {
+                    row.PeakStartTime = null;
+                }
+
+                result.Add(row);
+            }
+
+            return result;
         }
 
-        //營業時間範圍檢查 >> null 視為合法(代表不分尖峰/離峰),
-        //非null時必須落在 [開始營業時間, 打烊前一小時] 這個範圍內(含頭含尾)
-        //Create/Edit 兩個 Action 共用同一份檢查邏輯
-        //⚠️【暫時寫死,待接續開發】範圍依據 CSportTypePriceRuleFactory 裡寫死的營業時間常數,
-        //還沒有真正串接 WeekBusinessHour(場館營業時間管理),等那個功能做完要回來改成查表
-        private bool IsWithinBusinessHours(TimeOnly? time)
-        {
-            if (!time.HasValue)
-                return true;
 
-            return time.Value >= CSportTypePriceRuleFactory.BusinessOpenTime
-                && time.Value <= CSportTypePriceRuleFactory.LatestPeakStartTime;
+        //逐天檢查尖峰起始時間 >> 規則由 Factory 的 IsPeakStartTimeValid 決定(整點、在當天「開始營業 ~ 打烊前一小時」之間),
+        //跟下拉選單、列表提示是同一套規則,不會出現「畫面選得到、存檔卻被擋」的不一致
+        //不合法的那一天:錯誤訊息加在那一列(Days[i].PeakStartTime),畫面上顯示在該列下方;
+        //另外加一條不屬於任何欄位的總覽錯誤,顯示在表單最上方的 validation summary
+        //回傳值:是否有任何一天設定了尖峰(給尖峰價格的檢查與「7 天都沒有尖峰就清成 0」使用)
+        //呼叫前 days 必須先經過 NormalizePeakDays 整理(公休日已清成 null、OpenTime/CloseTime 已從資料庫帶入)
+        private bool ValidatePeakDays(List<SportTypePeakHourRowViewModel> days, List<CWeekBusinessHourWrap> businessHours)
+        {
+            CSportTypePriceRuleFactory SportTypePriceRuleFactory = new CSportTypePriceRuleFactory();
+            bool hasAnyPeak = false;
+            int invalidCount = 0;
+
+            for (int i = 0; i < days.Count; i++)
+            {
+                SportTypePeakHourRowViewModel day = days[i];
+
+                if (day.PeakStartTime.HasValue)
+                {
+                    hasAnyPeak = true;
+                }
+
+                //找出這一天的營業時間,交給 Factory 判斷是否合法
+                CWeekBusinessHourWrap? businessHour = null;
+                foreach (CWeekBusinessHourWrap item in businessHours)
+                {
+                    if (item.DayOfWeek == day.DayOfWeek)
+                    {
+                        businessHour = item;
+                    }
+                }
+
+                if (!SportTypePriceRuleFactory.IsPeakStartTimeValid(day.PeakStartTime, businessHour))
+                {
+                    invalidCount++;
+
+                    //錯誤訊息寫出當天合法的範圍,讓使用者知道要改成幾點
+                    string message;
+                    if (day.OpenTime.HasValue && day.CloseTime.HasValue)
+                    {
+                        message = $"{day.DayName} 的尖峰起始時間必須是 {day.OpenTime.Value:HH:mm} ~ {day.CloseTime.Value.AddHours(-1):HH:mm} 之間的整點,或選擇不分尖峰/離峰";
+                    }
+                    else
+                    {
+                        message = $"{day.DayName} 的尖峰起始時間不合法,請選擇不分尖峰/離峰";
+                    }
+
+                    ModelState.AddModelError($"Days[{i}].PeakStartTime", message);
+                }
+            }
+
+            if (invalidCount > 0)
+            {
+                ModelState.AddModelError(string.Empty, $"有 {invalidCount} 天的尖峰起始時間需要修正,請檢查下方標示的日子");
+            }
+
+            return hasAnyPeak;
         }
+
+
+        //把畫面的 7 列轉成 Factory 要的 CSportTypePeakHourWrap 清單(只帶星期與尖峰起始時間,其他欄位由 Factory 填)
+        private List<CSportTypePeakHourWrap> ToPeakHourWraps(List<SportTypePeakHourRowViewModel> days)
+        {
+            List<CSportTypePeakHourWrap> list = new List<CSportTypePeakHourWrap>();
+
+            foreach (SportTypePeakHourRowViewModel day in days)
+            {
+                CSportTypePeakHourWrap wrap = new CSportTypePeakHourWrap();
+                wrap.DayOfWeek = day.DayOfWeek;
+                wrap.PeakStartTime = day.PeakStartTime;
+                list.Add(wrap);
+            }
+
+            return list;
+        }
+
+
+        //存運動類型代表照片 >> 回傳網頁相對路徑;沒有檔案回傳 null
+        private async Task<string?> SaveSportTypePhotoAsync(IFormFile? photoFile)
+        {
+            if (photoFile == null || photoFile.Length == 0)
+                return null;
+
+            string fileName = Guid.NewGuid() + Path.GetExtension(photoFile.FileName);
+            string folderPath = Path.Combine(_env.WebRootPath, "images", "sporttypes");
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
+
+            using (var stream = new FileStream(Path.Combine(folderPath, fileName), FileMode.Create))
+            {
+                await photoFile.CopyToAsync(stream);
+            }
+            return "/images/sporttypes/" + fileName;
+        }
+
 
     }
 }

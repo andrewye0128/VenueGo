@@ -28,27 +28,13 @@ namespace VenueGo.Helpers
 
         /// <param name="time">要顯示的時間。</param>
         /// <param name="now">
-        /// 比較基準。預設是 DateTime.Now。
+        /// 比較基準。預設是 TimeService.Now。
         /// 開放這個參數是為了讓同一頁可以共用同一個基準，測試時也能餵固定值。
         /// </param>
         public static string Of(DateTime time, DateTime? now = null)
         {
-            // 💡 暫時的測試：如果 TimeService 為 null，強制噴出錯誤訊息給你看！
-            if (TimeService == null)
-            {
-                return "【偵錯】TimeService 注入失敗，目前是 null！";
-            }
-
-            DateTime baseline = now ?? TimeService.Now; // 直接強制用 TimeService，不用 ?? DateTime.Now 墊底
+            DateTime baseline = now ?? TimeService?.Now ?? DateTime.Now; // 套用TimeService
             TimeSpan span = baseline - time;
-
-            // 💡 暫時的測試：把 baseline 和傳入的時間印在畫面上
-            // return $"基準:{baseline:mm:ss} | 資料:{time:mm:ss}"; 
-
-            if (span < TimeSpan.Zero) return "【偵錯】這筆資料在未來！" + time.ToString(FullFormat);
-
-            //DateTime baseline = now ?? TimeService?.Now ?? DateTime.Now; // 套用TimeService
-            //TimeSpan span = baseline - time;
 
             // 未來時間：機器時鐘沒對準、或資料有問題。
             // 這時候講「-3 分鐘前」只會讓人更困惑，直接給完整時間。

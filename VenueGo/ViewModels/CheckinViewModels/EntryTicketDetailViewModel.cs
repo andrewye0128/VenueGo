@@ -41,7 +41,7 @@ namespace VenueGo.ViewModels.CheckinViewModels
         // 失效原因（只有已失效才有值）
         public string? ExpiredReasonText =>
             (EntryTicketStatus)Status == EntryTicketStatus.Expired
-                ? (HasValidCheckIn ? "超時失效" : "未使用失效")
+                ? (HasValidCheckIn ? "票券超時失效" : "未使用票券")
                 : null;
 
         //前端按鈕顯示用途

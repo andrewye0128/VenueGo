@@ -1,86 +1,47 @@
-@* @model IEnumerable<VenueGo.Models.Entities.Reservation> *@
-@* @model IEnumerable<VenueGo.Models.ReservationModels.CReservationWrap> *@
-@model IEnumerable<VenueGo.ViewModels.ReservationViewModels.ReservationListViewModel>
+@*
+    預約列表頁。
+
+    版面：標題列＋篩選列＋表格，篩選/查詢用非同步局部更新（比照評論管理佇列
+    AReviewController 的做法），不用整頁重新整理。
+
+    會變動的部分（篩選列、表格、每一列的取消彈窗）都放在 _ReservationTable.cshtml，
+    這裡只放「不會跟著查詢結果變的東西」：標題、操作訊息、腳本。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.ReservationListPageViewModel
 
 @{
-    ViewData["Title"] = "預約管理";
+    ViewData["Title"] = "預約列表";
 }
 
-<h1>預約管理</h1>
-
-<p>
-    <a asp-controller="ReservationCreate" asp-action="Start" class="btn btn-primary">
-        + 新增預約
-    </a>
-</p>
-<table class="table">
-    <thead>
-        <tr>
-            <th>
-                編號
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.UserName)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.VenueName)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.BookingDate)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.TimeRange)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.ReservationStatus)
-            </th>
-            <th>
-                @Html.DisplayNameFor(model => model.PaymentStatus)
-            </th>
-            <th>
-                操作
-            </th>
-        </tr>
-    </thead>
-    <tbody>
-        @{
-            int count = 0;
-            foreach (var item in Model)
-            {
-                count++;
-                <tr>
-
-                    <td>
-                        @count
-                    </td>
-                    <td>
-                        @Html.DisplayFor(model => item.UserName)
-                    </td>
-                    <td>
-                        @Html.DisplayFor(model => item.VenueName)
-                    </td>
-                    <td>
-                        @item.BookingDate.ToString("yyyy/MM/dd")
-                    </td>
-                    <td>
-                        @Html.DisplayFor(model => item.TimeRange)
-                    </td>
-                    <td>
-                        @Html.DisplayFor(model => item.ReservationStatusText)
-                    </td>
-                    <td>
-                        @Html.DisplayFor(model => item.PaymentStatusText)
-                    </td>
-
-                    <td>
-                        <a asp-action="Details" asp-route-id="@item.ReservationId">查看</a> |
-                        <a asp-action="Edit" asp-route-id="@item.ReservationId">編輯</a> |
-                        <a asp-action="Delete" asp-route-id="@item.ReservationId">刪除</a>
-                    </td>
-                </tr>
-            }
-        }
-    </tbody>
-</table>
 <partial name="_OperationMessages" />
-@* @Html.DisplayFor(model => item.StartTime) ~ @Html.DisplayFor(model => item.EndTime)> *@
+
+@* 操作結果提示（取消預約等非同步操作），由 JS 放進來 *@
+<div id="reservationFlash" aria-live="polite"></div>
+
+<div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-4">
+    <h1 class="h3 mb-0 d-flex align-items-center gap-2">
+        <i class="bi bi-calendar-check text-primary"></i>預約列表
+    </h1>
+
+    <a asp-controller="ReservationCreate" asp-action="Start" class="btn btn-primary">
+        <i class="bi bi-plus-lg me-1"></i>新增預約
+    </a>
+</div>
+
+@* 清單容器。data-list-url 讓 JS 知道要去哪裡拿新的表格內容，
+   路由改了這裡會自動跟著改。 *@
+<div id="reservationListRoot" data-list-url="@Url.Action("List")">
+    <div id="reservationTableWrapper">
+        <partial name="_ReservationTable" model="Model" />
+    </div>
+</div>
+
+@section Scripts {
+    @* axios 版本請固定寫死，不要用 latest（跟評論管理頁同一個做法）。 *@
+    <script src="https://cdn.jsdelivr.net/npm/axios@@1.20.0/dist/axios.min.js"></script>
+
+    @* 取消彈窗（_TerminateReservationModal）的字數計數器，跟預約詳細頁共用同一份。 *@
+    <script src="~/js/terminate-modal.js" asp-append-version="true"></script>
+
+    <script src="~/js/reservation-list.js" asp-append-version="true"></script>
+}

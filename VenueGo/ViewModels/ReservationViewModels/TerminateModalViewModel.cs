@@ -73,5 +73,29 @@
             RequiresRefund = detail.RequiresRefund,
             PaidAmountText = detail.TotalAmountText
         };
+
+        /// <summary>
+        /// 建立「取消預約」視窗的資料，資料來源是列表頁的一列（而非詳細頁）。
+        /// <para>
+        /// 版面、文案、送出的 Action 都跟 <see cref="ForCancel"/> 完全共用，
+        /// 差別只在 ModalId 要帶上預約編號——列表頁一次顯示很多筆預約，
+        /// 每一列都要有自己獨一無二的彈窗 id，不然點哪一列都只會打開第一個彈窗。
+        /// </para>
+        /// </summary>
+        public static TerminateModalViewModel ForCancelListRow(ReservationListViewModel row) => new()
+        {
+            ModalId = $"cancelReservationModal-{row.ReservationId}",
+            ActionName = "Cancel",
+            Title = "取消預約",
+            ActionNoun = "取消",
+            ConfirmButtonText = "確認取消",
+            ReasonPlaceholder = "例如：會員來電表示臨時有事無法前往",
+            RefundHintText = "取消後需另行於櫃檯辦理退款。",
+            ReservationId = row.ReservationId,
+            BookingDateText = row.BookingDateText,
+            TimeRangeText = row.TimeRange,
+            RequiresRefund = row.RequiresRefund,
+            PaidAmountText = row.PaidAmountText
+        };
     }
 }

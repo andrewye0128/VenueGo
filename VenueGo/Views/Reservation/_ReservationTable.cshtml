@@ -1,0 +1,176 @@
+@*
+    放置路徑：Views/Reservation/_ReservationTable.cshtml
+    檔名開頭的底線是慣例，表示「這是 Partial，不會單獨當一頁」。
+
+    這個檔案會被用在兩個地方：
+      1. Index.cshtml 用 <partial name="_ReservationTable" model="Model" /> 嵌進整頁
+      2. List Action 用 PartialView("_ReservationTable", vm) 單獨回傳，給 axios 換掉舊表格
+
+    篩選列也放在這裡，是因為搜尋框裡的字、下拉選單選了哪個、分頁位置
+    都會隨著操作改變，放在 Partial 裡每次重新載入就一起更新，不必另外寫程式同步。
+
+    ⚠️ 這整塊會被 JavaScript 整塊換掉，所有事件都必須掛在外層的 #reservationListRoot
+       上做事件委派，不能直接掛在這裡的按鈕或輸入框上——換掉之後新的元素就沒有事件了。
+*@
+@model VenueGo.ViewModels.ReservationViewModels.ReservationListPageViewModel
+@using System.Linq
+@using VenueGo.Models.Enums
+@using VenueGo.ViewModels.ReservationViewModels
+
+@* ── 篩選列 ──────────────────────────────────────────
+   asp-action="Index" method="get"：沒有 JavaScript 時，這個表單還是能用一般的
+   整頁送出查詢，只是不會有非同步換頁的效果。漸進增強，不會因為 JS 壞掉就整個不能用。 *@
+<form id="reservationFilterForm" asp-action="Index" method="get" class="card shadow-sm mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="form-label small text-secondary">搜尋會員</label>
+                <div class="input-group">
+                    <span class="input-group-text bg-white"><i class="bi bi-search text-secondary"></i></span>
+                    <input type="text" name="keyword" value="@Model.Filter.Keyword"
+                           class="form-control" placeholder="搜尋會員姓名、Email 或預約編號...">
+                </div>
+            </div>
+            <div class="col-md-4">
+                <label class="form-label small text-secondary">預約日期</label>
+                <div class="input-group">
+                    <input type="date" name="dateFrom" value="@Model.Filter.DateFrom?.ToString("yyyy-MM-dd")"
+                           class="form-control" aria-label="起始日期">
+                    <span class="input-group-text bg-white">至</span>
+                    <input type="date" name="dateTo" value="@Model.Filter.DateTo?.ToString("yyyy-MM-dd")"
+                           class="form-control" aria-label="結束日期">
+                </div>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-secondary">預約狀態</label>
+                <select name="reservationStatus" class="form-select">
+                    <option value="">全部狀態</option>
+                    @foreach (var status in Enum.GetValues<ReservationStatus>())
+                    {
+                        <option value="@((byte)status)" selected="@(Model.Filter.ReservationStatus == status)">
+                            @status.GetDisplayName()
+                        </option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small text-secondary">付款狀態</label>
+                <select name="paymentStatus" class="form-select">
+                    <option value="">全部付款</option>
+                    @foreach (var status in Enum.GetValues<PaymentStatus>())
+                    {
+                        <option value="@((byte)status)" selected="@(Model.Filter.PaymentStatus == status)">
+                            @status.GetDisplayName()
+                        </option>
+                    }
+                </select>
+            </div>
+            @* 篩選、重置兩個按鈕放在同一個容器裡，並排顯示。 *@
+            @* <div class="col-md-2 d-flex gap-2">
+                <button type="submit" id="reservationSearchBtn" class="btn btn-primary flex-grow-1">篩選</button>
+                <button type="button" id="reservationSearchReset" class="btn btn-outline-secondary"
+                        title="重置" aria-label="重置篩選條件">
+                    <i class="bi bi-arrow-counterclockwise"></i>
+                </button>
+            </div> *@
+        </div>
+        <div class="d-flex justify-content-end gap-2">
+                <button type="submit" id="reservationSearchBtn" class="btn btn-primary">篩選</button>
+                 <button type="button" id="reservationSearchReset" class="btn btn-outline-secondary">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>重置
+                </button>
+        </div>
+    </div>
+</form>
+
+@* ── 表格 ──────────────────────────────────────────── *@
+<div class="card shadow-sm">
+    @if (Model.Items.Count == 0)
+    {
+        <div class="card-body text-center text-secondary py-5">
+            找不到符合條件的預約，可以換個篩選條件再試一次。
+        </div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table align-middle mb-0">
+                <caption class="visually-hidden">預約清單</caption>
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col">預約編號</th>
+                        <th scope="col">會員</th>
+                        <th scope="col">場地</th>
+                        <th scope="col">預約日期</th>
+                        <th scope="col">使用時段</th>
+                        <th scope="col">預約狀態</th>
+                        <th scope="col">付款狀態</th>
+                        <th scope="col">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in Model.Items)
+                    {
+                        <tr>
+                            <td>
+                                <a asp-action="Details" asp-route-id="@item.ReservationId" class="fw-semibold text-decoration-none">
+                                    R@(item.ReservationId.ToString("D3"))
+                                </a>
+                            </td>
+                            <td>
+                                <div>@item.UserName</div>
+                                <div class="small text-secondary">@item.UserEmail</div>
+                            </td>
+                            <td>@item.VenueName</td>
+                            <td>@item.BookingDateText</td>
+                            <td>@item.TimeRange</td>
+                            <td>
+                                <span class="badge @item.ReservationStatusBadgeClass">@item.ReservationStatusText</span>
+                            </td>
+                            <td>
+                                <span class="badge @item.PaymentStatusBadgeClass">@item.PaymentStatusText</span>
+                            </td>
+                            <td>
+                                <div class="d-flex gap-1">
+                                    <a asp-action="Details" asp-route-id="@item.ReservationId"
+                                       class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-eye"></i> 查看
+                                    </a>
+                                    @* 編輯功能尚未實作，先連到查看，等編輯功能做出來再換連結目標。 *@
+                                    <a asp-action="Details" asp-route-id="@item.ReservationId"
+                                       class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i> 編輯
+                                    </a>
+                                    @if (item.CanCancel)
+                                    {
+                                        <button type="button" class="btn btn-sm btn-outline-danger"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#cancelReservationModal-@item.ReservationId">
+                                            <i class="bi bi-x-circle"></i> 取消
+                                        </button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</div>
+
+@* 每一列可取消的預約，各自帶一份專屬的取消彈窗（ModalId 帶編號，避免彼此撞名）。 *@
+@foreach (var item in Model.Items.Where(i => i.CanCancel))
+{
+    <partial name="_TerminateReservationModal" model="TerminateModalViewModel.ForCancelListRow(item)" />
+}
+
+@* JS 靠這個知道「後端這次是用什麼條件查出來的」，處理完一筆後用同樣條件重新載入，
+   「重置」時也靠這裡知道預設值是什麼，不用在 JS 裡另外記一份。 *@
+<div id="reservationState"
+     data-keyword="@Model.Filter.Keyword"
+     data-date-from="@Model.Filter.DateFrom?.ToString("yyyy-MM-dd")"
+     data-date-to="@Model.Filter.DateTo?.ToString("yyyy-MM-dd")"
+     data-reservation-status="@(Model.Filter.ReservationStatus.HasValue ? ((byte)Model.Filter.ReservationStatus.Value).ToString() : "")"
+     data-payment-status="@(Model.Filter.PaymentStatus.HasValue ? ((byte)Model.Filter.PaymentStatus.Value).ToString() : "")"
+     hidden></div>

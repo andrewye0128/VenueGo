@@ -56,7 +56,7 @@
             <div class="col-md-2">
                 <label class="form-label small text-secondary">付款狀態</label>
                 <select name="paymentStatus" class="form-select">
-                    <option value="">全部付款</option>
+                    <option value="">全部狀態</option>
                     @foreach (var status in Enum.GetValues<PaymentStatus>())
                     {
                         <option value="@((byte)status)" selected="@(Model.Filter.PaymentStatus == status)">
@@ -74,11 +74,13 @@
                 </button>
             </div> *@
         </div>
-        <div class="d-flex justify-content-end gap-2">
-                <button type="submit" id="reservationSearchBtn" class="btn btn-primary">篩選</button>
-                 <button type="button" id="reservationSearchReset" class="btn btn-outline-secondary">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>重置
-                </button>
+        <div class="d-flex justify-content-end gap-2 mt-2">
+           <button type="submit" id="reservationSearchBtn" class="btn btn-primary">
+              <i class="bi bi-funnel me-1"></i>篩選
+           </button>
+           <button type="button" id="reservationSearchReset" class="btn btn-outline-secondary">
+              <i class="bi bi-arrow-counterclockwise me-1"></i>重置
+           </button>
         </div>
     </div>
 </form>

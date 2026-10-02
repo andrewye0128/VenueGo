@@ -47,6 +47,19 @@ const router = createRouter({
       component: () => import("../views/ApiDemoView.vue"),
     },
     {
+      path: "/member",
+      name: "member",
+      component: () => import("../views/member/MemberLayout.vue"),
+      children: [
+        // 我的票券
+        {
+          path: "tickets",
+          name: "tickets",
+          component: () => import("../views/member/MyTicketsView.vue"),
+        },
+      ],
+    },
+    {
       // 場館資訊：/venues/1 顯示運動類型 Id 1；不帶 Id 時由頁面導到第一項
       // (\\d+) 限定只接受數字，避免吃掉 /venues/transport 之類的其他頁面
       path: "/venues/:sportTypeId(\\d+)?",

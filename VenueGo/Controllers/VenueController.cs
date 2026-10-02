@@ -217,6 +217,21 @@ namespace VenueGo.Controllers
         [HttpPost]
         public async Task<IActionResult> VenueCreate(VenueCreateViewModel vm)
         {
+            //有填寫場地名稱才檢查是否重複
+            if (!String.IsNullOrWhiteSpace(vm.VenueName))
+            {
+                //字串處理 >> 清除空白
+                vm.VenueName = vm.VenueName.Trim();
+                //呼叫檢查重複方法 >> 檢查傳回的場地名稱是否重複,若重複,則ModelState.IsValid 會變成 false,並往下落入 if (!ModelState.IsValid)處理
+                bool isVenueNameDuplicate = new CVenueFactory().IsVenueNameDuplicate(vm.VenueName, null);
+
+                if(isVenueNameDuplicate)
+                {
+                    ModelState.AddModelError("VenueName","場地名稱已存在,請重新填寫");
+                }
+                
+            }
+
             //判斷填寫欄位是否合規 >> 不合規就重新填寫
             if (!ModelState.IsValid)
             {
@@ -317,8 +332,26 @@ namespace VenueGo.Controllers
         [HttpPost]
         public async Task<IActionResult> VenueEdit(VenueEditViewModel vm)
         {
-            //驗證欄位填寫是否合規
-            if (!ModelState.IsValid)
+
+            //有填寫場地名稱才檢查是否重複
+            if (!String.IsNullOrWhiteSpace(vm.VenueName))
+            {
+                //字串處理 >> 清除空白
+                vm.VenueName = vm.VenueName.Trim();
+                //呼叫檢查重複方法 >> 檢查傳回的場地名稱是否重複,若重複,則ModelState.IsValid 會變成 false,並往下落入 if (!ModelState.IsValid)處理
+                bool isVenueNameDuplicate = new CVenueFactory().IsVenueNameDuplicate(vm.VenueName, vm.VenueId);
+
+                if (isVenueNameDuplicate)
+                {
+                    ModelState.AddModelError("VenueName", "場地名稱已存在,請重新填寫");
+                }
+
+            }
+
+
+
+                //驗證欄位填寫是否合規
+                if (!ModelState.IsValid)
             {
                 //回傳下拉清單選項回去
                 vm.SportTypes = new CVenueFactory().GetSportTypes();

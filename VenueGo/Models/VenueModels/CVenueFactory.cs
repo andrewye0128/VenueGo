@@ -219,6 +219,23 @@ namespace VenueGo.Models.VenueModels
         }
 
 
+        //檢查場地名稱是否重複(新增、編輯共用)
+        //excludeId:編輯時排除自己,新增時傳入null
+        public bool IsVenueNameDuplicate(string venueName, int? excludeId)
+        {
+            //進資料庫撈出場地
+            //未被軟刪除、名稱相同、排除自己(編輯時) >> 只要有一筆符合條件就算重複
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var data = from v in db.Venues 
+                           where (v.VenueName == venueName) && (v.IsActive == true) && (excludeId == null || v.VenueId != excludeId) 
+                           select v ;
+                return data.Any();
+            }
+        }
+
+
+
         //場地刪除(軟刪除)
         //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
         public void Delete(int id, int userId, DateTime now)
@@ -241,8 +258,5 @@ namespace VenueGo.Models.VenueModels
                 db.SaveChanges();
             }
         }
-
-
-        
     }
 }

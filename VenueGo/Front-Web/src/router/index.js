@@ -49,7 +49,7 @@ const router = createRouter({
     {
       path: "/member",
       name: "member",
-      component: () => import("../views/member/MemberLayout.vue"),
+      component: () => import("../layouts/member/MemberLayout.vue"),
       children: [
         // 我的票券
         {

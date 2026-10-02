@@ -51,11 +51,25 @@ namespace VenueGo.Controllers
         [HttpPost]
         public async Task<IActionResult> SportTypeCreate(CSportTypeWrap Wrap, IFormFile? PhotoFile)
         {
-            //先檢查填寫是否通過
-            if (!ModelState.IsValid)
+            //檢查運動類型名稱是否重複 >> 若重複,則ModelState.IsValid 會變成 false,並往下落入 if (!ModelState.IsValid)處理
+            if (!String.IsNullOrWhiteSpace(Wrap.SportName))
             {
-                return View(Wrap);
+                //對字串進行處理
+                Wrap.SportName = Wrap.SportName.Trim();
+                //檢查是否現有資料名稱重複
+                bool isSportNameDuplicate = new CSportTypeFactory().IsSportNameDuplicate(Wrap.SportName, null);
+
+                if(isSportNameDuplicate)
+                {
+                    ModelState.AddModelError("SportName", "運動類型名稱已存在,請重新填寫");
+                }
+
             }
+
+
+            //檢查填寫內容是否合規
+            if (!ModelState.IsValid)
+                return View(Wrap);
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
             int? userId = User.GetUserId();
@@ -108,6 +122,22 @@ namespace VenueGo.Controllers
         [HttpPost]
         public async Task<IActionResult> SportTypeEdit(CSportTypeWrap Wrap, IFormFile? PhotoFile)
         {
+            //檢查運動類型名稱是否重複 >> 若重複,則ModelState.IsValid 會變成 false,並往下落入 if (!ModelState.IsValid)處理
+            if (!String.IsNullOrWhiteSpace(Wrap.SportName))
+            {
+                //對字串進行處理
+                Wrap.SportName = Wrap.SportName.Trim();
+                //檢查是否現有資料名稱重複
+                bool isSportNameDuplicate = new CSportTypeFactory().IsSportNameDuplicate(Wrap.SportName, Wrap.SportTypeId);
+
+                if (isSportNameDuplicate)
+                {
+                    ModelState.AddModelError("SportName", "運動類型名稱已存在,請重新填寫");
+                }
+
+            }
+
+
             //驗證送回的資料非null
             if (!ModelState.IsValid) 
             { 
@@ -347,7 +377,6 @@ namespace VenueGo.Controllers
                 }
 
             }
-
 
 
                 //驗證欄位填寫是否合規
@@ -1125,14 +1154,11 @@ namespace VenueGo.Controllers
             {
                 Directory.CreateDirectory(folderPath);
             }
-
             using (var stream = new FileStream(Path.Combine(folderPath, fileName), FileMode.Create))
             {
                 await photoFile.CopyToAsync(stream);
             }
             return "/images/sporttypes/" + fileName;
         }
-
-
     }
 }

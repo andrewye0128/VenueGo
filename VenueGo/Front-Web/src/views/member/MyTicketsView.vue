@@ -1,61 +1,93 @@
 <script setup>
 import TicketCard from "@/components/tickets/TicketCard.vue";
+import { getMyTickets } from "@/api/ticketApi";
 import TicketQrModal from "@/components/tickets/TicketQrModal.vue";
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 const activeTab = ref("all");
 
 const statusCards = [
-  { key: "total", label: "全部票券" },
+  { key: "all", label: "全部票券" },
   { key: "available", label: "可使用" },
   { key: "used", label: "已使用" },
   { key: "expired", label: "已過期" },
 ];
 
 // 撈出所有票券
-const tickets = ref([
-  {
-    id: 1,
-    venueName: "羽球場 A",
-    sportType: "羽球",
-    date: "2026/09/30",
-    timeRange: "18:00-20:00",
-    status: "available",
-  },
-  {
-    id: 2,
-    venueName: "第一籃球場",
-    sportType: "籃球",
-    date: "2026/09/10",
-    timeRange: "20:00-21:00",
-    status: "used",
-  },
-  {
-    id: 3,
-    venueName: "桌球室 3 號台",
-    sportType: "桌球",
-    date: "2026/09/18",
-    timeRange: "09:00-10:00",
-    status: "transferred",
-  },
-]);
+const tickets = ref([]);
+const loading = ref(false);
+const errorMsg = ref("");
+
+async function loadTickets() {
+  loading.value = true;
+  errorMsg.value = "";
+  try {
+    tickets.value = await getMyTickets(1);
+  } catch (e) {
+    errorMsg.value = e.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(loadTickets);
+
+// 統計卡與 tab 共用 statusCards，數字在這裡算
+function countOf(key) {
+  return key === "all"
+    ? tickets.value.length
+    : tickets.value.filter((t) => t.status === key).length;
+}
+
+const filteredTickets = computed(() =>
+  activeTab.value === "all"
+    ? tickets.value
+    : tickets.value.filter((t) => t.status === activeTab.value),
+);
+
+// const tickets = ref([
+//   {
+//     id: 1,
+//     venueName: "羽球場 A",
+//     sportType: "羽球",
+//     date: "2026/09/30",
+//     timeRange: "18:00-20:00",
+//     status: "available",
+//   },
+//   {
+//     id: 2,
+//     venueName: "第一籃球場",
+//     sportType: "籃球",
+//     date: "2026/09/10",
+//     timeRange: "20:00-21:00",
+//     status: "used",
+//   },
+//   {
+//     id: 3,
+//     venueName: "桌球室 3 號台",
+//     sportType: "桌球",
+//     date: "2026/09/18",
+//     timeRange: "09:00-10:00",
+//     status: "transferred",
+//   },
+// ]);
 
 // 依票券分類
-const stats = computed(() => [
-  { label: "全部票券", value: tickets.value.length },
-  {
-    label: "可使用",
-    value: tickets.value.filter((t) => t.status === "available").length,
-  },
-  {
-    label: "已使用",
-    value: tickets.value.filter((t) => t.status === "used").length,
-  },
-  {
-    label: "已轉贈",
-    value: tickets.value.filter((t) => t.status === "transferred").length,
-  },
-]);
+// const stats = computed(() => [
+//   { label: "全部票券", value: tickets.value.length },
+//   {
+//     label: "可使用",
+//     value: tickets.value.filter((t) => t.status === "available").length,
+//   },
+//   {
+//     label: "已使用",
+//     value: tickets.value.filter((t) => t.status === "used").length,
+//   },
+//   {
+//     label: "已轉贈",
+//     value: tickets.value.filter((t) => t.status === "transferred").length,
+//   },
+// ]);
 
 const receivedtickets = ref([
   {
@@ -109,11 +141,11 @@ function startTransfer(ticket) {
     <!-- 統計卡 -->
     <div class="grid grid-cols-4 gap-4 mb-6">
       <div
-        v-for="s in stats"
-        :key="s.label"
+        v-for="s in statusCards"
+        :key="s.key"
         class="border border-gray-200 rounded bg-white py-6 flex flex-col items-center"
       >
-        <span class="text-2xl font-bold text-gray-900">{{ s.value }}</span>
+        <span class="text-2xl font-bold text-gray-900">{{ countOf(s.key) }}</span>
         <span class="text-xs text-gray-500 mt-1">{{ s.label }}</span>
       </div>
     </div>
@@ -135,9 +167,11 @@ function startTransfer(ticket) {
     </div>
 
     <!-- 票券列表 -->
-    <div v-if="tickets.length" class="grid grid-cols-2 gap-4 mb-10">
+    <p v-if="loading" class="text-sm text-gray-500 mb-10">載入中…</p>
+    <p v-else-if="errorMsg" class="text-sm text-red-600 mb-10">{{ errorMsg }}</p>
+    <div v-else-if="filteredTickets.length" class="grid grid-cols-2 gap-4 mb-10">
       <TicketCard
-        v-for="t in tickets"
+        v-for="t in filteredTickets"
         :key="t.id"
         :ticket="t"
         @view-qr="openQr(t)"

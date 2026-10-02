@@ -11,6 +11,7 @@ const open = defineModel("open", { type: Boolean, default: false });
 const statusMap = {
   available: { label: "可使用", class: "border border-gray-900 text-gray-900" },
   used: { label: "已使用", class: "border border-gray-200 bg-gray-100 text-gray-500" },
+  expired: { label: "已過期", class: "border border-gray-200 bg-gray-100 text-gray-500" },
   transferred: { label: "已轉贈", class: "border border-gray-200 bg-gray-100 text-gray-500" },
 };
 

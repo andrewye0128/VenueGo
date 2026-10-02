@@ -14,14 +14,13 @@ namespace VenueGo.Controllers.Api.VenuesApi
     {
         //前台「場館資訊」頁 >> GET /api/venues/introduction
         //回傳開放時間 + 各運動類型的代表照片、注意事項、收費標準
-        //不需要登入(前台訪客也能看),所以不掛 EmployeeAuthorize
-        //沒有任何運動類型時仍回傳 200,SportTypes 是空清單,由前台顯示「目前沒有場館資訊」
         [HttpGet("introduction")]
         public IActionResult GetIntroduction()
         {
+            //取得DTO
             SportTypeIntroPageDto page = new CSportTypeFactory().QueryIntroPage();
 
-            //用團隊統一的 ApiResult 包起來,前台 http.js 會自動取出 data
+            //回傳DTO
             return Ok(ApiResult<SportTypeIntroPageDto>.Ok(page));
         }
     }

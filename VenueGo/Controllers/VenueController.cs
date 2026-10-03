@@ -12,7 +12,7 @@ using VenueGo.ViewModels.VenueViewModels;
 
 namespace VenueGo.Controllers
 {
-    [EmployeeAuthorize(RoleNames.Admin,RoleNames.Manager,RoleNames.Staff)]
+    [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     public class VenueController : Controller
     {
         //取得照片路徑 >> 取得wwwroot的實際路徑(Controller建構子注入)
@@ -28,7 +28,7 @@ namespace VenueGo.Controllers
         }
 
 
-    
+
         /****SportType****/
 
         //列出所有運動類型
@@ -59,7 +59,7 @@ namespace VenueGo.Controllers
                 //檢查是否現有資料名稱重複
                 bool isSportNameDuplicate = new CSportTypeFactory().IsSportNameDuplicate(Wrap.SportName, null);
 
-                if(isSportNameDuplicate)
+                if (isSportNameDuplicate)
                 {
                     ModelState.AddModelError("SportName", "運動類型名稱已存在,請重新填寫");
                 }
@@ -139,8 +139,8 @@ namespace VenueGo.Controllers
 
 
             //驗證送回的資料非null
-            if (!ModelState.IsValid) 
-            { 
+            if (!ModelState.IsValid)
+            {
                 //表單沒有送回照片路徑 >> 只從DB補回照片,其他欄位保留使用者剛剛填的內容
                 Wrap.PhotoPath = new CSportTypeFactory().QueryById(Wrap.SportTypeId).PhotoPath;
                 return View(Wrap);
@@ -255,11 +255,11 @@ namespace VenueGo.Controllers
                 //呼叫檢查重複方法 >> 檢查傳回的場地名稱是否重複,若重複,則ModelState.IsValid 會變成 false,並往下落入 if (!ModelState.IsValid)處理
                 bool isVenueNameDuplicate = new CVenueFactory().IsVenueNameDuplicate(vm.VenueName, null);
 
-                if(isVenueNameDuplicate)
+                if (isVenueNameDuplicate)
                 {
-                    ModelState.AddModelError("VenueName","場地名稱已存在,請重新填寫");
+                    ModelState.AddModelError("VenueName", "場地名稱已存在,請重新填寫");
                 }
-                
+
             }
 
             //判斷填寫欄位是否合規 >> 不合規就重新填寫
@@ -379,8 +379,8 @@ namespace VenueGo.Controllers
             }
 
 
-                //驗證欄位填寫是否合規
-                if (!ModelState.IsValid)
+            //驗證欄位填寫是否合規
+            if (!ModelState.IsValid)
             {
                 //回傳下拉清單選項回去
                 vm.SportTypes = new CVenueFactory().GetSportTypes();
@@ -843,7 +843,7 @@ namespace VenueGo.Controllers
         /*VenueUnavailableSlot*/
 
         //場地不開放時段管理 >> 頁面產生,顯示某場地某天的所有時段按鈕
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager,RoleNames.Staff)]
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
         public IActionResult VenueUnavailableSlotManage(int venueId, DateOnly? date)
         {
             //今天跟現在時間都從同一個校時後的時間拆出來,避免跨午夜時兩者對不上

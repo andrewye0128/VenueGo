@@ -46,45 +46,134 @@ namespace VenueGo.Controllers
         // ══ 列表 ═══════════════════════════════════════
 
         /// <summary>
-        /// 預約列表。
+        /// 組出預約列表的篩選查詢。
+        /// <para>
+        /// 抽成共用的私有方法，是因為 Index（整頁）跟 List（AJAX 局部更新用）
+        /// 兩個 Action 都要用同一套篩選條件查資料，只是回傳的包裝不一樣——
+        /// 寫成兩份查詢邏輯的話，以後新增篩選條件很容易改一邊忘記改另一邊。
+        /// </para>
         /// </summary>
-        public async Task<IActionResult> Index(CancellationToken cancellationToken)
+        private IQueryable<ReservationListViewModel> BuildFilteredQuery(ReservationListFilter filter)
         {
-            var datas = await (from r in _db.Reservations.AsNoTracking()
-                               join u in _db.Users on r.UserId equals u.UserId
-                               join v in _db.Venues on r.VenueId equals v.VenueId
+            var query = from r in _db.Reservations.AsNoTracking()
+                        join u in _db.Users on r.UserId equals u.UserId
+                        join v in _db.Venues on r.VenueId equals v.VenueId
+                        select new { r, u, v };
 
-                               // 最近的預約排前面，櫃檯多半在查近期的單
-                               orderby r.BookingDate descending, r.StartTime descending
+            if (!string.IsNullOrWhiteSpace(filter.Keyword))
+            {
+                var keyword = filter.Keyword.Trim();
 
-                               select new ReservationListViewModel
-                               {
-                                   ReservationId = r.ReservationId,
-                                   UserName = u.Name,
-                                   VenueName = v.VenueName,
-                                   BookingDate = r.BookingDate,
-                                   StartTime = r.StartTime,
-                                   EndTime = r.EndTime,
-                                   ReservationStatus = (ReservationStatus)r.ReservationStatus,
+                // 關鍵字如果剛好是數字，一併比對預約編號；
+                // 不是數字就只比對姓名跟 Email，避免 int.Parse 丟例外。
+                if (int.TryParse(keyword, out var keywordId))
+                {
+                    query = query.Where(x => x.r.ReservationId == keywordId
+                        || x.u.Name.Contains(keyword) || x.u.Email.Contains(keyword));
+                }
+                else
+                {
+                    query = query.Where(x => x.u.Name.Contains(keyword) || x.u.Email.Contains(keyword));
+                }
+            }
 
-                                   // 付款狀態改用子查詢，不再用 left join。
-                                   //
-                                   // 原因一：原本的寫法在 left join 之後又用 o.OrderId 去 join
-                                   // Payments，當 o 為 null 時 o.OrderId 會拋 NullReferenceException。
-                                   // EF 翻成 SQL 時通常沒事，但改成在記憶體中處理就會出錯。
-                                   //
-                                   // 原因二：子查詢不會讓主檔的列數被乘開。
-                                   // 之後若要加上金額欄位也不必擔心重複列的問題。
-                                   PaymentStatus = (from o in _db.Orders
-                                                    join p in _db.Payments
-                                                        on o.OrderId equals p.OrderId
-                                                    where o.ReservationId == r.ReservationId
-                                                    select (PaymentStatus?)p.PaymentStatus)
-                                                   .FirstOrDefault()
-                               })
-                              .ToListAsync(cancellationToken);
+            if (filter.DateFrom.HasValue)
+            {
+                query = query.Where(x => x.r.BookingDate >= filter.DateFrom.Value);
+            }
 
-            return View(datas);
+            if (filter.DateTo.HasValue)
+            {
+                query = query.Where(x => x.r.BookingDate <= filter.DateTo.Value);
+            }
+
+            if (filter.ReservationStatus.HasValue)
+            {
+                query = query.Where(x => x.r.ReservationStatus == (byte)filter.ReservationStatus.Value);
+            }
+
+            // 付款狀態要先投影出來才能篩選：它本來就是子查詢算出來的，
+            // 不是 Reservations 表上現成的欄位。
+            var withPayment = query.Select(x => new
+            {
+                x.r,
+                x.u,
+                x.v,
+
+                // 付款狀態改用子查詢，不再用 left join。
+                //
+                // 原因一：原本的寫法在 left join 之後又用 o.OrderId 去 join
+                // Payments，當 o 為 null 時 o.OrderId 會拋 NullReferenceException。
+                // EF 翻成 SQL 時通常沒事，但改成在記憶體中處理就會出錯。
+                //
+                // 原因二：子查詢不會讓主檔的列數被乘開。
+                PaymentStatus = (from o in _db.Orders
+                                 join p in _db.Payments
+                                     on o.OrderId equals p.OrderId
+                                 where o.ReservationId == x.r.ReservationId
+                                 select (PaymentStatus?)p.PaymentStatus)
+                                .FirstOrDefault(),
+
+                PaidAmount = (from o in _db.Orders
+                              join p in _db.Payments
+                                  on o.OrderId equals p.OrderId
+                              where o.ReservationId == x.r.ReservationId
+                              select (int?)p.Amount)
+                             .FirstOrDefault()
+            });
+
+            if (filter.PaymentStatus.HasValue)
+            {
+                withPayment = withPayment.Where(x => x.PaymentStatus == filter.PaymentStatus.Value);
+            }
+
+            // 最近的預約排前面，櫃檯多半在查近期的單
+            return withPayment
+                .OrderByDescending(x => x.r.BookingDate)
+                .ThenByDescending(x => x.r.StartTime)
+                .Select(x => new ReservationListViewModel
+                {
+                    ReservationId = x.r.ReservationId,
+                    UserName = x.u.Name,
+                    UserEmail = x.u.Email,
+                    VenueName = x.v.VenueName,
+                    BookingDate = x.r.BookingDate,
+                    StartTime = x.r.StartTime,
+                    EndTime = x.r.EndTime,
+                    ReservationStatus = (ReservationStatus)x.r.ReservationStatus,
+                    PaymentStatus = x.PaymentStatus,
+                    PaidAmount = x.PaidAmount
+                });
+        }
+
+        /// <summary>
+        /// 預約列表。第一次進來、按 F5、從書籤打開都走這裡，回傳完整頁面。
+        /// </summary>
+        public async Task<IActionResult> Index(ReservationListFilter filter, CancellationToken cancellationToken)
+        {
+            var vm = new ReservationListPageViewModel
+            {
+                Filter = filter,
+                Items = await BuildFilteredQuery(filter).ToListAsync(cancellationToken)
+            };
+
+            return View(vm);
+        }
+
+        /// <summary>
+        /// 只回傳表格那一塊（Partial）。查詢/篩選由 JavaScript 呼叫，換掉畫面上的表格，
+        /// 不用整頁重新整理。
+        /// </summary>
+        [HttpGet]
+        public async Task<IActionResult> List(ReservationListFilter filter, CancellationToken cancellationToken)
+        {
+            var vm = new ReservationListPageViewModel
+            {
+                Filter = filter,
+                Items = await BuildFilteredQuery(filter).ToListAsync(cancellationToken)
+            };
+
+            return PartialView("_ReservationTable", vm);
         }
 
         // ══ 詳細 ═══════════════════════════════════════
@@ -138,6 +227,13 @@ namespace VenueGo.Controllers
 
         /// <summary>
         /// 取消預約（會員因素退訂）。
+        /// <para>
+        /// 這個 Action 同時給兩個地方用：預約詳細頁（一般表單送出，整頁跳轉）
+        /// 跟預約列表頁（JavaScript 用 AJAX 呼叫，留在原頁、局部更新）。
+        /// 兩種情境真正執行取消的商業邏輯（_commandService.CancelAsync）完全共用，
+        /// 只有「做完之後要回應什麼」不一樣，靠 X-Requested-With 這個標頭分辨來源——
+        /// 瀏覽器一般表單送出不會帶這個標頭，axios 之類的背景請求預設會自動帶上。
+        /// </para>
         /// </summary>
         /// <param name="reason">取消原因，由彈出視窗填寫。</param>
         [HttpPost]
@@ -153,6 +249,16 @@ namespace VenueGo.Controllers
 
             var result = await _commandService.CancelAsync(
                 id, reason, operatorUserId.Value, cancellationToken);
+
+            bool isAjax = Request.Headers["X-Requested-With"] == "XMLHttpRequest";
+            if (isAjax)
+            {
+                return Json(new
+                {
+                    success = result.IsSuccess,
+                    message = result.IsSuccess ? result.SuccessMessage : result.ErrorMessage
+                });
+            }
 
             StoreResultMessage(result);
 

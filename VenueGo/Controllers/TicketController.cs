@@ -95,7 +95,8 @@ namespace VenueGo.Controllers
 
         public async Task<IActionResult> Detail(int id)
         {
-            //await _checkInService.SettleTicketAsync(id);   // 進頁面先結算，狀態才是最新的, 改為自動排程
+            //await _checkInService.SettleTicketAsync(id);
+            // 進頁面先結算，狀態才是最新的, 改為自動排程
             var vm = _ticketFactory.GetTicketDetail(id);
             if (vm == null) return NotFound();
             return View(vm);

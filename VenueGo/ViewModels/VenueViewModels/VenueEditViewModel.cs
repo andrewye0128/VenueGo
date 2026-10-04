@@ -36,7 +36,11 @@ namespace VenueGo.ViewModels.VenueViewModels
         //下拉選單的資料
         [ValidateNever] //該欄位不參與驗證
         public IEnumerable<SelectListItem> SportTypes { get; set; }
-        
+
+        //按「取消」、「返回列表」時要回到的場地列表頁數
+        //GET 時用場地原本的運動類型算出,View 用隱藏欄位帶著,驗證失敗退回表單時才不會變回第1頁
+        public int ReturnPage { get; set; } = 1;
+
     }
 
 }

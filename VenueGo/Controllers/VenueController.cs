@@ -15,6 +15,10 @@ namespace VenueGo.Controllers
     [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     public class VenueController : Controller
     {
+        //類別常數
+        //每頁顯示3種運動類型分組,固定寫死在這裡,之後要調整頁數大小改這個數字就好
+        private const int VenuePageSize = 3;
+
         //取得照片路徑 >> 取得wwwroot的實際路徑(Controller建構子注入)
         private readonly IWebHostEnvironment _env;
 
@@ -219,11 +223,9 @@ namespace VenueGo.Controllers
         //列出所有場地,依運動類型分組顯示,並依分組換頁
         public IActionResult VenueIndex(int page = 1)
         {
-            //每頁顯示3種運動類型分組,固定寫死在這裡,之後要調整頁數大小改這個數字就好
-            int pageSize = 3;
-
+            //查出所有場地資料,依運動類型分組,並依分組換頁
             CVenueFactory venueFactory = new CVenueFactory();
-            VenueIndexViewModel vm = venueFactory.QueryGroupedBySportType(page, pageSize);
+            VenueIndexViewModel vm = venueFactory.QueryGroupedBySportType(page, VenuePageSize);
 
             return View(vm);
         }
@@ -321,7 +323,10 @@ namespace VenueGo.Controllers
             CVenueFactory VenueFactory = new CVenueFactory();
             VenueFactory.Create(VenueWrap);
 
-            return RedirectToAction("VenueIndex");
+            //新增完成,回到新場地所在的頁面
+            //必須在存檔之後才算:這個運動類型原本可能沒有場地,存檔後才會出現在分組清單裡
+            int page = VenueFactory.GetPageBySportTypeId(VenueWrap.SportTypeId, VenuePageSize);
+            return RedirectToAction("VenueIndex", new { page = page });
         }
 
 
@@ -352,6 +357,8 @@ namespace VenueGo.Controllers
             //要把運動類型清單一起送到前端
             vm.SportTypes = new CVenueFactory().GetSportTypes();
 
+            //取消、返回列表時回到的頁數 >> 用場地原本的運動類型計算,回到使用者點編輯之前看的那一頁
+            vm.ReturnPage = VenueFactory.GetPageBySportTypeId(data.SportTypeId, VenuePageSize);
 
             return View(vm);
         }
@@ -362,7 +369,7 @@ namespace VenueGo.Controllers
         [HttpPost]
         public async Task<IActionResult> VenueEdit(VenueEditViewModel vm)
         {
-
+                
             //有填寫場地名稱才檢查是否重複
             if (!String.IsNullOrWhiteSpace(vm.VenueName))
             {
@@ -375,7 +382,6 @@ namespace VenueGo.Controllers
                 {
                     ModelState.AddModelError("VenueName", "場地名稱已存在,請重新填寫");
                 }
-
             }
 
 
@@ -426,10 +432,10 @@ namespace VenueGo.Controllers
             CVenueFactory VenueFactory = new CVenueFactory();
             VenueFactory.Edit(vm, userId.Value, _timeService.Now);
 
-
-
-            //編輯完成,回到場地清單
-            return RedirectToAction("VenueIndex");
+            //編輯完成,回到該場地所在的頁面
+            //用存檔後的運動類型計算:編輯時改了運動類型,場地會移到新的分組,要跳到新分組所在的頁面
+            int page = VenueFactory.GetPageBySportTypeId(vm.SportTypeId, VenuePageSize);
+            return RedirectToAction("VenueIndex", new { page = page });
         }
 
 

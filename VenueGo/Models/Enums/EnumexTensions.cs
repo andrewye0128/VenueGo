@@ -39,5 +39,16 @@ namespace VenueGo.Models.Enums
                         ?.Name
                    ?? value.ToString();
         }
+
+        /// <summary>
+        /// 這個預約狀態是否仍屬於「有效」——時段仍被佔用，可以繼續做後續操作
+        /// （標記付款、取消、作廢）。只有待確認、已確認這兩種狀態算有效。
+        /// <para>
+        /// 抽成共用方法，是因為預約詳細頁與預約列表頁都要用到同一條規則，
+        /// 複製兩份的話，以後規則變了很容易改一邊忘記改另一邊。
+        /// </para>
+        /// </summary>
+        public static bool IsActive(this ReservationStatus status) =>
+            status is ReservationStatus.Pending or ReservationStatus.Confirmed;
     }
 }

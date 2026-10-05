@@ -95,9 +95,10 @@ namespace VenueGo.ViewModels.ReservationViewModels
         /// <summary>
         /// 預約是否仍在有效狀態。
         /// 只有待確認與已確認兩種狀態下，時段才還被佔用、才有後續操作空間。
+        /// 規則本身寫在 <see cref="EnumExtensions.IsActive(ReservationStatus)"/>，
+        /// 預約列表頁也呼叫同一個方法，避免規則被複製兩份而不同步。
         /// </summary>
-        public bool IsActive =>
-            ReservationStatus is ReservationStatus.Pending or ReservationStatus.Confirmed;
+        public bool IsActive => ReservationStatus.IsActive();
 
         /// <summary>
         /// 是否已被終止（取消、場館取消、作廢）。

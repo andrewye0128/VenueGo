@@ -1,0 +1,66 @@
+<!-- js -->
+<script setup>
+import IconUsers from "@/components/icons/IconUsers.vue";
+import { RouterLink, RouterView, useRoute } from "vue-router";
+const route = useRoute();
+
+const sideMenuItem = [
+  { label: "個人資料", icon: IconUsers, to: { name: "member" } },
+  { label: "我的預約", icon: IconUsers, to: { name: "not-found" } },
+  { label: "訂單與付款", icon: IconUsers, to: { name: "not-found" } },
+  { label: "我的票券", icon: IconUsers, to: { name: "tickets" } },
+  { label: "我的評論", icon: IconUsers, to: { name: "not-found" } },
+];
+
+const user = {
+  name: "王小明",
+  email: "member@example.com",
+  avatar: null,
+};
+</script>
+
+<template>
+  <div class="bg-gray-50">
+    <div class="mx-auto max-w-6xl md:flex items-start px-4 py-6 gap-6">
+      <!-- sideBar -->
+      <aside class="w-56 shrink-0 border border-gray-200 bg-white">
+        <div class="flex items-center border-b border-gray-200 p-4 gap-3">
+          <div
+            class="w-10 h-10 shrink-0 rounded-full bg-gray-700 text-white flex justify-center items-center text-xl font-bold"
+          >
+            {{ user.name.charAt(0) }}
+          </div>
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-gray-900">{{ user.name }}</p>
+            <p class="truncate text-xs text-gray-500">{{ user.email }}</p>
+          </div>
+        </div>
+
+        <!-- nav -->
+        <nav class="flex flex-col gap-1">
+          <RouterLink
+            v-for="item in sideMenuItem"
+            :key="item.label"
+            :to="item.to"
+            class="flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors"
+            :class="
+              route.name === item.to.name
+                ? 'bg-gray-900 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            "
+          >
+            <component :is="item.icon" />
+            {{ item.label }}
+          </RouterLink>
+        </nav>
+      </aside>
+
+      <!-- Main -->
+      <main class="flex-1 min-w-0">
+        <RouterView />
+      </main>
+    </div>
+  </div>
+</template>
+
+<style scoped></style>

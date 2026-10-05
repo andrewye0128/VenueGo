@@ -133,12 +133,18 @@ namespace VenueGo.Services.CheckIn
 
             // 終態判斷(是否已有終態)
             if (ticket.Status == (byte)EntryTicketStatus.Cancelled)
+            {
                 return await LogAndFailAsync(ticketId, CheckInAction.CheckOut, operatorId, isManualOverride, CheckInFailReason.AlreadyCancelled);
+            }
             if (ticket.Status == (byte)EntryTicketStatus.Completed)
+            {
                 return await LogAndFailAsync(ticketId, CheckInAction.CheckOut, operatorId, isManualOverride, CheckInFailReason.AlreadyCompleted);
+            }
             // 已失效且人不在場內 → 已失效(已完成)
             if (ticket.Status == (byte)EntryTicketStatus.Expired && !isInside)
+            {
                 return await LogAndFailAsync(ticketId, CheckInAction.CheckOut, operatorId, isManualOverride, CheckInFailReason.AlreadyExpired);
+            }
 
             // 已失效但人還在場內（超時失效）→ 繳費放行，唯一允許的動作
             /////////////////////

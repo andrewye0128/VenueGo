@@ -1,6 +1,4 @@
-﻿using VenueGo.Helpers;
-
-namespace VenueGo.Dtos.ReviewDtos
+﻿namespace VenueGo.Dtos.ReviewDtos
 {
     // ════════════════════════════════════════════════════════════════
     //  顧客端評論 API 的回應形狀（對應《API規格_CReview.md》第二節）
@@ -27,20 +25,10 @@ namespace VenueGo.Dtos.ReviewDtos
     public static class ReviewKind
     {
         public const string Visit = "visit";       // 現場評論，憑 QRToken
-        public const string Booking = "booking";   // 預約評論，憑 ReviewPerBookingId，要會員本人登入
+        public const string Booking = "booking";   // 預約評論，憑 OrderId，要會員本人登入
     }
 
-    /// <summary>
-    /// 畫面上要顯示的時間（規格 0-4）。
-    /// Ago／Full 在後端用 TimeAgo 算好：規則只存在一個地方，而且「現在」是校時過的時間。
-    /// </summary>
-    public sealed record TimeView(DateTime Value, string Ago, string Full)
-    {
-        public static TimeView From(DateTime time) => new(time, TimeAgo.Of(time), TimeAgo.Full(time));
-    }
-
-    /// <summary>下拉選單的一個選項。</summary>
-    public sealed record OptionItem(string Value, string Text);
+    // 10/5：TimeView、OptionItem 搬到 Dtos/（全組共用），檔名 TimeView_Claude.cs、OptionItem_Claude.cs
 
     // ── 2-1 評論專區 ─────────────────────────────────────────────
 

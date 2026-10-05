@@ -8,7 +8,7 @@
 <script setup>
 import { ref, onMounted, nextTick } from "vue";
 import StarView from "./StarView.vue";
-import TimeText from "./TimeText.vue";
+import TimeText from "@/components/TimeText.vue";
 
 defineProps({
   item: { type: Object, required: true },

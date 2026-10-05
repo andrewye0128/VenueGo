@@ -2,7 +2,7 @@
     MyReviewView.vue — 我的評論（取代 Views/CReview/ShowMyReviewPage.cshtml）
 
     路由：/reviews/visit/:token        → kind='visit'
-          /reviews/booking/:id         → kind='booking'
+          /reviews/booking/:orderId    → kind='booking'
           /reviews/preview/:reviewId   → previewId（員工預覽，從館方清單開過來）
 
     ── 員工預覽（2026-09-26 取代原本的 ?preview=1）──────────────
@@ -35,8 +35,9 @@ import {
   setSatisfaction,
 } from "@/api/reviewApi";
 import { ErrorCodes } from "@/constants/errorCodes";
+import { REPLY_SATISFACTION } from "@/constants/review";
+import { kindInfo } from "@/utils/review/reviewKinds";
 import StarView from "@/components/review/StarView.vue";
-import ReviewKindIcon from "@/components/review/ReviewKindIcon.vue";
 
 // 顧客模式傳 kind + ticket；預覽模式只傳 previewId（種類由 API 回傳的 kind 決定）
 const props = defineProps({
@@ -54,20 +55,15 @@ const showNewReplyBanner = ref(false);
 
 const isPreview = computed(() => props.previewId != null);
 
-function load() {
+// 錯誤由呼叫端處理：onMounted 顯示在整頁，rate() 顯示在操作區
+async function load() {
   return isPreview.value
-    ? getReviewPreview(props.previewId)
-    : getMyReview(props.kind, props.ticket);
+    ? await getReviewPreview(props.previewId)
+    : await getMyReview(props.kind, props.ticket);
 }
 
-// 滿意度的三個選項。顯示用的翻譯放在前端：它純粹是畫面文字，不影響任何資料。
-// 圖示名稱寫完整字串，Nuxt UI 才掃描得到（見 reviewKinds.js 的說明）。
-const SATISFACTION = [
-  { value: 2, text: "滿意", icon: "i-lucide-smile" },
-  { value: 1, text: "普通", icon: "i-lucide-meh" },
-  { value: 0, text: "不滿意", icon: "i-lucide-frown" },
-];
-const satisfactionOf = (v) => SATISFACTION.find((s) => s.value === v);
+// 滿意度的三個選項在 constants/review.js
+const satisfactionOf = (v) => REPLY_SATISFACTION.find((s) => s.value === v);
 
 onMounted(async () => {
   try {
@@ -132,7 +128,13 @@ async function rate(value) {
     actionError.value = e.message;
     if (e.errorCode === ErrorCodes.AlreadyRated) {
       // 另一個分頁已經表態過了：重新讀一次，畫面才會跟資料庫一致
-      vm.value = await load();
+      try {
+        vm.value = await load();
+      } catch {
+        // 重讀失敗：至少確定「已經表態過」，先把三顆按鈕停用，避免使用者一直按、一直收到同一個錯誤。
+        // 錯誤訊息維持上面那句（比「讀取失敗」更有用），重新整理頁面就會看到正確的結果。
+        vm.value.reply.canRateSatisfaction = false;
+      }
     }
   } finally {
     savingSatisfaction.value = false;
@@ -176,9 +178,9 @@ async function rate(value) {
 
     <template v-else>
       <!-- ── 狀態提示：被下架、有新回覆 ──
-           下架理由是「顧客版」的說明（ReviewPolicy.SpamReasonInfos 的 CustomerText）：
-           只說評論含有什麼，不引用被判定有問題的字句，也不指控顧客。
-           顧客看得懂理由，才比較不會懷疑館方在壓負評。 -->
+                 下架理由是「顧客版」的說明（ReviewPolicy.SpamReasonInfos 的 CustomerText）：
+                 只說評論含有什麼，不引用被判定有問題的字句，也不指控顧客。
+                 顧客看得懂理由，才比較不會懷疑館方在壓負評。 -->
       <UAlert
         v-if="vm.isSpamMarked"
         color="error"
@@ -266,7 +268,7 @@ async function rate(value) {
           >
             <span class="inline-flex items-center gap-1">
               <!-- 種類用 API 回傳的（預覽模式下網址上沒有種類） -->
-              <ReviewKindIcon :kind="vm.kind" />
+              <UIcon :name="kindInfo(vm.kind).icon" aria-hidden="true" />
               {{ vm.context.primary }}
             </span>
             <span v-if="vm.context.secondary">{{ vm.context.secondary }}</span>
@@ -297,7 +299,7 @@ async function rate(value) {
             <div class="mb-2 text-sm text-neutral-text-secondary">這則回覆對你有幫助嗎？</div>
             <div class="flex flex-wrap gap-2">
               <UButton
-                v-for="s in SATISFACTION"
+                v-for="s in REPLY_SATISFACTION"
                 :key="s.value"
                 color="primary"
                 variant="outline"

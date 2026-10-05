@@ -3,7 +3,7 @@
     取代 Views/CReview/CreateForVisit.cshtml 與 CreateForBooking.cshtml（兩個合成一個）
 
     路由：/reviews/visit/:token/write   → kind='visit',   ticket=QRToken
-          /reviews/booking/:id/write    → kind='booking', ticket=ReviewPerBookingId
+          /reviews/booking/:orderId/write → kind='booking', ticket=OrderId
 
     ── 兩種評論的差別由後端決定 ─────────────────────────────
     要不要顯示提及標籤、能不能選匿名、要不要顯示公開開關，
@@ -27,22 +27,21 @@
 import { ref, reactive, computed, watch, onMounted } from "vue";
 import { useRouter } from "vue-router";
 import { z } from "zod";
-import { getWriteForm, createReview, fieldErrorsOf } from "@/api/reviewApi";
+import { getWriteForm, createReview } from "@/api/reviewApi";
 import { ErrorCodes } from "@/constants/errorCodes";
 import { mineRoute } from "@/router/reviewRoutes";
-import { kindInfo } from "@/components/review/reviewKinds";
+import { kindInfo } from "@/utils/review/reviewKinds";
 import { useDraft } from "@/composables/useDraft";
 import StarInput from "@/components/review/StarInput.vue";
-import ReviewKindIcon from "@/components/review/ReviewKindIcon.vue";
-import ReviewConfirmModal from "@/components/review/ReviewConfirmModal.vue";
+import ConfirmModal from "@/components/ConfirmModal.vue";
 
 const props = defineProps({
   kind: { type: String, required: true }, // 'visit' | 'booking'
-  ticket: { type: String, required: true }, // QRToken 或 ReviewPerBookingId
+  ticket: { type: String, required: true }, // QRToken 或 OrderId
 });
 
 const router = useRouter();
-const confirmModal = useOverlay().create(ReviewConfirmModal);
+const confirmModal = useOverlay().create(ConfirmModal);
 
 // ── 頁面狀態 ──
 const pageState = ref("loading"); // 'loading' | 'blocked' | 'ready'
@@ -184,12 +183,11 @@ async function onSubmit() {
   } catch (e) {
     if (handleEligibility(e)) return;
     if (e.errorCode === ErrorCodes.ValidationFailed) {
-      // 後端的欄位錯誤放回對應的欄位底下；不屬於任何欄位的（key 是 "_"）顯示在表單上方
-      const errors = fieldErrorsOf(e);
-      const general = errors._ ?? [];
-      delete errors._;
+      // 後端的欄位錯誤（http.js 整理好的 e.fieldErrors）放回對應的欄位底下；
+      // 不屬於任何欄位的（key 是 "_"）顯示在表單上方
+      const { _: general = [], ...fields } = e.fieldErrors;
       formRef.value?.setErrors(
-        Object.entries(errors).map(([name, messages]) => ({ name, message: messages[0] })),
+        Object.entries(fields).map(([name, messages]) => ({ name, message: messages[0] })),
       );
       formError.value = general[0] ?? e.message;
     } else {
@@ -205,7 +203,7 @@ async function saveDraft(event) {
   if (await draft.save()) button?.blur(); // 避免按鈕停在 focus 樣式，看起來像沒反應
 }
 
-const kindText = computed(() => kindInfo(props.kind)); // 圖示與文字，見 reviewKinds.js
+const kindText = computed(() => kindInfo(props.kind)); // 圖示與文字，見 constants/review.js
 
 const mentionOptions = [
   { key: "mentionsVenue", label: "提及場地" },
@@ -255,7 +253,7 @@ const mentionOptions = [
         class="rounded-lg border border-neutral-border bg-brand-background p-3"
       >
         <div class="flex items-center gap-1 font-semibold text-neutral-text-primary">
-          <ReviewKindIcon :kind="kind" />
+          <UIcon :name="kindText.icon" aria-hidden="true" />
           {{ setup.context.primary }}
         </div>
         <div v-if="setup.context.secondary" class="text-sm text-neutral-text-secondary">

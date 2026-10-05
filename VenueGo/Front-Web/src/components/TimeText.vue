@@ -1,5 +1,5 @@
 <!--
-  TimeText.vue — 「3 天前」這種相對時間，點一下切換成完整時間
+  TimeText.vue — 「3 天前」這種相對時間，點一下切換成完整時間（昱）
   用法：<TimeText :time="item.createdAt" />    （time 是後端的 TimeView：{ value, ago, full }）
 
   手機沒有「滑鼠停上去」這個動作，只放在 title 的完整時間永遠看不到，所以改成點一下切換。

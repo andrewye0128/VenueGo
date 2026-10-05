@@ -1,8 +1,9 @@
 <!--
-  ReviewConfirmModal.vue — 評論頁共用的確認視窗（送出確認、覆蓋草稿、離開前三選一）
+  ConfirmModal.vue — 全站通用的確認視窗（昱）：按鈕的數量、文字、顏色都由呼叫端決定
+  （評論頁用在送出確認、覆蓋草稿、離開前三選一）
 
   用法（useOverlay 是 Nuxt UI 的函式，不用 import）：
-    const confirmModal = useOverlay().create(ReviewConfirmModal);
+    const confirmModal = useOverlay().create(ConfirmModal);
     const choice = await confirmModal.open({
       title: "尚未儲存",
       description: "你填寫的內容還沒有儲存，離開這一頁之後會消失。",

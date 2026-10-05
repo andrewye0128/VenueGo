@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Mvc;
-using VenueGo.ViewModels;
+using VenueGo.Dtos;
 
 namespace VenueGo.Controllers.Api
 {
@@ -31,7 +31,18 @@ namespace VenueGo.Controllers.Api
         /// <summary>前台讀的 Cookie 名稱。改了要同步改 Front-Web/src/api/http.js 的 XSRF_COOKIE。</summary>
         public const string CookieName = "XSRF-TOKEN";
 
+        /// <summary>取得防偽 token</summary>
+        /// <remarks>
+        /// 把防偽 token 寫進 `XSRF-TOKEN` 這個 Cookie。之後送 POST、PUT、PATCH、DELETE 時，
+        /// 把它的值放進 `RequestVerificationToken` 標頭。
+        ///
+        /// ### 注意
+        /// - token 綁定「拿的時候是誰」，登入或登出之後要重拿。
+        /// - 前台的 `http.js` 會自動處理；在 Scalar 測試時要自己複製貼上。
+        /// </remarks>
+        /// <response code="200">成功，token 在 `XSRF-TOKEN` Cookie 裡</response>
         [HttpGet("token")]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status200OK)]
         public IActionResult GetToken()
         {
             var tokens = antiforgery.GetAndStoreTokens(HttpContext);

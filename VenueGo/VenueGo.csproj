@@ -57,7 +57,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Front-Web\src\utils\review\" />
     <Folder Include="Models\MemberModels\" />
     <Folder Include="Models\OperationModels\" />
     <Folder Include="Models\ReservationModels\" />

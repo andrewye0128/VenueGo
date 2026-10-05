@@ -9,9 +9,9 @@
 //  原本的 Razor 頁面 → 現在的路由：
 //    CReview/Index                         → /reviews
 //    CReview/CreateForVisit?token=…        → /reviews/visit/:token/write
-//    CReview/CreateForBooking?id=…         → /reviews/booking/:id/write
+//    CReview/CreateForBooking/{orderId}    → /reviews/booking/:orderId/write
 //    CReview/ShowMyReviewPage?token=…      → /reviews/visit/:token
-//    CReview/ShowMyReviewPage?bookingId=…  → /reviews/booking/:id
+//    CReview/ShowMyReviewPage?orderId=…    → /reviews/booking/:orderId
 //    （新增）員工預覽                       → /reviews/preview/:reviewId
 //
 //  ── 為什麼兩種撰寫頁共用一個 View ─────────────────────
@@ -54,10 +54,10 @@ export default [
     // 預約評論：後端有 [Authorize(Roles = Member)]。
     // requiresMember 只是「標記」，要不要在前端先擋，看組裡的登入流程怎麼做。
     // 就算前端不擋，後端也會擋，前端只是讓使用者早一步知道。
-    path: "/reviews/booking/:id/write",
+    path: "/reviews/booking/:orderId/write",
     name: "review-write-booking",
     component: ReviewWriteView,
-    props: (route) => ({ kind: "booking", ticket: String(route.params.id) }),
+    props: (route) => ({ kind: "booking", ticket: String(route.params.orderId) }),
     meta: { title: "撰寫評論", requiresMember: true },
   },
 
@@ -70,10 +70,10 @@ export default [
     meta: { title: "我的評論" },
   },
   {
-    path: "/reviews/booking/:id",
+    path: "/reviews/booking/:orderId",
     name: "review-mine-booking",
     component: MyReviewView,
-    props: (route) => ({ kind: "booking", ticket: String(route.params.id) }),
+    props: (route) => ({ kind: "booking", ticket: String(route.params.orderId) }),
     meta: { title: "我的評論", requiresMember: true },
   },
 
@@ -96,12 +96,12 @@ export default [
  */
 export function writeRoute(kind, ticket) {
   if (kind === "visit") return { name: "review-write-visit", params: { token: ticket } };
-  if (kind === "booking") return { name: "review-write-booking", params: { id: ticket } };
+  if (kind === "booking") return { name: "review-write-booking", params: { orderId: ticket } };
   throw new Error(`[reviewRoutes] 不認得的評論種類：${kind}`);
 }
 
 export function mineRoute(kind, ticket) {
   if (kind === "visit") return { name: "review-mine-visit", params: { token: ticket } };
-  if (kind === "booking") return { name: "review-mine-booking", params: { id: ticket } };
+  if (kind === "booking") return { name: "review-mine-booking", params: { orderId: ticket } };
   throw new Error(`[reviewRoutes] 不認得的評論種類：${kind}`);
 }

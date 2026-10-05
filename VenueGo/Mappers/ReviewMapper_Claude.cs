@@ -1,4 +1,5 @@
-﻿using VenueGo.Dtos.ReviewDtos;
+﻿using VenueGo.Dtos;
+using VenueGo.Dtos.ReviewDtos;
 using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services.ReviewScreening;

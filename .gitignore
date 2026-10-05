@@ -508,3 +508,6 @@ VenueGo/publish-test/
 
 # 前台 Vue 打包輸出（部署用，由 npm run build 產生）
 VenueGo/wwwroot/app/
+
+# Qodo（AI 程式助理）的本機設定
+.qodo/

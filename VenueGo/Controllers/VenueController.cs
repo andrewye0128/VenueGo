@@ -9,6 +9,7 @@ using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;
 using VenueGo.Services;
 using VenueGo.ViewModels.VenueViewModels;
+using VenueGo.Services.Auth;
 
 namespace VenueGo.Controllers
 {
@@ -24,11 +25,14 @@ namespace VenueGo.Controllers
 
         //取得校時後的系統時間(取代 DateTime.Now,Controller建構子注入)
         private readonly ITimeService _timeService;
+        //取得目前登入者資訊(Controller建構子注入)
+        private readonly ICurrentUserService _currentUser;
 
-        public VenueController(IWebHostEnvironment env, ITimeService timeService)
+        public VenueController(IWebHostEnvironment env, ITimeService timeService, ICurrentUserService currentUser)
         {
             _env = env;
             _timeService = timeService;
+            _currentUser = currentUser;
         }
 
 
@@ -76,7 +80,7 @@ namespace VenueGo.Controllers
                 return View(Wrap);
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -151,7 +155,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -180,7 +184,7 @@ namespace VenueGo.Controllers
                 return RedirectToAction("SportTypeIndex");
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -274,7 +278,7 @@ namespace VenueGo.Controllers
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
             //放在照片上傳之前檢查,取不到就不存照片,避免留下沒人用的檔案
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -394,7 +398,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -448,7 +452,7 @@ namespace VenueGo.Controllers
                 return RedirectToAction("VenueIndex");
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -539,7 +543,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -626,7 +630,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -743,7 +747,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -1008,7 +1012,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";

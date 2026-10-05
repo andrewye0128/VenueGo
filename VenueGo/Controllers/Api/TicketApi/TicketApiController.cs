@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using VenueGo.Dtos;
 using VenueGo.Dtos.TicketDtos;
+using VenueGo.Extensions;
 using VenueGo.Helpers;
 using VenueGo.Services.Ticket;
 using VenueGo.ViewModels;
@@ -36,7 +38,7 @@ namespace VenueGo.Controllers.Api.TicketApi
                 userId = testUserId;
 
             if (userId is null)
-                return Unauthorized(ApiResultVM.Fail("請先登入", "UNAUTHORIZED"));
+                return Unauthorized(ApiResult.Fail("請先登入", "UNAUTHORIZED"));
 
             var tickets = await _ticketQuery.GetMyTicketsAsync(userId.Value, cancellationToken);
 

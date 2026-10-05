@@ -22,7 +22,7 @@ async function loadTickets() {
   loading.value = true;
   errorMsg.value = "";
   try {
-    tickets.value = await getMyTickets(2);
+    tickets.value = await getMyTickets(6);
   } catch (err) {
     console.error("loadTickets 發生錯誤", err);
     errorMsg.value = e.message;

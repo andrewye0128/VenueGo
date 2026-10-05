@@ -1,17 +1,27 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Helpers;
+using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 
 namespace VenueGo.Services.Auth;
 
 public class AuthenticationService : IAuthenticationService
 {
+    // LoginLogs.LoginAccount 欄位長度上限（255）。帳號欄位是使用者輸入的原始字串，
+    // 超過上限會讓 SaveChanges 丟例外，變成「亂打一長串帳號就能讓登入頁 500」。
+    private const int MaxLoginAccountLength = 255;
+
     private readonly dbVenueContext _db;
 
-    public AuthenticationService(dbVenueContext db)
+    // 全系統統一的時間來源，不直接用 DateTime.Now。
+    // 帳號鎖定是拿「現在」跟「解鎖時間」比較，寫入與比較必須用同一個時間來源，所以整支一起換。
+    private readonly ITimeService _time;
+
+    public AuthenticationService(dbVenueContext db, ITimeService time)
     {
         _db = db;
+        _time = time;
     }
 
     public async Task<LoginResult> LoginAsync(string email, string password, string ipAddress)
@@ -22,15 +32,15 @@ public class AuthenticationService : IAuthenticationService
             .FirstOrDefaultAsync(u =>
                 u.Email.ToLower() == normalizedEmail);
 
-            if (user == null)
-            {
-              await WriteLoginLogAsync(
-               null,
-               email,
-               ipAddress,
-               false,
-               "帳號不存在"
-            );
+        if (user == null)
+        {
+            await WriteLoginLogAsync(
+             null,
+             email,
+             ipAddress,
+             false,
+             "帳號不存在"
+          );
 
             return new LoginResult
             {
@@ -41,10 +51,10 @@ public class AuthenticationService : IAuthenticationService
         // 檢查資料庫鎖定狀態
 
         if (user.LockedUntil.HasValue &&
-            user.LockedUntil.Value > DateTime.Now)
+            user.LockedUntil.Value > _time.Now)
         {
             var remainingMinutes = (int)Math.Ceiling(
-                (user.LockedUntil.Value - DateTime.Now).TotalMinutes
+                (user.LockedUntil.Value - _time.Now).TotalMinutes
             );
 
             await WriteLoginLogAsync(
@@ -84,7 +94,7 @@ public class AuthenticationService : IAuthenticationService
 
             if (user.FailedLoginCount >= 5)
             {
-                user.LockedUntil = DateTime.Now.AddMinutes(15);
+                user.LockedUntil = _time.Now.AddMinutes(15);
 
                 reason = "密碼連續錯誤達 5 次，觸發帳號鎖定 15 分鐘";
                 errorMessage = "密碼錯誤達 5 次，帳號已鎖定 15 分鐘！";
@@ -97,7 +107,7 @@ public class AuthenticationService : IAuthenticationService
                 errorMessage = $"帳號或密碼錯誤（剩餘可嘗試次數：{remainingAttempts} 次）。";
             }
 
-            user.UpdatedAt = DateTime.Now;
+            user.UpdatedAt = _time.Now;
 
             await _db.SaveChangesAsync();
 
@@ -121,7 +131,7 @@ public class AuthenticationService : IAuthenticationService
         // 1. 使用者帳號 Status
         // 檢查會員帳號狀態
 
-        if (user.Status != "Active")
+        if (user.Status != UserStatuses.Active)
         {
             await WriteLoginLogAsync(
                 user.UserId,
@@ -160,12 +170,12 @@ public class AuthenticationService : IAuthenticationService
         }
         // 3. Employee Status
 
-        if (employee.Status != "Active")
+        if (employee.Status != EmployeeStatuses.Active)
         {
             string statusText = employee.Status switch
             {
-                "Resigned" => "已離職",
-                "OnLeave" => "留職停薪",
+                EmployeeStatuses.Resigned => "已離職",
+                EmployeeStatuses.OnLeave => "留職停薪",
                 _ => "狀態異常"
             };
 
@@ -190,7 +200,8 @@ public class AuthenticationService : IAuthenticationService
             from ur in _db.UserRoles
             join r in _db.Roles on ur.RoleId equals r.RoleId
             where ur.UserId == user.UserId
-                  && r.RoleName != "Member"
+                  && r.RoleName != RoleNames.Member
+                  && r.Status // [Role.Status] 只計入啟用中的角色，與 EmployeeAuthorizeFilter 一致
             select r.RoleName
         ).ToListAsync();
 
@@ -218,10 +229,19 @@ public class AuthenticationService : IAuthenticationService
 
         user.FailedLoginCount = 0;
         user.LockedUntil = null;
-        user.LastLoginAt = DateTime.Now;
-        user.UpdatedAt = DateTime.Now;
+        user.LastLoginAt = _time.Now;
+        user.UpdatedAt = _time.Now;
 
         await _db.SaveChangesAsync();
+
+        // 記錄登入成功
+        await WriteLoginLogAsync(
+            user.UserId,
+            email,
+            ipAddress,
+            true,
+            null
+        );
 
         return new LoginResult
         {
@@ -246,12 +266,16 @@ public class AuthenticationService : IAuthenticationService
         bool result,
         string? failureReason)
     {
+        var safeAccount = account.Length > MaxLoginAccountLength
+            ? account[..MaxLoginAccountLength]
+            : account;
+
         var log = new LoginLog
         {
             UserId = userId,
-            LoginAccount = account,
+            LoginAccount = safeAccount,
             IpAddress = ipAddress,
-            LoginTime = DateTime.Now,
+            LoginTime = _time.Now,
             Result = result,
             FailureReason = failureReason
         };

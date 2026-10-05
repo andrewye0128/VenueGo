@@ -204,6 +204,15 @@ namespace VenueGo.Services.Members
                 errors.Add(("Email", "此 Email 已被註冊使用"));
             }
 
+            // [補上] 職稱必填。RegisterUserViewModel 的註解說「移除 [Required]，改由 Controller 動態驗證」，
+            // 但實際上沒有任何地方驗證；Employee.JobTitle 在實體上是非 null（資料庫欄位為 NOT NULL），
+            // 留空會變成 INSERT NULL 失敗，使用者只看到泛用的「建立帳號過程發生錯誤」。
+            // 編輯員工（EditUserViewModel）本來就是 [Required]，這裡跟它保持一致。
+            if (string.IsNullOrWhiteSpace(model.JobTitle))
+            {
+                errors.Add((nameof(model.JobTitle), "請輸入職稱"));
+            }
+
             // [補修正] 一個角色都不勾也能建立員工，會變成「建立成功、但永遠無法登入後台」的殭屍帳號
             // （系統只會自動補 Member，登入時 userRoles.Any() 為 false 而被擋下）。
             //
@@ -233,7 +242,8 @@ namespace VenueGo.Services.Members
                 }
             }
 
-            string finalEmployeeNo = model.EmployeeNo;
+            // Trim 之後再比對與寫入：前後多一個空白就能繞過重複檢查，最後才在資料庫撞唯一索引
+            string finalEmployeeNo = model.EmployeeNo?.Trim() ?? string.Empty;
             if (string.IsNullOrWhiteSpace(finalEmployeeNo) || await _db.Employees.AnyAsync(e => e.EmployeeNo == finalEmployeeNo))
             {
                 finalEmployeeNo = await GenerateNextEmployeeNoAsync();
@@ -280,7 +290,7 @@ namespace VenueGo.Services.Members
                     {
                         UserId = user.UserId,
                         EmployeeNo = finalEmployeeNo,
-                        JobTitle = model.JobTitle?.Trim(),
+                        JobTitle = model.JobTitle!.Trim(), // 上面已驗證非空白
                         HireDate = DateOnly.FromDateTime(_time.Now),
                         Status = EmployeeStatuses.Active,
                         CreatedAt = _time.Now,
@@ -386,7 +396,15 @@ namespace VenueGo.Services.Members
 
             // [補修正] 原本沒有驗證 model.Status 是否為合法值，直接寫入 Employees.Status，
             // 繞過前端畫面就能寫入任意字串。現在用 EmployeeStatuses.AllowedStatuses 白名單擋下。
-            if (!EmployeeStatuses.AllowedStatuses.Contains(model.Status))
+            //
+            // [再修正] 白名單是「不分大小寫」比對，但寫進資料庫的卻是使用者送來的原字串。
+            // 送 "active" 會通過驗證、存成 "active"；而登入（AuthenticationService）與
+            // EmployeeAuthorizeFilter 是用 C# 的 != "Active" 比對（區分大小寫），
+            // 這位員工之後會被判定為「狀態異常」而無法登入。
+            // 所以這裡取出白名單裡的標準拼法，之後一律寫入標準拼法。
+            var canonicalStatus = EmployeeStatuses.AllowedStatuses
+                .FirstOrDefault(s => string.Equals(s, model.Status, StringComparison.OrdinalIgnoreCase));
+            if (canonicalStatus == null)
             {
                 errors.Add(("Status", "無效的員工狀態值。"));
             }
@@ -465,7 +483,7 @@ namespace VenueGo.Services.Members
                 user.UpdatedAt = _time.Now;
 
                 emp.JobTitle = model.JobTitle?.Trim();
-                emp.Status = model.Status;
+                emp.Status = canonicalStatus!; // 通過驗證才會走到這裡，必定非 null
                 emp.UpdatedAt = _time.Now;
 
                 var currentRoles = await _db.UserRoles
@@ -531,6 +549,163 @@ namespace VenueGo.Services.Members
                 await transaction.RollbackAsync();
                 _logger.LogError(ex, "Failed to edit user {UserId}", model.UserId);
                 return ServiceResult.Error("更新員工資料時發生錯誤，請稍後再試。");
+            }
+        }
+
+        // ============================================================
+        // 會員升格為員工
+        // ============================================================
+
+        // 舊系統遺留的角色名稱，原本 MemberController 的角色清單會把它排除，這裡維持一致
+        private const string LegacyCustomerRoleName = "Customer";
+
+        public async Task<ServiceResult<ConvertEmployeeViewModel>> GetConvertToEmployeeFormAsync(int userId)
+        {
+            var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == userId);
+            if (user == null) return ServiceResult<ConvertEmployeeViewModel>.NotFound();
+
+            if (await _db.Employees.AnyAsync(e => e.UserId == userId))
+            {
+                return ServiceResult<ConvertEmployeeViewModel>.ValidationFailed(string.Empty, "該使用者已經是員工。");
+            }
+
+            return ServiceResult<ConvertEmployeeViewModel>.Success(new ConvertEmployeeViewModel
+            {
+                UserId = user.UserId,
+                Name = user.Name,
+                Email = user.Email,
+                EmployeeNo = await GenerateNextEmployeeNoAsync(),
+                AvailableRoles = await GetConvertibleRolesAsync()
+            });
+        }
+
+        public async Task<List<RoleOptionDto>> GetConvertibleRolesAsync()
+        {
+            var roles = await GetAvailableRolesAsync(excludeMemberRoles: true);
+            return roles.Where(r => r.RoleName != LegacyCustomerRoleName).ToList();
+        }
+
+        public async Task<ServiceResult<string>> ConvertMemberToEmployeeAsync(ConvertEmployeeViewModel model, int currentUserId)
+        {
+            // [補修正] 原本「已經是員工」只在 GET 檢查，POST 沒檢查，
+            // 重複送出時會撞 UQ_Employees_UserId，使用者只看到泛用的錯誤訊息。
+            var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.UserId == model.UserId);
+            if (user == null) return ServiceResult<string>.NotFound();
+
+            if (await _db.Employees.AnyAsync(e => e.UserId == user.UserId))
+            {
+                return ServiceResult<string>.ValidationFailed(string.Empty, "該使用者已經是員工。");
+            }
+
+            var errors = new List<(string Key, string Message)>();
+
+            // [補修正] 先 Trim 再檢查重複：原本檢查的是未 Trim 的值、寫入的卻是 Trim 後的值，
+            // 前後多一個空白就能繞過檢查，最後才在資料庫撞唯一索引。
+            var employeeNo = model.EmployeeNo?.Trim() ?? string.Empty;
+            if (string.IsNullOrEmpty(employeeNo))
+            {
+                errors.Add((nameof(model.EmployeeNo), "請輸入員工編號"));
+            }
+            else if (await _db.Employees.AnyAsync(e => e.EmployeeNo == employeeNo))
+            {
+                errors.Add((nameof(model.EmployeeNo), "此員工編號已存在"));
+            }
+
+            // 職稱必填，原因同 CreateEmployeeAsync（Employee.JobTitle 為非 null 欄位）
+            if (string.IsNullOrWhiteSpace(model.JobTitle))
+            {
+                errors.Add((nameof(model.JobTitle), "請輸入職稱"));
+            }
+
+            // 角色驗證：Key 用 string.Empty，因為畫面是 ModelOnly 摘要、角色區塊沒有欄位級的錯誤顯示
+            // （同 CreateEmployeeAsync）。原本完全沒驗證角色 ID，也允許一個角色都不選。
+            var selectedRoleIds = model.SelectedRoleIds?.Distinct().ToList() ?? new List<int>();
+            if (!selectedRoleIds.Any())
+            {
+                errors.Add((string.Empty, "請至少選擇一個後台角色，否則此員工將無法登入後台。"));
+            }
+            else
+            {
+                var validRoleIds = (await GetConvertibleRolesAsync()).Select(r => r.RoleId).ToHashSet();
+                if (selectedRoleIds.Any(id => !validRoleIds.Contains(id)))
+                {
+                    errors.Add((string.Empty, "選擇的角色中包含不存在、已停用或不可指派的角色。"));
+                }
+            }
+
+            if (errors.Any())
+            {
+                return ServiceResult<string>.ValidationFailed(errors);
+            }
+
+            using var transaction = await _db.Database.BeginTransactionAsync();
+
+            try
+            {
+                _db.Employees.Add(new Employee
+                {
+                    UserId = user.UserId,
+                    EmployeeNo = employeeNo,
+                    JobTitle = model.JobTitle!.Trim(), // 上面已驗證非空白
+                    HireDate = DateOnly.FromDateTime(_time.Now),
+                    Status = EmployeeStatuses.Active,
+                    CreatedAt = _time.Now,
+                    UpdatedAt = _time.Now
+                });
+
+                // 這個人原本就有的角色（例如 Member）不重複指派
+                var existingRoleIds = await _db.UserRoles
+                    .Where(ur => ur.UserId == user.UserId)
+                    .Select(ur => ur.RoleId)
+                    .ToListAsync();
+
+                foreach (var roleId in selectedRoleIds.Except(existingRoleIds))
+                {
+                    _db.UserRoles.Add(new UserRole
+                    {
+                        UserId = user.UserId,
+                        RoleId = roleId,
+                        AssignedBy = currentUserId,
+                        AssignedAt = _time.Now
+                    });
+                }
+
+                _db.AuditLogs.Add(new AuditLog
+                {
+                    UserId = currentUserId,
+                    Action = AuditActions.ConvertToEmployee,
+                    EntityType = AuditEntityTypes.User,
+                    EntityId = user.UserId.ToString(),
+                    NewValue = $"Converted member {user.Email} to employee ({employeeNo})",
+                    CreatedAt = _time.Now
+                });
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+
+                return ServiceResult<string>.Success(user.Name);
+            }
+            catch (DbUpdateException ex)
+            {
+                await transaction.RollbackAsync();
+                _db.ChangeTracker.Clear();
+
+                // 兩個人同時用同一個編號升格時，應用層檢查擋不住，由資料庫唯一索引兜底
+                if (GetUniqueConstraintConflictField(ex) == ConflictField.EmployeeNo)
+                {
+                    _logger.LogWarning(ex, "EmployeeNo conflict while converting UserId {UserId}", model.UserId);
+                    return ServiceResult<string>.ValidationFailed(nameof(model.EmployeeNo), "此員工編號已存在");
+                }
+
+                _logger.LogError(ex, "Failed to convert UserId {UserId} to employee", model.UserId);
+                return ServiceResult<string>.Error("轉變員工過程發生錯誤。");
+            }
+            catch (Exception ex)
+            {
+                await transaction.RollbackAsync();
+                _db.ChangeTracker.Clear();
+                _logger.LogError(ex, "Failed to convert UserId {UserId} to employee", model.UserId);
+                return ServiceResult<string>.Error("轉變員工過程發生錯誤。");
             }
         }
 

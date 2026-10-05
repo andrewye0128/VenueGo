@@ -48,5 +48,36 @@ namespace VenueGo.Services.Members
 
         /// <summary>目前啟用中的角色清單，供新增/編輯員工畫面的角色勾選使用。</summary>
         Task<List<RoleOptionDto>> GetAvailableRolesAsync(bool excludeMemberRoles = false);
+
+
+        // ============================================================
+        // 會員升格為員工（原本寫在 MemberController，並且重複了員工編號產生與角色查詢）
+        // ============================================================
+
+        /// <summary>
+        /// 取得「會員升格為員工」畫面的初始資料（含自動產生的員工編號、可選角色）。
+        /// NotFound = 查無此使用者；ValidationFailed = 該使用者已經是員工（Errors 內有訊息）。
+        /// </summary>
+        Task<ServiceResult<ConvertEmployeeViewModel>> GetConvertToEmployeeFormAsync(int userId);
+
+        /// <summary>
+        /// 「會員升格為員工」可選的角色：啟用中，且排除 Member 與舊的 Customer 角色。
+        /// 驗證失敗要重新顯示畫面時，用這個方法補回角色清單。
+        /// </summary>
+        Task<List<RoleOptionDto>> GetConvertibleRolesAsync();
+
+        /// <summary>
+        /// 把既有會員升格為員工。成功時 Data 為會員姓名（取自資料庫，不是表單送來的值）。
+        /// <para>
+        /// 驗證規則：使用者必須存在且還不是員工；員工編號不可空白、不可重複；
+        /// 至少選一個「啟用中、可指派」的後台角色（否則會變成無法登入後台的帳號，
+        /// 跟 <see cref="CreateEmployeeAsync"/> 的規則一致）。
+        /// </para>
+        /// <para>
+        /// 【為何姓名、Email 不用表單的值】ConvertToEmployee 畫面用隱藏欄位送 Name / Email，
+        /// 任何人都能改。稽核紀錄與成功訊息一律用從資料庫查到的值。
+        /// </para>
+        /// </summary>
+        Task<ServiceResult<string>> ConvertMemberToEmployeeAsync(ConvertEmployeeViewModel model, int currentUserId);
     }
 }

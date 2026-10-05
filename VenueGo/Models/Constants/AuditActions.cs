@@ -55,6 +55,31 @@
         /// 這裡先保留常數，供未來若要重新啟用該功能時使用。
         /// </summary>
         public const string UpdateEmployeeStatus = "UpdateEmployeeStatus";
+
+        /// <summary>使用者修改自己的個人資料。</summary>
+        public const string UpdateProfile = "UpdateProfile";
+
+        /// <summary>將既有會員升格為員工。</summary>
+        public const string ConvertToEmployee = "ConvertToEmployee";
+
+        // ── 以下為 MemberController（會員管理）相關動作 ──
+        // [重構搬移] 字串值維持原本在 MemberController 裡的拼法，相容既有 AuditLogs 資料。
+
+        /// <summary>變更會員狀態（Active/Suspended/Inactive）。</summary>
+        public const string UpdateMemberStatus = "UpdateMemberStatus";
+
+        /// <summary>管理員重置會員密碼為預設密碼。</summary>
+        public const string ResetMemberPassword = "ResetMemberPassword";
+
+        /// <summary>管理員解除會員帳號的登入失敗鎖定。</summary>
+        public const string UnlockMemberAccount = "UnlockMemberAccount";
+
+        /// <summary>
+        /// 匯出會員名單為 CSV。
+        /// [補修正] 原本這個動作完全沒有寫入稽核紀錄——匯出全部會員的 Email、電話、
+        /// 累計消費等個資卻無法追查是誰在什麼時候匯出的，這次重構順便補上。
+        /// </summary>
+        public const string ExportMembersToCsv = "ExportMembersToCsv";
     }
 
     /// <summary>
@@ -82,5 +107,7 @@
 
         /// <summary>使用者（對應 SettingController 的 CreateUser）。</summary>
         public const string User = "User";
+
+        
     }
 }

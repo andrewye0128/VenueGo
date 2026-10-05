@@ -15,9 +15,6 @@ using VenueGo.Services.Reservations;
 using VenueGo.Services.Ticket;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
-using Microsoft.AspNetCore.Authentication.Cookies;
-using VenueGo.Services.Ticket;
-using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -120,6 +117,10 @@ builder.Services.AddSession();
 builder.Services.AddScoped<IRoleManagementService, RoleManagementService>();
 builder.Services.AddScoped<IEmployeeAccountService, EmployeeAccountService>();
 
+builder.Services.AddScoped<IMemberAccountService, MemberAccountService>();
+
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
 
@@ -149,6 +150,8 @@ builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUse
 
 // 註冊會員登入驗證服務
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
+// 註冊密碼重設服務
+builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 
 // 註冊關於訂單編號產生器的服務：介面 → 實作
 builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();

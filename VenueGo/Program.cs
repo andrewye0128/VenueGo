@@ -64,6 +64,9 @@ builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 // HttpClient
 builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 CreateClient()
 
+// 全站共用的時間來源，本地時區固定為台北
+builder.Services.AddSingleton<TimeProvider, TaipeiTimeProvider>();
+
 // 自動校時（TimeAgo 等全站共用）
 builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<ITimeService, TimeService>();
@@ -86,7 +89,7 @@ builder.Services.AddApiDocs();
 var app = builder.Build();
 
 // 在應用程式啟動時，將單例 TimeService 橋接給靜態類別
-TimeAgo.TimeService = app.Services.GetRequiredService<ITimeService>();  
+TimeAgo.TimeService = app.Services.GetRequiredService<ITimeService>();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())

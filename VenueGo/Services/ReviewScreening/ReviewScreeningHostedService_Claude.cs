@@ -10,7 +10,8 @@
     /// </summary>
     public sealed class ReviewScreeningHostedService(
         IServiceScopeFactory scopeFactory,
-        ILogger<ReviewScreeningHostedService> logger) : BackgroundService
+        ILogger<ReviewScreeningHostedService> logger,
+        TimeProvider timeProvider) : BackgroundService
     {
         private static readonly TimeSpan Interval = TimeSpan.FromSeconds(30);
 
@@ -22,6 +23,7 @@
 
         private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
         private readonly ILogger<ReviewScreeningHostedService> _logger = logger;
+        private readonly TimeProvider _timeProvider = timeProvider;
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -37,7 +39,7 @@
 
             _logger.LogInformation("評論預審背景分析已啟動，間隔 {Interval}", Interval);
 
-            using var timer = new PeriodicTimer(Interval);
+            using var timer = new PeriodicTimer(Interval, _timeProvider);
             try
             {
                 // 開機先跑一次，再每隔一段時間跑一次

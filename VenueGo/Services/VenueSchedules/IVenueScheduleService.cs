@@ -7,7 +7,7 @@ namespace VenueGo.Services.VenueSchedules
     //
     //在 Program.cs 註冊為 Scoped,使用方透過建構子注入 IVenueScheduleService 即可
     //所有方法都是唯讀查詢,不會修改任何資料
-    //
+
     //「不能使用」的判斷全部在這裡處理,使用方不需要自己判斷 IsActive:
     //  Venues.IsActive = false             >> 場地已刪除(軟刪除),當作不存在
     //  SportTypes.IsActive = false         >> 運動類型已刪除,屬於它的場地也當作不能使用
@@ -43,5 +43,12 @@ namespace VenueGo.Services.VenueSchedules
         //可以使用的運動類型清單,依運動類型 Id 排序;不會回傳 null
         Task<IReadOnlyList<UsableSportTypeInfo>> GetUsableSportTypesAsync(
             CancellationToken cancellationToken = default);
+
+        //某運動類型在某一天的尖峰起始時間,給預約明細標示「尖峰/離峰」使用
+        //這一格的開始時間 >= 回傳值就是尖峰
+        //null >> 那天不分尖峰/離峰、沒有價格規則或價格規則停用(整天都是離峰)
+        //跟上面的方法不同:不判斷場地、運動類型是否已刪除,已刪除場地的歷史預約也能取得
+        Task<TimeOnly?> GetPeakStartTimeAsync(
+            int sportTypeId, DateOnly date, CancellationToken cancellationToken = default);
     }
 }

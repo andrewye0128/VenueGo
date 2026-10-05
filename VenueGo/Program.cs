@@ -1,24 +1,10 @@
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Cookies; // Cookie 認證
 using Microsoft.EntityFrameworkCore;
-using Microsoft.OpenApi;
-using Scalar.AspNetCore;
 using VenueGo.Data;
+using VenueGo.Extensions;   // 各子系統的服務註冊、API 文件
 using VenueGo.Helpers;
-using VenueGo.Models.CheckinModels;
-using VenueGo.Models.DashboardModels;
-using VenueGo.Models.Options;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
-using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
-using VenueGo.Services.Members;
-using VenueGo.Services.Orders;
-using VenueGo.Services.Reservations;
-using VenueGo.Services.ReviewTickets;
-using VenueGo.Services.ReviewScreening;
-using VenueGo.Services.Ticket;
-using VenueGo.Services.TimeSlots;
-using VenueGo.Services.Venues;
-using VenueGo.Services.VenueSchedules;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -69,107 +55,33 @@ builder.Services.AddSession();
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
 
-// 註冊關於會員方法的服務：介面 → 實作
-builder.Services.AddScoped<IMemberQueryService, MemberQueryService>();
+// ── 全組共用的服務 ───────────────────────────────────────
+// 各子系統自己的服務不寫在這裡，寫在 Extensions/ 底下各自的檔案（見下方）。
 
-// 註冊關於訂位方法的服務：介面 → 實作
-builder.Services.AddScoped<IReservationDraftStore, SessionReservationDraftStore>();
-
-// 註冊關於場地方法的服務：介面 → 實作
-builder.Services.AddScoped<IVenueQueryService, VenueQueryService>();
-
-// 註冊關於場地時段的服務(場地模組提供:營業時段、不開放時段、尖峰、單價、可使用的場地)：介面 → 實作
-builder.Services.AddScoped<IVenueScheduleService, VenueScheduleService>();
-
-// 註冊關於時段方法的服務：介面 → 實作
-builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
-
-// 註冊關於時段選取驗證的服務：介面 → 實作
-builder.Services.AddScoped<ISlotSelectionValidator, SlotSelectionValidator>();
-
-// 註冊關於預約計價的服務：介面 → 實作
-builder.Services.AddScoped<IReservationPricingService, ReservationPricingService>();
-
-// 註冊關於目前登入者的服務：介面 → 實作
+// 目前登入者
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
-// 註冊關於訂單編號產生器的服務：介面 → 實作
-builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();
-
-// 註冊關於預約建立的服務：介面 → 實作
-builder.Services.AddScoped<IReservationCreationService, ReservationCreationService>();
-
-// 註冊關於預約查詢與指令的服務：介面 → 實作
-builder.Services.AddScoped<IReservationQueryService, ReservationQueryService>();
-// 註冊關於預約指令的服務：介面 → 實作
-builder.Services.AddScoped<IReservationCommandService, ReservationCommandService>();
-
-// 註冊關於球館預約的業務邏輯的服務：介面 → 實作
-builder.Services.Configure<ReservationRulesOptions>(
-    builder.Configuration.GetSection(ReservationRulesOptions.SectionName));
-
-// 註冊關於票券的服務：介面 → 實作
-builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
-builder.Services.AddScoped<CTicketViewModelFactory>();
-
-builder.Services.AddScoped<VenueMonitorFactory>();
-
-// 評論系統使用
-builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
-builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
-builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
-// 自動校時使用
+// HttpClient
 builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 CreateClient()
+
+// 自動校時（TimeAgo 等全站共用）
 builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<ITimeService, TimeService>();
 builder.Services.AddHostedService<TimeSyncHostedService>();
 
-// 評論預審：AI 設定、呼叫 AI 用的連線（30 秒逾時）、AI 服務
-builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
-builder.Services.AddHttpClient(GeminiScreeningClient.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(30));
-builder.Services.AddScoped<IReviewScreeningAi, GeminiScreeningClient>();
-builder.Services.AddScoped<IReviewScreeningService, ReviewScreeningService>();
-builder.Services.AddHostedService<ReviewScreeningHostedService>();
+// ── 各子系統的服務（Extensions/*ModuleExtensions）────────────────
+builder.Services.AddMemberModule();
+builder.Services.AddVenueModule();
+builder.Services.AddReservationModule(builder.Configuration);
+builder.Services.AddTicketModule();
+builder.Services.AddReviewModule(builder.Configuration);
 
-// 註冊關於票券報到的服務：介面 → 實作
-builder.Services.AddScoped<ICheckInService, CheckInService>();
-builder.Services.AddHostedService<TicketSettlementHostedService>();
 
 // 註冊 Swagger 服務
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-// 🔵 新系統：微軟官方 OpenAPI
-builder.Services.AddOpenApi(options =>
-{
-    options.AddDocumentTransformer((document, context, cancellationToken) =>
-    {
-        // 宣告一種「把 token 放在標頭」的驗證方式
-        document.Components ??= new OpenApiComponents();
-        document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
-        {
-            ["Antiforgery"] = new OpenApiSecurityScheme
-            {
-                Type = SecuritySchemeType.ApiKey,
-                In = ParameterLocation.Header,
-                Name = "RequestVerificationToken",
-                Description = "先打 GET /api/antiforgery/token，再貼上 XSRF-TOKEN Cookie 的值",
-            },
-        };
-        // 只套用在會驗證防偽 token 的方法上，跟 http.js 的 UNSAFE_METHODS 一致
-        HttpMethod[] unsafeMethods = [HttpMethod.Post, HttpMethod.Put, HttpMethod.Patch, HttpMethod.Delete];
-        foreach (var operation in document.Paths.Values
-                     .SelectMany(path => path.Operations)
-                     .Where(operation => unsafeMethods.Contains(operation.Key)))
-        {
-            operation.Value.Security ??= [];
-            operation.Value.Security.Add(new OpenApiSecurityRequirement
-            {
-                [new OpenApiSecuritySchemeReference("Antiforgery", document)] = [],
-            });
-        }
-        return Task.CompletedTask;
-    });
-});
+// ── API 文件：OpenAPI＋Scalar（Extensions/ApiDocsExtensions）──────
+builder.Services.AddApiDocs();
 
 var app = builder.Build();
 
@@ -184,12 +96,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// 啟用 Swagger UI
+// API 文件（OpenAPI JSON＋Scalar 網頁）只在開發環境開啟
 if (app.Environment.IsDevelopment())
 {
-    // 🔵 新系統 UI：微軟 OpenAPI 檔案 + Scalar 網頁
-    app.MapOpenApi();          // 產生 JSON：https://localhost:<port>/openapi/v1.json
-    app.MapScalarApiReference(); // 渲染網頁：https://localhost:<port>/scalar/v1
+    app.MapApiDocs();
 
     app.UseSwagger();
     app.UseSwaggerUI();

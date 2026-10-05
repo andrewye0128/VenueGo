@@ -332,7 +332,7 @@ const hasContentOnly = computed({
           v-if="vm.items.length === 0"
           class="rounded-lg border border-neutral-border bg-neutral-surface py-12 text-center text-neutral-text-secondary"
         >
-          <UIcon name="i-lucide-message-square-text" class="mb-2 size-10" aria-hidden="true" />
+          <UIcon name="i-lucide-message-square-text" class="mx-auto mb-2 size-10" aria-hidden="true" />
           <template v-if="hasFilter">
             <div>目前的條件沒有找到評論</div>
             <div class="mt-1 text-sm">可以放寬時間範圍，或按「清除全部篩選」</div>

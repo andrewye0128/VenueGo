@@ -162,7 +162,7 @@ async function rate(value) {
     >
       <UIcon
         name="i-lucide-frown"
-        class="mb-3 size-10 text-neutral-text-secondary"
+        class="mx-auto mb-3 size-10 text-neutral-text-secondary"
         aria-hidden="true"
       />
       <p class="mb-4 text-neutral-text-primary">{{ loadError }}</p>

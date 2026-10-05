@@ -8,7 +8,7 @@ namespace VenueGo.ViewModels.ReviewVM
     /// 刻意不包含 SpamReason、ReadByEmployeeId 等館方內部欄位，
     /// 從結構上杜絕洩漏。
     /// </summary>
-    public class ReviewCardVM
+    public sealed record ReviewCardVM
     {
         [Key]
         public int ReviewId { get; init; }

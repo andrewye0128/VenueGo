@@ -1,4 +1,4 @@
-namespace VenueGo.Services.Reviews
+namespace VenueGo.Services.ReviewScreening
 {
     /// <summary>
     /// 評論預審「規則層」用的字詞清單。要加詞、刪詞，只改這個檔案。

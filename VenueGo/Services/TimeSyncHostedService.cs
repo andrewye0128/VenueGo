@@ -13,7 +13,7 @@ namespace VenueGo.Services
     /// 只要在 Program.cs 呼叫 AddHostedService，框架就會在網站啟動後
     /// 自己呼叫 ExecuteAsync，並在關站時透過 stoppingToken 通知它收工。
     /// </summary>
-    public class TimeSyncHostedService(
+    public sealed class TimeSyncHostedService(
         ITimeService timeService,
         ILogger<TimeSyncHostedService> logger) : BackgroundService
     {

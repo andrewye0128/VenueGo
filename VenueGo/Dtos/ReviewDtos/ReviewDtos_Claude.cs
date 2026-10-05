@@ -1,6 +1,6 @@
 ﻿using VenueGo.Helpers;
 
-namespace VenueGo.Dtos.Reviews
+namespace VenueGo.Dtos.ReviewDtos
 {
     // ════════════════════════════════════════════════════════════════
     //  顧客端評論 API 的回應形狀（對應《API規格_CReview.md》第二節）
@@ -19,7 +19,7 @@ namespace VenueGo.Dtos.Reviews
     //  ⚠️ 屬性名稱就是 JSON 的欄位名稱。改名等於改規格，前端要跟著改。
     //  ⚠️ 組裡規定：data 裡不要用 message、success、errorCode 當欄位名稱（會跟外層 ApiResult 混淆）。
     //
-    //  9/29：從 Api/Models 搬到 Dtos/Reviews（組員開發注意事項：給前台的資料格式放 Dtos/）。
+    //  9/29：從 Api/Models 搬到 Dtos/ReviewScreening（組員開發注意事項：給前台的資料格式放 Dtos/）。
     //        從資料表／ViewModel 轉成這些格式的程式在 Mappers/ReviewMapper。
     // ════════════════════════════════════════════════════════════════
 

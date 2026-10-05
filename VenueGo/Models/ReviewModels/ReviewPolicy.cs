@@ -1,4 +1,4 @@
-namespace VenueGo.Helpers
+namespace VenueGo.Models.ReviewModels
 {
     /// <summary>
     /// 評論子系統的業務規則常數。

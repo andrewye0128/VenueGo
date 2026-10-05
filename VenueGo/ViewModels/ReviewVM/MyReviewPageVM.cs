@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace VenueGo.ViewModels.ReviewVM
 {
-    public class MyReviewPageVM
+    public sealed class MyReviewPageVM
     {
         // 需要的欄位：
         //   ReviewId          ← 表單 POST 時要帶（切換公開、表態滿意度）

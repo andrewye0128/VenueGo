@@ -1,7 +1,7 @@
-﻿using VenueGo.Dtos.Reviews;
-using VenueGo.Helpers;
+﻿using VenueGo.Dtos.ReviewDtos;
 using VenueGo.Models.Entities;
-using VenueGo.Services.Reviews;
+using VenueGo.Models.ReviewModels;
+using VenueGo.Services.ReviewScreening;
 using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Mappers

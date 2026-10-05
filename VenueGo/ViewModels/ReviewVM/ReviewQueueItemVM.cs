@@ -1,7 +1,7 @@
 namespace VenueGo.ViewModels.ReviewVM
 {
     /// <summary>館方清單裡的一則評論。顯示用，全部 init。</summary>
-    public class ReviewQueueItemVM
+    public sealed record ReviewQueueItemVM
     {
         public int ReviewId { get; init; }
         public byte StarRating { get; init; }

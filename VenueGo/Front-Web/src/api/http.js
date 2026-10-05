@@ -24,35 +24,35 @@ const XSRF_HEADER = "RequestVerificationToken";
 const UNSAFE_METHODS = ["post", "put", "patch", "delete"];
 
 function readCookie(name) {
-      const row = document.cookie.split("; ").find((r) => r.startsWith(name + "="));
-      return row ? decodeURIComponent(row.slice(name.length + 1)) : null;
+  const row = document.cookie.split("; ").find((r) => r.startsWith(name + "="));
+  return row ? decodeURIComponent(row.slice(name.length + 1)) : null;
 }
 
 // 同一時間只拿一次：好幾個 POST 同時發生時，共用同一個結果
 let tokenRequest = null;
 function refreshXsrfToken() {
-      if (!tokenRequest) {
-            tokenRequest = http.get("/antiforgery/token").finally(() => {
-                  tokenRequest = null;
-            });
-      }
-      return tokenRequest.then(() => readCookie(XSRF_COOKIE));
+  if (!tokenRequest) {
+    tokenRequest = http.get("/antiforgery/token").finally(() => {
+      tokenRequest = null;
+    });
+  }
+  return tokenRequest.then(() => readCookie(XSRF_COOKIE));
 }
 
 http.interceptors.request.use(async (config) => {
-      if (UNSAFE_METHODS.includes((config.method ?? "get").toLowerCase())) {
-            const token = readCookie(XSRF_COOKIE) ?? (await refreshXsrfToken());
-            if (token) config.headers[XSRF_HEADER] = token;
-      }
-      return config;
+  if (UNSAFE_METHODS.includes((config.method ?? "get").toLowerCase())) {
+    const token = readCookie(XSRF_COOKIE) ?? (await refreshXsrfToken());
+    if (token) config.headers[XSRF_HEADER] = token;
+  }
+  return config;
 });
 
 // 防偽 token 驗證失敗的樣子：400，而且不是 ApiResult、也沒有欄位錯誤（框架直接擋下來的）
 const isAntiforgeryFailure = (error) =>
-      error.response?.status === 400 &&
-      UNSAFE_METHODS.includes((error.config?.method ?? "").toLowerCase()) &&
-      !isApiResult(error.response.data) &&
-      !error.response.data?.errors;
+  error.response?.status === 400 &&
+  UNSAFE_METHODS.includes((error.config?.method ?? "").toLowerCase()) &&
+  !isApiResult(error.response.data) &&
+  !error.response.data?.errors;
 
 // 判斷是不是後端的 ApiResult 格式：{ success, message, errorCode, data }
 const isApiResult = (body) =>
@@ -80,13 +80,13 @@ http.interceptors.response.use(
 
   // ── 失敗（HTTP 4xx / 5xx、連不到伺服器）──
   // 統一整理成：error.message（給人看的中文）、error.errorCode（給程式判斷）
-      (error) => {
-            // 防偽 token 失效（通常是拿 token 之後登入或登出了）：重拿一次、重送一次（昱）
-            // 只重試一次（_xsrfRetried），避免真的壞掉時無限重送
-            if (isAntiforgeryFailure(error) && !error.config._xsrfRetried) {
-                  error.config._xsrfRetried = true;
-                  return refreshXsrfToken().then(() => http.request(error.config));
-            }
+  (error) => {
+    // 防偽 token 失效（通常是拿 token 之後登入或登出了）：重拿一次、重送一次（昱）
+    // 只重試一次（_xsrfRetried），避免真的壞掉時無限重送
+    if (isAntiforgeryFailure(error) && !error.config._xsrfRetried) {
+      error.config._xsrfRetried = true;
+      return refreshXsrfToken().then(() => http.request(error.config));
+    }
     const body = error.response?.data;
     if (!error.response) {
       // 沒有收到回應：後端沒開、網路斷線、逾時
@@ -100,16 +100,16 @@ http.interceptors.response.use(
       error.message = Object.values(body.errors).flat()[0] || "輸入資料有誤";
       error.errorCode = ErrorCodes.ValidationFailed;
     } else if (isAntiforgeryFailure(error)) {
-          // 重拿 token 之後還是失敗（昱）
-          error.message = "頁面已經過期，請重新整理後再試一次";
-          error.errorCode = ErrorCodes.PageExpired;
+      // 重拿 token 之後還是失敗（昱）
+      error.message = "頁面已經過期，請重新整理後再試一次";
+      error.errorCode = ErrorCodes.PageExpired;
     } else if (error.response.status === 401) {
-          // 後端沒有回 ApiResult 的 401（昱）
-          error.message = "請先登入";
-          error.errorCode = ErrorCodes.NotLoggedIn;
+      // 後端沒有回 ApiResult 的 401（昱）
+      error.message = "請先登入";
+      error.errorCode = ErrorCodes.NotLoggedIn;
     } else if (error.response.status === 403) {
-          error.message = "這個功能需要其他身分才能使用";
-          error.errorCode = ErrorCodes.Forbidden;
+      error.message = "這個功能需要其他身分才能使用";
+      error.errorCode = ErrorCodes.Forbidden;
     } else if (error.response.status === 404) {
       error.message = "找不到要求的資料";
     } else if (error.response.status >= 500) {

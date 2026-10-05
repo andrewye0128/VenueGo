@@ -2,7 +2,7 @@
 using VenueGo.Data;
 using VenueGo.Models.Entities;
 
-namespace VenueGo.Services.Reviews
+namespace VenueGo.Services.ReviewScreening
 {
     /// <summary>ReviewScreening／ReviewScreeningLabel 各欄位的代碼，跟建表腳本的 CHECK 約束一致。</summary>
     public static class ScreeningCodes
@@ -78,7 +78,7 @@ namespace VenueGo.Services.Reviews
         {
             if (!IsEnabled) return;
 
-            ReviewScreening? screening = null;
+            Models.Entities.ReviewScreening? screening = null;
             try
             {
                 // 同一則評論只建一次（例如重送、或之後補跑舊評論時）
@@ -87,7 +87,7 @@ namespace VenueGo.Services.Reviews
 
                 bool ratingOnly = string.IsNullOrWhiteSpace(review.ReviewContent);
 
-                screening = new ReviewScreening
+                screening = new Models.Entities.ReviewScreening
                 {
                     ReviewId = review.ReviewId,
                     // 規則層現在就能判斷；AI 分析完之後，AI 認為要優先處理的也會補上
@@ -161,7 +161,7 @@ namespace VenueGo.Services.Reviews
             return due.Count;
         }
 
-        private async Task AnalyzeAsync(ReviewScreening screening, ReviewMain review, CancellationToken cancellationToken)
+        private async Task AnalyzeAsync(Models.Entities.ReviewScreening screening, ReviewMain review, CancellationToken cancellationToken)
         {
             // ⚠️ 送給 AI 的一定是遮蔽後的文字：電話、Email 這些個資不能送出去
             string masked = ReviewTextGuard.MaskForPublic(review.ReviewContent);
@@ -200,7 +200,7 @@ namespace VenueGo.Services.Reviews
             }
         }
 
-        private async Task ApplyResultAsync(ReviewScreening screening, AiScreeningResult result, CancellationToken cancellationToken)
+        private async Task ApplyResultAsync(Models.Entities.ReviewScreening screening, AiScreeningResult result, CancellationToken cancellationToken)
         {
             screening.AiStatus = ScreeningCodes.AiDone;
             screening.NextAttemptAt = null;
@@ -239,7 +239,7 @@ namespace VenueGo.Services.Reviews
         };
 
         /// <summary>失敗而且不再重試：AiStatus＝失敗、NextAttemptAt＝NULL（約束要求兩者一致）。</summary>
-        private static void StopRetrying(ReviewScreening screening)
+        private static void StopRetrying(Models.Entities.ReviewScreening screening)
         {
             screening.AiStatus = ScreeningCodes.AiFailed;
             screening.NextAttemptAt = null;

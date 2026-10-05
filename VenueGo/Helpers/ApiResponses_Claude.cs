@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
-using VenueGo.ViewModels;
+using VenueGo.Dtos;
 
 namespace VenueGo.Helpers
 {
@@ -112,7 +112,7 @@ namespace VenueGo.Helpers
             if (IsApi(context.Request))
             {
                 context.Response.StatusCode = StatusCodes.Status401Unauthorized;
-                return context.Response.WriteAsJsonAsync(ApiResultVM.Fail("請先登入", "NotLoggedIn"));
+                return context.Response.WriteAsJsonAsync(ApiResult.Fail("請先登入", "NotLoggedIn"));
             }
             return Defaults.RedirectToLogin(context);
         }
@@ -128,7 +128,7 @@ namespace VenueGo.Helpers
             if (IsApi(context.Request))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
-                return context.Response.WriteAsJsonAsync(ApiResultVM.Fail("這個功能需要其他身分才能使用", "Forbidden"));
+                return context.Response.WriteAsJsonAsync(ApiResult.Fail("這個功能需要其他身分才能使用", "Forbidden"));
             }
             return Defaults.RedirectToAccessDenied(context);
         }

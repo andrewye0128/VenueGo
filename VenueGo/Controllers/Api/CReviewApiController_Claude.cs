@@ -4,17 +4,18 @@ using Microsoft.EntityFrameworkCore;
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using VenueGo.Data;
-using VenueGo.Dtos.Reviews;
+using VenueGo.Dtos.ReviewDtos;
 using VenueGo.Helpers;
 using VenueGo.Mappers;
 using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
-using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
-using VenueGo.Services.Reviews;
+using VenueGo.Services.ReviewTickets;
+using VenueGo.Services.ReviewScreening;
 using VenueGo.ViewModels;
 using VenueGo.ViewModels.ReviewVM;
+using VenueGo.Models.ReviewModels;
 
 namespace VenueGo.Controllers.Api
 {
@@ -41,7 +42,7 @@ namespace VenueGo.Controllers.Api
     //     前台兩種都會顯示訊息，不影響使用。
     //
     //  ── 位置（9/29）──────────────────────────────────────────────
-    //  組裡規定 API 放 Controllers/Api/；回應格式放 Dtos/Reviews/；轉換放 Mappers/ReviewMapper。
+    //  組裡規定 API 放 Controllers/Api/；回應格式放 Dtos/ReviewScreening/；轉換放 Mappers/ReviewMapper。
     //
     //  ── 跟 Razor 版的邏輯關係 ────────────────────────────────────────
     //  資格判定、上架條件、組卡片、寫入的規則，全部照搬 CReviewController，沒有改規則。

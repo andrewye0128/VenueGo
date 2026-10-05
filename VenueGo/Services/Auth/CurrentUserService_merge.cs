@@ -13,7 +13,7 @@ namespace VenueGo.Services.Auth
     /// 其中 ClaimTypes.NameIdentifier 存的是 Users.UserId。
     /// </para>
     /// </summary>
-    public class CurrentUserService(IHttpContextAccessor contextAccessor) : ICurrentUserService
+    public sealed class CurrentUserService(IHttpContextAccessor contextAccessor) : ICurrentUserService
     {
         private readonly IHttpContextAccessor _httpContextAccessor = contextAccessor;
 

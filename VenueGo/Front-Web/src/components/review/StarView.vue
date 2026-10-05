@@ -19,9 +19,9 @@ defineProps({
     role="img"
     :aria-label="`${rating} 顆星（滿分 5 顆）`"
   >
-      <template v-for="n in 5" :key="n">
-          <UIcon v-if="n <= rating" name="i-mdi-star" class="text-rating-star" aria-hidden="true" />
-          <UIcon v-else name="i-mdi-star-outline" class="text-neutral-border" aria-hidden="true" />
-      </template>
+    <template v-for="n in 5" :key="n">
+      <UIcon v-if="n <= rating" name="i-mdi-star" class="text-rating-star" aria-hidden="true" />
+      <UIcon v-else name="i-mdi-star-outline" class="text-neutral-border" aria-hidden="true" />
+    </template>
   </span>
 </template>

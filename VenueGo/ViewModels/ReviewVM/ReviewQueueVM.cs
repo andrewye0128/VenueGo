@@ -1,5 +1,5 @@
 ﻿using System.Text.RegularExpressions;
-using VenueGo.Helpers;
+using VenueGo.Models.ReviewModels;
 
 namespace VenueGo.ViewModels.ReviewVM
 {
@@ -116,7 +116,7 @@ namespace VenueGo.ViewModels.ReviewVM
     ///         N 個人就有 N 次現場評論的機會，再加上一則預約評論。
     /// 依場地：選了運動類型時自動改用這個，把同一個場地的問題放在一起看（9/29）。
     /// </summary>
-    public sealed class ReviewQueueGroupVM
+    public sealed record ReviewQueueGroupVM
     {
         public QueueGroupKind Kind { get; init; } = QueueGroupKind.Order;
 
@@ -151,7 +151,7 @@ namespace VenueGo.ViewModels.ReviewVM
     public sealed record SportTypeOption(int SportTypeId, string Text);
 
     /// <summary>館方評論清單的整頁資料。Index 與 QueueList 共用同一份。</summary>
-    public class ReviewQueueVM
+    public sealed record ReviewQueueVM
     {
         public string Tab    { get; init; } = QueueTab.Unread;
         public string Source { get; init; } = QueueSource.All;

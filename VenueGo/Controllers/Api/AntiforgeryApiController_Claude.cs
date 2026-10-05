@@ -44,7 +44,7 @@ namespace VenueGo.Controllers.Api
                 Path = "/"
             });
 
-            return Ok(ApiResultVM.Ok());
+            return Ok(ApiResult.Ok());
         }
     }
 }

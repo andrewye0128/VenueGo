@@ -5,15 +5,16 @@ using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
-using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
-using VenueGo.Services.Reviews;
+using VenueGo.Services.ReviewTickets;
+using VenueGo.Services.ReviewScreening;
 using VenueGo.ViewModels.ReviewVM;
+using VenueGo.Models.ReviewModels;
 
 namespace VenueGo.Controllers
 {
-    public class CReviewController(dbVenueContext db, ICurrentUserService currentUserService, IVisitReviewTicketFactory visitFactory, IBookingReviewTicketFactory bookingFactory, ITimeService timeService, IReviewScreeningService screening) : Controller
+    public sealed class CReviewController(dbVenueContext db, ICurrentUserService currentUserService, IVisitReviewTicketFactory visitFactory, IBookingReviewTicketFactory bookingFactory, ITimeService timeService, IReviewScreeningService screening) : Controller
     {
         private readonly dbVenueContext _db = db;
         private readonly ICurrentUserService _currentUser = currentUserService;

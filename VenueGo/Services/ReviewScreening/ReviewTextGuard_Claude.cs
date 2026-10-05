@@ -1,9 +1,9 @@
 using System.Text;
 using System.Text.RegularExpressions;
-using VenueGo.Helpers;
-using static VenueGo.Services.Reviews.ReviewScreeningLexicon;
+using VenueGo.Models.ReviewModels;
+using static VenueGo.Services.ReviewScreening.ReviewScreeningLexicon;
 
-namespace VenueGo.Services.Reviews
+namespace VenueGo.Services.ReviewScreening
 {
     // ════════════════════════════════════════════════════════════
     //  評論預審：規則層

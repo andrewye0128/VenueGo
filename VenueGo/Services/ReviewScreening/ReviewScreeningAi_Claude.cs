@@ -1,8 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using VenueGo.Helpers;
+using VenueGo.Models.ReviewModels;
 
-namespace VenueGo.Services.Reviews
+namespace VenueGo.Services.ReviewScreening
 {
     // ════════════════════════════════════════════════════════════
     //  評論預審：AI 層的「題目」與「改考卷」

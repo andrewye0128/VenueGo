@@ -9,7 +9,7 @@ using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
 using VenueGo.Models.ReservationModels;
-using VenueGo.Models.ReviewModels;
+using VenueGo.Services.ReviewTickets;
 
 namespace VenueGo.Services.Reservations
 {

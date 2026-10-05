@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
-using VenueGo.Helpers;
-using VenueGo.Services.Reviews;
+using VenueGo.Models.ReviewModels;
+using VenueGo.Services.ReviewScreening;
 
 namespace VenueGo.Controllers
 {

@@ -1,22 +1,24 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
+using Scalar.AspNetCore;
 using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.CheckinModels;
 using VenueGo.Models.DashboardModels;
 using VenueGo.Models.Options;
-using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
 using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
 using VenueGo.Services.Members;
 using VenueGo.Services.Orders;
 using VenueGo.Services.Reservations;
+using VenueGo.Services.ReviewTickets;
+using VenueGo.Services.ReviewScreening;
 using VenueGo.Services.Ticket;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
 using VenueGo.Services.VenueSchedules;
-using VenueGo.Services.Reviews;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -136,8 +138,38 @@ builder.Services.AddHostedService<TicketSettlementHostedService>();
 // 註冊 Swagger 服務
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-//builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
+// 🔵 新系統：微軟官方 OpenAPI
+builder.Services.AddOpenApi(options =>
+{
+    options.AddDocumentTransformer((document, context, cancellationToken) =>
+    {
+        // 宣告一種「把 token 放在標頭」的驗證方式
+        document.Components ??= new OpenApiComponents();
+        document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
+        {
+            ["Antiforgery"] = new OpenApiSecurityScheme
+            {
+                Type = SecuritySchemeType.ApiKey,
+                In = ParameterLocation.Header,
+                Name = "RequestVerificationToken",
+                Description = "先打 GET /api/antiforgery/token，再貼上 XSRF-TOKEN Cookie 的值",
+            },
+        };
+        // 只套用在會驗證防偽 token 的方法上，跟 http.js 的 UNSAFE_METHODS 一致
+        HttpMethod[] unsafeMethods = [HttpMethod.Post, HttpMethod.Put, HttpMethod.Patch, HttpMethod.Delete];
+        foreach (var operation in document.Paths.Values
+                     .SelectMany(path => path.Operations)
+                     .Where(operation => unsafeMethods.Contains(operation.Key)))
+        {
+            operation.Value.Security ??= [];
+            operation.Value.Security.Add(new OpenApiSecurityRequirement
+            {
+                [new OpenApiSecuritySchemeReference("Antiforgery", document)] = [],
+            });
+        }
+        return Task.CompletedTask;
+    });
+});
 
 var app = builder.Build();
 
@@ -155,6 +187,10 @@ if (!app.Environment.IsDevelopment())
 // 啟用 Swagger UI
 if (app.Environment.IsDevelopment())
 {
+    // 🔵 新系統 UI：微軟 OpenAPI 檔案 + Scalar 網頁
+    app.MapOpenApi();          // 產生 JSON：https://localhost:<port>/openapi/v1.json
+    app.MapScalarApiReference(); // 渲染網頁：https://localhost:<port>/scalar/v1
+
     app.UseSwagger();
     app.UseSwaggerUI();
 }

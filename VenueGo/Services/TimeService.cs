@@ -9,7 +9,7 @@ namespace VenueGo.Services
     /// ⚠️ 必須註冊為 Singleton——它要「記住」偏移量。
     ///    註冊成 Scoped 的話每個請求都是新物件，什麼都記不住。
     /// </summary>
-    public class TimeService : ITimeService
+    public sealed class TimeService : ITimeService
     {
         /// <summary>給 AddHttpClient 用的名字，Program.cs 要用同一個字串。</summary>
         public const string HttpClientName = "TimeApi";

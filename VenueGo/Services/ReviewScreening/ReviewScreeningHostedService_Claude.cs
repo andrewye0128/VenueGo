@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Services.Reviews
+﻿namespace VenueGo.Services.ReviewScreening
 {
     /// <summary>
     /// 評論預審的背景工作：每 30 秒撈一次「待分析」或「到了重試時間」的預審紀錄，送給 AI 分析。

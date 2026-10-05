@@ -3,7 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using VenueGo.Models.Options;
 
-namespace VenueGo.Services.Reviews
+namespace VenueGo.Services.ReviewScreening
 {
     /// <summary>評論預審的 AI 層：送一則（已遮蔽的）評論，拿回預審結果。</summary>
     public interface IReviewScreeningAi

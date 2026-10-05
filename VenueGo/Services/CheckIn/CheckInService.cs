@@ -2,7 +2,7 @@
 using VenueGo.Data;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
-using VenueGo.Models.ReviewModels;
+using VenueGo.Services.ReviewTickets;
 using static VenueGo.Services.CheckIn.ICheckInService;
 
 namespace VenueGo.Services.CheckIn

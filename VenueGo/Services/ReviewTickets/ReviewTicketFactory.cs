@@ -1,11 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Helpers;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
+using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 
-namespace VenueGo.Models.ReviewModels
+namespace VenueGo.Services.ReviewTickets
 {
     // 一個實作、兩個門：報到系統看到 IVisitReviewTicketFactory，
     // 訂單／付款系統看到 IBookingReviewTicketFactory，各自只看得到自己該叫的方法。
@@ -13,7 +13,7 @@ namespace VenueGo.Models.ReviewModels
     // 文件註解寫在「介面」上，不寫在這裡：呼叫端拿到的是介面，
     // IntelliSense 顯示的也是介面上的註解。<inheritdoc/> 讓這邊直接沿用，
     // 不會出現兩份說明各說各話的情況。
-    public class ReviewTicketFactory(dbVenueContext db, ITimeService timeService)
+    public sealed class ReviewTicketFactory(dbVenueContext db, ITimeService timeService)
         : IVisitReviewTicketFactory, IBookingReviewTicketFactory
     {
         private readonly dbVenueContext _db = db;

@@ -103,6 +103,7 @@ builder.Services.Configure<ReservationRulesOptions>(
 
 // 註冊關於票券的服務：介面 → 實作
 builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
+builder.Services.AddScoped<IMemberTicketQueryService, MemberTicketQueryService>();
 builder.Services.AddScoped<CTicketViewModelFactory>();
 
 builder.Services.AddScoped<VenueMonitorFactory>();

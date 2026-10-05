@@ -594,19 +594,7 @@
 </style>
 
 @section Scripts {
-    <script>
-        // 原因欄位的字數計數器。
-        // 上限 200 對應 Reservations.CancelReason 的 nvarchar(200)，
-        // textarea 的 maxlength 已經擋住超出的輸入，這裡只負責顯示。
-        (function() {
-            document.querySelectorAll('.reason-counter').forEach(function(counter) {
-                const textarea = document.getElementById(counter.dataset.target);
-                if (!textarea) return;
-
-                textarea.addEventListener('input', function() {
-                    counter.textContent = textarea.value.length;
-                });
-            });
-        })();
-    </script>
+    @* 取消／作廢彈窗（_TerminateReservationModal）的字數計數器，
+       獨立成專屬的 JS 檔案，預約列表頁也會引用同一份，不寫進全站共用的 site.js。 *@
+    <script src="~/js/terminate-modal.js" asp-append-version="true"></script>
 }

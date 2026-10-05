@@ -28,7 +28,9 @@ namespace VenueGo.Services.ReviewTickets
 
             var entry = await _db.EntryTickets.FirstOrDefaultAsync(t => t.Qrtoken == token);
             if (entry == null) return false;
-            if (entry.Status != (byte)EntryTicketStatus.Used) return false; // 要先把票券狀態改為 Used 再呼叫
+            //if (entry.Status != (byte)EntryTicketStatus.Used) return false;
+            if ((EntryTicketStatus)entry.Status is not 
+                (EntryTicketStatus.Used or EntryTicketStatus.Completed)) return false; // 要先把票券狀態改為 Used 再呼叫
 
             var order = await _db.Orders.FirstOrDefaultAsync(o => o.OrderId == entry.OrderId);
             if (order == null) return false;

@@ -44,6 +44,42 @@ namespace VenueGo.Models.Options
         /// <summary>前台會員最多可預約幾天後。</summary>
         public int MemberMaxAdvanceDays { get; set; } = 30;
 
+        /// <summary>
+        /// 前台會員選「現場付款」時，付款期限要留的緩衝天數（期末使用）。
+        /// <para>
+        /// 目前尚無任何程式碼讀取這個值——前台會員自助預約功能還沒開工，
+        /// 先備好設定值，等該功能真正開始開發時直接套用，不用回頭補。
+        /// </para>
+        /// </summary>
+        public int OnsitePaymentBufferDays { get; set; } = 2;
+
+        /// <summary>
+        /// 前台會員選「現場付款」時，付款期限＝使用時段前幾天（期末使用）。
+        /// <para>
+        /// 用「最低提前天數－緩衝天數」算出來，而不是另外寫死一個數字，
+        /// 這樣以後只要調整 <see cref="MemberMinAdvanceDays"/>，這裡會自動跟著連動，
+        /// 不會發生「改了一個數字、忘記看另一個，中間緩衝被壓縮」的狀況。
+        /// Math.Max 保底至少留 1 天，避免緩衝天數設定不合理時算出 0 或負數。
+        /// </para>
+        /// </summary>
+        public int OnsitePaymentDeadlineDaysBeforeUse =>
+            Math.Max(MemberMinAdvanceDays - OnsitePaymentBufferDays, 1);
+
+        // ── 情境一：後台代客的付款期限規則（開關）──────────────
+
+        /// <summary>
+        /// 是否啟用情境一的付款期限算法（建立時間＋緩衝分鐘）。
+        /// <para>
+        /// false（預設）：維持原本「付款期限＝使用時段開始時間」的算法。
+        /// 組員的 appsettings.json 沒有這個值時，一律套用這個預設值，行為不受影響；
+        /// 要測試新邏輯，在自己的 appsettings.Local.json 裡把這個值設為 true。
+        /// </para>
+        /// </summary>
+        public bool UseScenario1PaymentRule { get; set; } = false;
+
+        /// <summary>情境一／後台代客的付款緩衝分鐘數：建立時間＋這個分鐘數＝付款期限。</summary>
+        public int PaymentCreationBufferMinutes { get; set; } = 30;
+
         // ── 時段規則 ────────────────────────────────────
 
         /// <summary>

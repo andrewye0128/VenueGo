@@ -185,9 +185,13 @@ namespace VenueGo.Services.Reservations
             var bookingDate = draft.BookingDate!.Value;
             var startTime = pricing.StartTime!.Value;
 
-            // 付款期限 = 使用時段的開始時間，代表會員最晚要在報到前付清。
+            // 情境一（做法 B 開關）：開關開啟時，付款期限 = 建立時間 + 緩衝分鐘，
+            // 代表員工代客收款時，最晚要在下單後這段時間內收到錢。
+            // 開關關閉（組員預設情況）維持原本「使用時段開始時間」的算法，
             // BookingDate 是 date、StartTime 是 time，必須組成 datetime。
-            var paymentDueAt = bookingDate.ToDateTime(startTime);
+            var paymentDueAt = _rules.UseScenario1PaymentRule
+                ? now.AddMinutes(_rules.PaymentCreationBufferMinutes)
+                : bookingDate.ToDateTime(startTime);
 
             var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             await using (transaction)

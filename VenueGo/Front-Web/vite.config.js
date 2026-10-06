@@ -56,6 +56,14 @@ export default defineConfig({
             },
           ],
         },
+        // 日期輸入框：高度跟 UInput、USelect、UButton 一樣是 40px（Nuxt UI 預設 32px）
+        inputDate: {
+          variants: {
+            size: {
+              md: { base: "h-10" },
+            },
+          },
+        },
         textarea: {
           slots: {
             base: "rounded disabled:opacity-100 disabled:bg-brand-background disabled:text-neutral-text-secondary",

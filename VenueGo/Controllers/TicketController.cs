@@ -257,7 +257,7 @@ namespace VenueGo.Controllers
                 return RedirectToAction("ManualLog", new { id });
             }
 
-            var result = await _ticketManualService.ExpireAsync(id, userId.Value, reasonType!.Value, remark);
+            var result = await _ticketManualService.ReissueAsync(id, userId.Value, reasonType!.Value, remark);
             if (result.Success)
             {
                 TempData[CDictionary.TK_MSG_操作成功] = "手動補發QRcode成功";

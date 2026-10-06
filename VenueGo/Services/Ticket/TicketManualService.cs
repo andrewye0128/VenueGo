@@ -115,7 +115,7 @@ namespace VenueGo.Services.Ticket
             
             byte fromStatus = ticket.Status;
             ticket.Qrtoken = $"TCK-{Guid.NewGuid():N}";
-            AddManualLog(ticketId, TicketManualLogAction.Expire, fromStatus, ticket.Status, reasonType, reason, operatorId);
+            AddManualLog(ticketId, TicketManualLogAction.Reissue, fromStatus, ticket.Status, reasonType, reason, operatorId);
             await _db.SaveChangesAsync();
             return CheckInResult.Ok();
         }

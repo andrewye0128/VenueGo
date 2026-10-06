@@ -76,6 +76,9 @@ a,
   /* action 為自訂顏色名稱（vite.config.js 的 theme.colors），對應 Brand / Action */
   --ui-action: var(--color-brand-action);
   --ui-error: var(--color-semantic-error);
+  /* 狀態標籤（StatusBadge）等用到的成功、警告色；沒有對應時會是 Nuxt UI 預設的亮綠、亮黃，淺底上不易閱讀 */
+  --ui-success: var(--color-semantic-success);
+  --ui-warning: var(--color-semantic-warning);
   --ui-radius: 0.25rem;
   --ui-text-dimmed: var(--color-neutral-text-secondary);
   --ui-text-muted: var(--color-neutral-text-secondary);

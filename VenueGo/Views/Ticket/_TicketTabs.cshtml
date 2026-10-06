@@ -1,0 +1,21 @@
+﻿@model int
+@{
+    var currentAction = ViewContext.RouteData.Values["action"]?.ToString() ?? "";
+}
+
+@* 分頁的切換: 模型帶入票券編號(int)來帶入換的分頁 *@
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(currentAction == "Detail" ? "active fw-bold" : "")"
+           asp-controller="Ticket" asp-action="Detail" asp-route-id="@Model">場館/時段資訊</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(currentAction == "ScanLog" ? "active fw-bold" : "")"
+           asp-controller="Ticket" asp-action="ScanLog" asp-route-id="@Model">報到管理</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(currentAction == "ManualLog" ? "active fw-bold" : "")"
+           asp-controller="Ticket" asp-action="ManualLog" asp-route-id="@Model">異動紀錄</a>
+    </li>
+</ul>
+

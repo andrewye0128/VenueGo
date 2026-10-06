@@ -1,0 +1,50 @@
+﻿@model VenueGo.ViewModels.CheckinViewModels.TicketManualTabViewModel
+@using VenueGo.Models.CheckinModels
+@{
+    ViewData["Title"] = "異動紀錄";
+}
+
+<partial name="_TicketHeader" model="Model" />
+<partial name="_TicketTabs" model="Model.TicketId" />
+
+<div class="border border-top-0 p-3">
+    <div class="mb-3 d-flex flex-wrap gap-2">
+        <button type="button" class="btn btn-sm btn-danger" disabled="@(!Model.CanCancel)"
+                data-bs-toggle="modal" data-bs-target="#cancelTicketModal">手動取消</button>
+        <button type="button" class="btn btn-sm btn-warning" disabled="@(!Model.CanExpire)"
+                data-bs-toggle="modal" data-bs-target="#expireTicketModal">手動轉失效</button>
+        <button type="button" class="btn btn-sm btn-info" disabled="@(!Model.CanReissue)"
+                data-bs-toggle="modal" data-bs-target="#reissueTicketModal">手動補發票券</button>
+    </div>
+
+    <table class="table table-sm">
+        <thead>
+            <tr><th>時間</th><th>動作</th><th>狀態變化</th><th>原因類別</th><th>備註</th><th>員工編號</th></tr>
+        </thead>
+        <tbody>
+            @if (!Model.Logs.Any())
+            {
+                <tr><td colspan="6" class="text-center text-muted">尚無異動紀錄</td></tr>
+            }
+            else
+            {
+                @foreach (var log in Model.Logs)
+                {
+                <tr>
+                    <td>@log.CreatedAt</td>
+                    <td>@CheckinDisplayText.ManualActionText(log.ActionType)</td>
+                    <td>@CheckinDisplayText.StatusChangeText(log.FromStatus, log.ToStatus)</td>
+                    <td>@CheckinDisplayText.ReasonTypeText(log.ReasonType)</td>
+                    <td>@CheckinDisplayText.ReasonText(log.Reason)</td>
+                    <td>@log.OperatorId</td>
+                </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+
+<partial name="_TicketManualModal" model="VenueGo.ViewModels.CheckinViewModels.TicketManualModalViewModel.ForCancel(Model)" />
+<partial name="_TicketManualModal" model="VenueGo.ViewModels.CheckinViewModels.TicketManualModalViewModel.ForExpire(Model)" />
+<partial name="_TicketManualModal" model="VenueGo.ViewModels.CheckinViewModels.TicketManualModalViewModel.ForReissue(Model)" />

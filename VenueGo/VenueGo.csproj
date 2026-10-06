@@ -55,7 +55,6 @@
     <Folder Include="Models\ReservationModels\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="Mappers\" />
-    <Folder Include="ViewModels\CheckinViewModels\" />
     <Folder Include="Models\TimeSlots\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="ViewModels\MemberViewModels\" />

@@ -28,7 +28,9 @@ namespace VenueGo.Controllers.Api.TicketApi
         public async Task<IActionResult> GetMine(
             [FromQuery] int? testUserId, CancellationToken cancellationToken)
         {
-            int? userId = User.GetUserId();
+
+            //int? userId = User.GetUserId();
+            int? userId = null; // 先強制為null不抓後台存在Cookie的ID
 
             // 前台登入還沒串好：只有開發環境允許用 ?testUserId=1 假裝某個會員
             // TODO: 前台登入完成後，整段 testUserId 刪掉

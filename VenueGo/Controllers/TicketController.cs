@@ -10,6 +10,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
 using VenueGo.Services.CheckIn;
 using VenueGo.ViewModels.CheckinViewModels;
+using VenueGo.Services.Ticket;
 
 namespace VenueGo.Controllers
 {
@@ -18,8 +19,10 @@ namespace VenueGo.Controllers
     {
         //private readonly dbVenueContext _db;
         private readonly ICheckInService _checkInService;
-
+        private readonly ITicketManualService _ticketManualService;
         private readonly CTicketViewModelFactory _ticketFactory;
+
+        private readonly CTicketStatusLogFactory _ticketStatusLogFactory;
 
         private int? GetCurrentUserId()
         {
@@ -27,10 +30,12 @@ namespace VenueGo.Controllers
             return int.TryParse(value, out var id) ? id : null;
         }
 
-        public TicketController(ICheckInService checkInService, CTicketViewModelFactory ticketFactory)
+        public TicketController(ICheckInService checkInService, ITicketManualService ticketManualService, CTicketViewModelFactory ticketFactory, CTicketStatusLogFactory ticketStatusLogFactory)
         {
             _checkInService = checkInService;
+            _ticketManualService = ticketManualService;
             _ticketFactory = ticketFactory;
+            _ticketStatusLogFactory = ticketStatusLogFactory;
         }
 
         public IActionResult Index(string? txtKeyword, DateOnly? selectedDate, int? venueId, int? status)
@@ -41,8 +46,14 @@ namespace VenueGo.Controllers
             // 有選擇日期時，使用選擇的日期, selectedDate 為選擇的日期
             // ViewBag傳到頁面是選擇的日期, 前一天為選擇的日期 - 1, 後一天為選擇的日期 + 1
 
+            // 網址有搜尋條件
+            if(Request.QueryString.HasValue)
+            {
+                HttpContext.Session.SetString("searchQuery", Request.QueryString.Value!);
+            }
+
             //防呆
-            DateOnly targetDate = selectedDate ?? DateOnly.FromDateTime(DateTime.Now);
+            DateOnly targetDate = selectedDate ?? DateOnly.FromDateTime(DateTime.Now);       
 
             var vm = new TicketIndexViewModel
             {
@@ -93,15 +104,31 @@ namespace VenueGo.Controllers
             }
         }
 
+
+        // 進入到 Detail 頁面 --> 總Detail頁面生成(Tab1球場資訊頁面) --> 選擇(Tab)產生該頁面
         public async Task<IActionResult> Detail(int id)
         {
             //await _checkInService.SettleTicketAsync(id);
             // 進頁面先結算，狀態才是最新的, 改為自動排程
-            var vm = _ticketFactory.GetTicketDetail(id);
+            var vm = _ticketFactory.GetDetailTab(id);
             if (vm == null) return NotFound();
             return View(vm);
         }
 
+        public IActionResult ScanLog(int id)
+        {
+            var vm = _ticketFactory.GetScanTab(id);
+            if (vm == null) return NotFound();
+            return View(vm);
+        }
+
+        // 分頁 3:異動紀錄(取消/轉失效 + 異動紀錄)
+        public IActionResult ManualLog(int id)
+        {
+            var vm = _ticketFactory.GetManualTab(id);
+            if (vm == null) return NotFound();
+            return View(vm);
+        }
 
         private static string GetFailMessage(CheckInFailReason reason, string actionText) => reason switch
         {
@@ -134,19 +161,14 @@ namespace VenueGo.Controllers
 
             if (result.Success)
             {
-                TempData["SuccessMessage"] = "手動入場成功";
+                TempData[CDictionary.TK_MSG_操作成功] = "手動入場成功";
             }
             else
             {
-                TempData["ErrorMessage"] = GetFailMessage(result.Reason!.Value, "入場"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "入場"); // 失敗一定有值
             }
-            return RedirectToAction("Detail", new { id });
+            return RedirectToAction("ScanLog", new { id });
         }
-        //public IActionResult ManualCheckIn(int id, string? remark)
-        //{
-        //    (new CTicketViewModelFactory()).ManualCheckIn(id, operatorId: 1);
-        //    return RedirectToAction("Detail", new { id });
-        //}
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -158,68 +180,94 @@ namespace VenueGo.Controllers
             var result = await _checkInService.CheckOutAsync(id, userId, isManualOverride: true);
             if (result.Success)
             {
-                TempData["SuccessMessage"] = "手動離場成功";
+                TempData[CDictionary.TK_MSG_操作成功] = "手動離場成功";
             }
             else
             {
-                TempData["ErrorMessage"] = GetFailMessage(result.Reason!.Value, "離場"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "離場"); // 失敗一定有值
             }
-            return RedirectToAction("Detail", new { id });
+            return RedirectToAction("ScanLog", new { id });
         }
-        //public IActionResult ManualCheckOut(int id, string? remark)
-        //{
-        //    (new CTicketViewModelFactory()).ManualCheckOut(id, operatorId: 1);
-        //    return RedirectToAction("Detail", new { id });
-        //}
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ManualCancel(int id, string? remark)
+        public async Task<IActionResult> ManualCancel(int id, TicketManualLogReasonType? reasonType, string? remark)
         {
             var userId = GetCurrentUserId();
             if (userId is null) return Unauthorized();
 
-            // CancelAsync 的 operatorId 不是可為 null，所以用 userId.Value
-            var result = await _checkInService.CancelAsync(id, userId.Value, isManualOverride: true);
+            var error = _ticketStatusLogFactory.ValidateInput(TicketManualLogAction.Cancel, reasonType, remark);
+            if (error != null)
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = error;
+                return RedirectToAction("ManualLog", new { id });
+            }
+
+            var result = await _ticketManualService.CancelAsync(id, userId.Value, reasonType!.Value, remark);
             if (result.Success)
             {
-                TempData["SuccessMessage"] = "手動取消成功";
+                TempData[CDictionary.TK_MSG_操作成功] = "手動轉取消成功";
             }
             else
             {
-                TempData["ErrorMessage"] = GetFailMessage(result.Reason!.Value, "取消"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "取消"); // 失敗一定有值
             }
-            return RedirectToAction("Detail", new { id });
+            return RedirectToAction("ManualLog", new { id });
         }
-        //public IActionResult ManualCancel(int id, string? remark)
-        //{
-        //    (new CTicketViewModelFactory()).ManualCancel(id, operatorId: 1);
-        //    return RedirectToAction("Detail", new { id });
-        //}
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ManualExpire(int id, string? remark)
+        public async Task<IActionResult> ManualExpire(int id, TicketManualLogReasonType? reasonType, string? remark)
         {
             var userId = GetCurrentUserId();
             if (userId is null) return Unauthorized();
 
-            var result = await _checkInService.ExpireAsync(id, userId.Value, isManualOverride: true);
+            // 將驗證方法放入到人工異常的factory裡去做驗證
+            var error = _ticketStatusLogFactory.ValidateInput(TicketManualLogAction.Expire,reasonType, remark);
+            if (error != null)
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = error;
+                return RedirectToAction("ManualLog", new { id });
+            }
+
+            var result = await _ticketManualService.ExpireAsync(id, userId.Value, reasonType!.Value, remark);
             if (result.Success)
             {
-                TempData["SuccessMessage"] = "手動轉失效成功";
+                TempData[CDictionary.TK_MSG_操作成功] = "手動轉失效成功";
             }
             else
             {
-                TempData["ErrorMessage"] = GetFailMessage(result.Reason!.Value, "轉失效"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "轉失效"); // 失敗一定有值
             }
-            return RedirectToAction("Detail", new { id });
+            return RedirectToAction("ManualLog", new { id });
         }
-        //public IActionResult ManualExpire(int id, string? remark)
-        //{
-        //    (new CTicketViewModelFactory()).ManualExpire(id, operatorId: 1);
-        //    return RedirectToAction("Detail", new { id });
-        //}
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ManualReissue(int id, TicketManualLogReasonType? reasonType, string? remark)
+        {
+            var userId = GetCurrentUserId();
+            if (userId is null) return Unauthorized();
+
+            // 將驗證方法放入到人工異常的factory裡去做驗證
+            var error = _ticketStatusLogFactory.ValidateInput(TicketManualLogAction.Reissue, reasonType, remark);
+            if (error != null)
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = error;
+                return RedirectToAction("ManualLog", new { id });
+            }
+
+            var result = await _ticketManualService.ExpireAsync(id, userId.Value, reasonType!.Value, remark);
+            if (result.Success)
+            {
+                TempData[CDictionary.TK_MSG_操作成功] = "手動補發QRcode成功";
+            }
+            else
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "補發QRcode"); // 失敗一定有值
+            }
+            return RedirectToAction("ManualLog", new { id });
+        }
 
         public async Task<IActionResult> QrImage(int id)
         {
@@ -229,5 +277,6 @@ namespace VenueGo.Controllers
             var pngBytes = QrCodeHelper.GeneratePng(qrtoken);
             return File(pngBytes, "image/png");
         }
+
     }
 }

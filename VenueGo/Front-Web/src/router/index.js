@@ -64,7 +64,7 @@ const router = createRouter({
       // (\\d+) 限定只接受數字，避免吃掉 /venues/transport 之類的其他頁面
       path: "/venues/:sportTypeId(\\d+)?",
       name: "venues",
-      component: () => import("../views/VenueIntro.vue"),
+      component: () => import("../views/VenueIntroView.vue"),
     },
     {
       // 404：網址不符合上面任何路由時顯示（一定要放在最後一個）

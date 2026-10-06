@@ -182,6 +182,7 @@ namespace VenueGo.Controllers
         /// 預約詳細頁。
         /// </summary>
         /// <param name="id">預約 Id。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         [HttpGet]
         public async Task<IActionResult> Details(int id, CancellationToken cancellationToken)
         {
@@ -235,7 +236,9 @@ namespace VenueGo.Controllers
         /// 瀏覽器一般表單送出不會帶這個標頭，axios 之類的背景請求預設會自動帶上。
         /// </para>
         /// </summary>
+        /// <param name="id">預約 Id。</param>
         /// <param name="reason">取消原因，由彈出視窗填寫。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的資料庫操作。</param>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Cancel(
@@ -268,7 +271,9 @@ namespace VenueGo.Controllers
         /// <summary>
         /// 作廢預約（管理員開錯單或測試資料）。
         /// </summary>
+        /// <param name="id">預約 Id。</param>
         /// <param name="reason">作廢原因，由彈出視窗填寫。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的資料庫操作。</param>
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Void(

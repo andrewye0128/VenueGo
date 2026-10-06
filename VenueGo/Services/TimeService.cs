@@ -9,7 +9,9 @@ namespace VenueGo.Services
     /// ⚠️ 必須註冊為 Singleton——它要「記住」偏移量。
     ///    註冊成 Scoped 的話每個請求都是新物件，什麼都記不住。
     /// </summary>
-    public class TimeService : ITimeService
+    public sealed class TimeService(IHttpClientFactory httpClientFactory,
+            ILogger<TimeService> logger,
+            IConfiguration configuration, TimeProvider timeProvider) : ITimeService
     {
         /// <summary>給 AddHttpClient 用的名字，Program.cs 要用同一個字串。</summary>
         public const string HttpClientName = "TimeApi";
@@ -65,9 +67,12 @@ namespace VenueGo.Services
         private static readonly JsonSerializerOptions JsonOptions =
             new() { PropertyNameCaseInsensitive = true };
 
-        private readonly IHttpClientFactory _httpClientFactory;
-        private readonly ILogger<TimeService> _logger;
-        private readonly string _url;
+        private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
+        private readonly ILogger<TimeService> _logger = logger;
+        private readonly TimeProvider _timeProvider = timeProvider;
+
+        // 網址寫進設定檔，之後要修正不必改程式碼重新編譯
+        private readonly string _url = configuration["TimeApi:Url"] ?? DefaultUrl;
 
         /// <summary>
         /// 同一時間只讓一次校時進行。Singleton 會被多執行緒共用，
@@ -89,18 +94,6 @@ namespace VenueGo.Services
         /// </summary>
         private long _lastSyncedAtTicks;
 
-        public TimeService(
-            IHttpClientFactory httpClientFactory,
-            ILogger<TimeService> logger,
-            IConfiguration configuration)
-        {
-            _httpClientFactory = httpClientFactory;
-            _logger = logger;
-
-            // 網址寫進設定檔，之後要修正不必改程式碼重新編譯
-            _url = configuration["TimeApi:Url"] ?? DefaultUrl;
-        }
-
         public TimeSpan Offset => TimeSpan.FromTicks(Interlocked.Read(ref _offsetTicks));
 
         public DateTime? LastSyncedAt
@@ -112,7 +105,7 @@ namespace VenueGo.Services
             }
         }
 
-        public DateTime Now => TruncateToSecond(DateTime.Now + Offset);
+        public DateTime Now => TruncateToSecond(_timeProvider.GetLocalNow().DateTime + Offset);
 
         public DateTime Today => Now.Date;
 
@@ -132,7 +125,7 @@ namespace VenueGo.Services
                 //  會把整趟網路往返的時間都算成誤差。
                 //  用一來一回的「中點」當基準，等於假設去程和回程各花一半，
                 //  剩下的誤差只有半趟。這也是 NTP 的核心想法。
-                DateTime localBefore = DateTime.Now;
+                DateTime localBefore = _timeProvider.GetLocalNow().DateTime;
 
                 using var response = await client.GetAsync(_url, cancellationToken);
                 response.EnsureSuccessStatusCode();
@@ -140,7 +133,7 @@ namespace VenueGo.Services
                 var dto = await response.Content
                                         .ReadFromJsonAsync<TimeApiDto>(JsonOptions, cancellationToken);
 
-                DateTime localAfter = DateTime.Now;
+                DateTime localAfter = _timeProvider.GetLocalNow().DateTime;
 
                 if (string.IsNullOrWhiteSpace(dto?.DateTime))
                     throw new InvalidOperationException("時間 API 的回應裡沒有 dateTime 欄位。");

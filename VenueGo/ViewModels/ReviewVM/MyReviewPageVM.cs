@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace VenueGo.ViewModels.ReviewVM
 {
-    public class MyReviewPageVM
+    public sealed class MyReviewPageVM
     {
         // 需要的欄位：
         //   ReviewId          ← 表單 POST 時要帶（切換公開、表態滿意度）
@@ -22,6 +22,7 @@ namespace VenueGo.ViewModels.ReviewVM
         [DisplayName("QR 條碼")]
         public string? Qrtoken { get; init; }
         public int? ReviewPerBookingId { get; init; }
+        public int? OrderId { get; init; }
         public string? OrderNo { get; init; }
         [DisplayName("評分")]
         public byte StarRating { get; init; }

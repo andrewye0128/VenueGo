@@ -46,6 +46,10 @@ public partial class dbVenueContext : DbContext
 
     public virtual DbSet<ReviewPerVisit> ReviewPerVisits { get; set; }
 
+    public virtual DbSet<ReviewScreening> ReviewScreenings { get; set; }
+
+    public virtual DbSet<ReviewScreeningLabel> ReviewScreeningLabels { get; set; }
+
     public virtual DbSet<Role> Roles { get; set; }
 
     public virtual DbSet<RolePermission> RolePermissions { get; set; }
@@ -353,6 +357,39 @@ public partial class dbVenueContext : DbContext
             entity.Property(e => e.RentStartTime).HasPrecision(0);
         });
 
+        modelBuilder.Entity<ReviewScreening>(entity =>
+        {
+            entity.HasKey(e => e.ReviewId);
+
+            entity.ToTable("ReviewScreening");
+
+            entity.HasIndex(e => new { e.AiStatus, e.NextAttemptAt }, "IX_ReviewScreening_AiPending").HasFilter("([AiStatus] IN ((0), (2)))");
+
+            entity.HasIndex(e => e.ReviewId, "IX_ReviewScreening_Priority").HasFilter("([IsPriority]=(1) AND [VerifiedAt] IS NULL)");
+
+            entity.Property(e => e.ReviewId).ValueGeneratedNever();
+            entity.Property(e => e.AiAnalyzedAt).HasPrecision(0);
+            entity.Property(e => e.AiModel)
+                .HasMaxLength(60)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_ReviewScreening_CreatedAt");
+            entity.Property(e => e.ManagerReason).HasMaxLength(40);
+            entity.Property(e => e.NextAttemptAt).HasPrecision(0);
+            entity.Property(e => e.Summary).HasMaxLength(60);
+            entity.Property(e => e.VerifiedAt).HasPrecision(0);
+        });
+
+        modelBuilder.Entity<ReviewScreeningLabel>(entity =>
+        {
+            entity.HasKey(e => new { e.ReviewId, e.LabelType, e.LabelCode, e.Source });
+
+            entity.ToTable("ReviewScreeningLabel");
+
+            entity.HasIndex(e => new { e.LabelType, e.LabelCode }, "IX_ReviewScreeningLabel_Code");
+        });
+
         modelBuilder.Entity<Role>(entity =>
         {
             entity.HasIndex(e => e.RoleName, "UQ_Roles_RoleName").IsUnique();
@@ -507,6 +544,43 @@ public partial class dbVenueContext : DbContext
             entity.Property(e => e.UserPhone)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.VenueName).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<VReservationSummary>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("v_ReservationSummary");
+
+            entity.Property(e => e.CheckInRate).HasColumnType("decimal(16, 13)");
+            entity.Property(e => e.EndTime).HasPrecision(0);
+            entity.Property(e => e.OrderCreatedAt).HasPrecision(0);
+            entity.Property(e => e.OrderNo).HasMaxLength(30);
+            entity.Property(e => e.PaymentPaidAt).HasPrecision(0);
+            entity.Property(e => e.SportName).HasMaxLength(20);
+            entity.Property(e => e.StartTime).HasPrecision(0);
+            entity.Property(e => e.UserName).HasMaxLength(100);
+            entity.Property(e => e.VenueName).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<VReviewFullInfo>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("v_ReviewFullInfo");
+
+            entity.Property(e => e.OrderNo).HasMaxLength(30);
+            entity.Property(e => e.Qrtoken)
+                .HasMaxLength(64)
+                .IsUnicode(false)
+                .HasColumnName("QRToken");
+            entity.Property(e => e.ReadByEmployeeName).HasMaxLength(100);
+            entity.Property(e => e.RentStartTime).HasPrecision(0);
+            entity.Property(e => e.RepliedByEmployeeName).HasMaxLength(100);
+            entity.Property(e => e.SpamMarkedByEmployeeName).HasMaxLength(100);
+            entity.Property(e => e.SportName).HasMaxLength(20);
+            entity.Property(e => e.UserName).HasMaxLength(100);
             entity.Property(e => e.VenueName).HasMaxLength(40);
         });
 

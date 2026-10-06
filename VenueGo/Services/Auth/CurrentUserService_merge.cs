@@ -2,7 +2,7 @@
 using System.Security.Claims;
 using System.Security.Principal;
 using VenueGo.Data;
-using VenueGo.Helpers;
+using VenueGo.Extensions;
 
 namespace VenueGo.Services.Auth
 {
@@ -13,7 +13,7 @@ namespace VenueGo.Services.Auth
     /// 其中 ClaimTypes.NameIdentifier 存的是 Users.UserId。
     /// </para>
     /// </summary>
-    public class CurrentUserService(IHttpContextAccessor contextAccessor) : ICurrentUserService
+    public sealed class CurrentUserService(IHttpContextAccessor contextAccessor) : ICurrentUserService
     {
         private readonly IHttpContextAccessor _httpContextAccessor = contextAccessor;
 
@@ -57,7 +57,6 @@ namespace VenueGo.Services.Auth
 
         /// <summary>
         /// 目前登入者的 Employees.EmployeeId。未登入或非員工回傳 null。
-        /// 同一個請求內只會查一次資料庫。
         /// </summary>
         public int? EmployeeId
         {

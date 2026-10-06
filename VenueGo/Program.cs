@@ -1,21 +1,10 @@
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.Cookies; // Cookie 認證
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Extensions;   // 各子系統的服務註冊、API 文件
 using VenueGo.Helpers;
-using VenueGo.Models.CheckinModels;
-using VenueGo.Models.DashboardModels;
-using VenueGo.Models.Options;
-using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
-using VenueGo.Services.CheckIn; // [新增] 引入 Cookie 認證命名空間
-using VenueGo.Services.Members;
-using VenueGo.Services.Orders;
-using VenueGo.Services.Reservations;
-using VenueGo.Services.Ticket;
-using VenueGo.Services.TimeSlots;
-using VenueGo.Services.Venues;
-using VenueGo.Services.VenueSchedules;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,6 +18,8 @@ builder.Configuration.AddJsonFile(
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
+builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
+    o.InvalidModelStateResponseFactory = ApiResponses.InvalidModelState);
 
 // 註冊 EF Core DbContext
 builder.Services.AddDbContext<dbVenueContext>(options =>
@@ -47,6 +38,8 @@ builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationSc
         options.ExpireTimeSpan = TimeSpan.FromHours(8);    // Cookie 預設有效時間
         options.Cookie.HttpOnly = true;                    // 防範 XSS 存取 Cookie
         options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // 限定 HTTPS 傳輸
+        options.Events.OnRedirectToLogin = ApiResponses.RedirectToLogin;
+        options.Events.OnRedirectToAccessDenied = ApiResponses.RedirectToAccessDenied;
     });
 
 // 註冊 Session
@@ -62,79 +55,41 @@ builder.Services.AddSession();
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
 
-// 註冊關於會員方法的服務：介面 → 實作
-builder.Services.AddScoped<IMemberQueryService, MemberQueryService>();
+// ── 全組共用的服務 ───────────────────────────────────────
+// 各子系統自己的服務不寫在這裡，寫在 Extensions/ 底下各自的檔案（見下方）。
 
-// 註冊關於訂位方法的服務：介面 → 實作
-builder.Services.AddScoped<IReservationDraftStore, SessionReservationDraftStore>();
+// 目前登入者
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
-// 註冊關於場地方法的服務：介面 → 實作
-builder.Services.AddScoped<IVenueQueryService, VenueQueryService>();
-
-// 註冊關於場地時段的服務(場地模組提供:營業時段、不開放時段、尖峰、單價、可使用的場地)：介面 → 實作
-builder.Services.AddScoped<IVenueScheduleService, VenueScheduleService>();
-
-// 註冊關於時段方法的服務：介面 → 實作
-builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
-
-// 註冊關於時段選取驗證的服務：介面 → 實作
-builder.Services.AddScoped<ISlotSelectionValidator, SlotSelectionValidator>();
-
-// 註冊關於預約計價的服務：介面 → 實作
-builder.Services.AddScoped<IReservationPricingService, ReservationPricingService>();
-
-// 註冊關於目前登入者的服務：介面 → 實作
-builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUserService>();
-
-// 註冊關於訂單編號產生器的服務：介面 → 實作
-builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();
-
-// 註冊關於預約建立的服務：介面 → 實作
-builder.Services.AddScoped<IReservationCreationService, ReservationCreationService>();
-
-// 註冊關於預約查詢與指令的服務：介面 → 實作
-builder.Services.AddScoped<IReservationQueryService, ReservationQueryService>();
-// 註冊關於預約指令的服務：介面 → 實作
-builder.Services.AddScoped<IReservationCommandService, ReservationCommandService>();
-
-// 註冊關於球館預約的業務邏輯的服務：介面 → 實作
-builder.Services.Configure<ReservationRulesOptions>(
-    builder.Configuration.GetSection(ReservationRulesOptions.SectionName));
-
-// 註冊關於票券的服務：介面 → 實作
-builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
-builder.Services.AddScoped<ITicketManualService, TicketManualService>();
-builder.Services.AddScoped<CCheckInLogFactory>();
-builder.Services.AddScoped<CTicketStatusLogFactory>();
-builder.Services.AddScoped<IMemberTicketQueryService, MemberTicketQueryService>();
-builder.Services.AddScoped<CTicketViewModelFactory>();
-
-builder.Services.AddScoped<VenueMonitorFactory>();
-
-// 評論系統使用
-builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
-builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
-builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
-// 自動校時使用
+// HttpClient
 builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 CreateClient()
+
+// 全站共用的時間來源，本地時區固定為台北
+builder.Services.AddSingleton<TimeProvider, TaipeiTimeProvider>();
+
+// 自動校時（TimeAgo 等全站共用）
 builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<ITimeService, TimeService>();
 builder.Services.AddHostedService<TimeSyncHostedService>();
 
-// 註冊關於票券報到的服務：介面 → 實作
-builder.Services.AddScoped<ICheckInService, CheckInService>();
-builder.Services.AddHostedService<TicketSettlementHostedService>();
+// ── 各子系統的服務（Extensions/*ModuleExtensions）────────────────
+builder.Services.AddMemberModule();
+builder.Services.AddVenueModule();
+builder.Services.AddReservationModule(builder.Configuration);
+builder.Services.AddTicketModule();
+builder.Services.AddReviewModule(builder.Configuration);
+
 
 // 註冊 Swagger 服務
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-//builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
+// ── API 文件：OpenAPI＋Scalar（Extensions/ApiDocsExtensions）──────
+builder.Services.AddApiDocs();
 
 var app = builder.Build();
 
 // 在應用程式啟動時，將單例 TimeService 橋接給靜態類別
-TimeAgo.TimeService = app.Services.GetRequiredService<ITimeService>();  
+TimeAgo.TimeService = app.Services.GetRequiredService<ITimeService>();
 
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
@@ -144,9 +99,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-// 啟用 Swagger UI
+// API 文件（OpenAPI JSON＋Scalar 網頁）只在開發環境開啟
 if (app.Environment.IsDevelopment())
 {
+    app.MapApiDocs();
+
     app.UseSwagger();
     app.UseSwaggerUI();
 }

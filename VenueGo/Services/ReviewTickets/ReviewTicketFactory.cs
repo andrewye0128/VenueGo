@@ -1,11 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Helpers;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
+using VenueGo.Models.ReviewModels;
 using VenueGo.Services;
 
-namespace VenueGo.Models.ReviewModels
+namespace VenueGo.Services.ReviewTickets
 {
     // 一個實作、兩個門：報到系統看到 IVisitReviewTicketFactory，
     // 訂單／付款系統看到 IBookingReviewTicketFactory，各自只看得到自己該叫的方法。
@@ -13,7 +13,7 @@ namespace VenueGo.Models.ReviewModels
     // 文件註解寫在「介面」上，不寫在這裡：呼叫端拿到的是介面，
     // IntelliSense 顯示的也是介面上的註解。<inheritdoc/> 讓這邊直接沿用，
     // 不會出現兩份說明各說各話的情況。
-    public class ReviewTicketFactory(dbVenueContext db, ITimeService timeService)
+    public sealed class ReviewTicketFactory(dbVenueContext db, ITimeService timeService)
         : IVisitReviewTicketFactory, IBookingReviewTicketFactory
     {
         private readonly dbVenueContext _db = db;
@@ -28,7 +28,9 @@ namespace VenueGo.Models.ReviewModels
 
             var entry = await _db.EntryTickets.FirstOrDefaultAsync(t => t.Qrtoken == token);
             if (entry == null) return false;
-            if (entry.Status != (byte)EntryTicketStatus.Used) return false; // 要先把票券狀態改為 Used 再呼叫
+            //if (entry.Status != (byte)EntryTicketStatus.Used) return false;
+            if ((EntryTicketStatus)entry.Status is not 
+                (EntryTicketStatus.Used or EntryTicketStatus.Completed)) return false; // 要先把票券狀態改為 Used 再呼叫
 
             var order = await _db.Orders.FirstOrDefaultAsync(o => o.OrderId == entry.OrderId);
             if (order == null) return false;
@@ -49,7 +51,7 @@ namespace VenueGo.Models.ReviewModels
                 RentEndTime = reservation.BookingDate.ToDateTime(reservation.EndTime),
                 ActualEndTime = null,
                 CreatedAt = _timeService.Now,
-                ExpiredAt = _timeService.Now.AddDays(CDictionary.DAY_評論資格期限天數)
+                ExpiredAt = _timeService.Now.AddDays(ReviewPolicy.TicketValidDays)
             };
 
             // Add 不是 I/O，不需要 async；AddAsync 只有在用特殊主鍵產生策略時才需要。
@@ -73,9 +75,13 @@ namespace VenueGo.Models.ReviewModels
                                      select s).FirstOrDefaultAsync();
             if (reservation == null) return false;
 
+            // 刻意不分入場／離場、成功／失敗：只取這張票「最新」的一筆紀錄。
+            // 呼叫時機由刷退方法決定，這裡不重做組員的進出判斷，他那邊的判斷有問題也不會牽連到這裡。
+            // ActionTime 只存到秒，同一秒有兩筆時再用 LogId（流水號，後寫的比較大）決定誰是最新。
             var latestLog = await _db.CheckInLogs
                                      .Where(c => c.TicketId == ticketId)
                                      .OrderByDescending(c => c.ActionTime)
+                                     .ThenByDescending(c => c.LogId)
                                      .FirstOrDefaultAsync();
             if (latestLog == null) return false;
 
@@ -83,7 +89,15 @@ namespace VenueGo.Models.ReviewModels
             if (latestLog.ActionTime < rentStartTime) return false; // 離場時間不可能早於租借開始時間
 
             var visitTicket = await _db.ReviewPerVisits.FirstOrDefaultAsync(v => v.Qrtoken == entry.Qrtoken);
-            if (visitTicket == null) return false;
+            // 補償：入場時沒建立評論憑證（例如票券清單的「快速報到」不會呼叫工廠），就在這裡補建一次。
+            // 條件跟 CreateReviewPerVisitAsync 一樣（票券狀態要是 Used），不符合就照舊回 false。
+            // 補建的 CreatedAt／ExpiredAt 從現在起算，會比入場時建立晚一點。
+            if (visitTicket == null)
+            {
+                if (!await CreateReviewPerVisitAsync(entry.Qrtoken)) return false;
+                visitTicket = await _db.ReviewPerVisits.FirstOrDefaultAsync(v => v.Qrtoken == entry.Qrtoken);
+                if (visitTicket == null) return false;
+            }
 
             visitTicket.ActualEndTime = latestLog.ActionTime;
             await _db.SaveChangesAsync();
@@ -113,7 +127,7 @@ namespace VenueGo.Models.ReviewModels
                 OrderId = order.OrderId,
                 PaymentMethod = payment.PaymentMethod,
                 CreatedAt = _timeService.Now,
-                ExpiredAt = _timeService.Now.AddDays(CDictionary.DAY_評論資格期限天數)
+                ExpiredAt = _timeService.Now.AddDays(ReviewPolicy.TicketValidDays)
             };
 
             _db.ReviewPerBookings.Add(newBooking);

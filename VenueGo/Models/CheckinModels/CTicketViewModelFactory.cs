@@ -6,6 +6,7 @@ using VenueGo.Helpers;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
 using VenueGo.Models.ReviewModels;
+using VenueGo.Services.ReviewTickets;
 using VenueGo.ViewModels.CheckinViewModels;
 
 namespace VenueGo.Models.CheckinModels

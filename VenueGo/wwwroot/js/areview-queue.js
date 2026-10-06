@@ -472,11 +472,12 @@
 
             // 9/29：換運動類型時，場地篩選一併取消——
             // 從「羽球場 A1」換成「網球」，還留著羽球場的篩選只會得到空清單。
-            // 依訂單分組也關掉：選了運動類型就改成依場地分組（後端也會強制）。
+            // （9/29 舊說明）依訂單分組也關掉：選了運動類型就改成依場地分組（後端也會強制）。
+            // v2：依訂單分組保留使用者原本的選擇——選了類型時後端會暫時停用，換回「全部」就自動恢復。
             if (e.target.matches('#sportTypeSelect')) {
                   f.sportTypeId = e.target.value;
                   f.venueId = '';
-                  f.grouped = 'false';
+                  // 原本：f.grouped = 'false';
                   loadList(f, { focusId: 'sportTypeSelect' });
             }
       });

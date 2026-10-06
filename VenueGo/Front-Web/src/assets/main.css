@@ -24,6 +24,10 @@
   --color-semantic-warning: #8a5300;
   --color-semantic-error: #b42318;
   --color-semantic-peak: #8c4a00;
+
+  /* 評分星星（昱）：跟後台 site.css 的 --vg-star 同色，顧客端與館方端看到的星星一致。需同步更新 Figma
+     用途：StarView、StarInput 的星星、評論專區星等分布的長條。空的星星用 neutral-border */
+  --color-rating-star: #f5a524;
 }
 
 /* 覆蓋 base.css 的 Inter 字型與深色模式背景（Design System v1 沒有深色模式） */

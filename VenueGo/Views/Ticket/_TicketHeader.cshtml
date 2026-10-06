@@ -1,0 +1,22 @@
+﻿@model VenueGo.ViewModels.CheckinViewModels.TicketTabViewModelBase
+
+@{
+    string saveQuery = Context.Session.GetString("searchQuery") ?? "";
+    string backUrl = Url.Action("Index", "Ticket") + saveQuery;
+}
+
+<partial name="~/Views/Reservation/_OperationMessages.cshtml" />
+
+<div class="d-flex align-items-center gap-5 mb-3 p-2">
+    <h5 class="mb-0">票券詳情 #@Model.TicketId</h5>
+    <p class="mb-0">
+        會員:@Model.UserName
+        <span class="badge @Model.StatusBadgeClass">@Model.StatusText</span>
+        @if (Model.ExpiredReasonText != null)
+        {
+            <small class="text-muted ms-1">（@Model.ExpiredReasonText）</small>
+        }
+    </p>
+
+    <a href="@backUrl" class="btn btn-sm btn-outline-secondary ms-auto">返回票券列表</a>
+</div>

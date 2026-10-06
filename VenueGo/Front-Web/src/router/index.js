@@ -51,6 +51,12 @@ const router = createRouter({
       name: "member",
       component: () => import("../layouts/member/MemberLayout.vue"),
       children: [
+        // 我的預約
+        {
+          path: "reservations",
+          name: "reservations",
+          component: () => import("../views/member/MyReservationsView.vue"),
+        },
         // 我的票券
         {
           path: "tickets",

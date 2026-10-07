@@ -1,22 +1,51 @@
 <!-- js -->
 <script setup>
 import IconUsers from "@/components/icons/IconUsers.vue";
-import { RouterLink, RouterView, useRoute } from "vue-router";
+import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
+import { computed } from "vue";
+import { useMemberStore } from "@/stores/member";
+const memberStore = useMemberStore();
 const route = useRoute();
-
+const router = useRouter();
 const sideMenuItem = [
-  { label: "個人資料", icon: IconUsers, to: { name: "member" } },
+  { label: "個人資料", icon: IconUsers, to: { name: "member-profile" } },
   { label: "我的預約", icon: IconUsers, to: { name: "not-found" } },
   { label: "訂單與付款", icon: IconUsers, to: { name: "not-found" } },
   { label: "我的票券", icon: IconUsers, to: { name: "tickets" } },
   { label: "我的評論", icon: IconUsers, to: { name: "not-found" } },
 ];
+//測試資料
+// const user = {
+//   name: "王小明",
+//   email: "member@example.com",
+//   avatar: null,
+// };
+// const user = ref({
+//   name: "",
+//   email: "",
+//   avatar: null,
+// });
+const user = computed(() => ({
+  name: memberStore.member?.name ?? "",
+  email: memberStore.member?.email ?? "",
+  avatar: memberStore.member?.avatar ?? null,
+}));
 
-const user = {
-  name: "王小明",
-  email: "member@example.com",
-  avatar: null,
+const logout = async () => {
+  memberStore.logout();
+
+  await router.push({ name: "login" });
 };
+// onMounted(async () => {
+//   try {
+//     const member = await getCurrentMember();
+
+//     user.value.name = member.name;
+//     user.value.email = member.email;
+//   } catch (error) {
+//     console.error("取得會員資料失敗：", error);
+//   }
+// });
 </script>
 
 <template>
@@ -52,6 +81,14 @@ const user = {
             <component :is="item.icon" />
             {{ item.label }}
           </RouterLink>
+
+          <button
+            type="button"
+            @click="logout"
+            class="px-4 py-3 text-left text-sm text-red-600 hover:bg-gray-100"
+          >
+            登出
+          </button>
         </nav>
       </aside>
 

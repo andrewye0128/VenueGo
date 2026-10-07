@@ -1,9 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using VenueGo.Dtos.TicketDtos;
 using VenueGo.Helpers;
 using VenueGo.Services.Ticket;
 using VenueGo.ViewModels;
-
 namespace VenueGo.Controllers.Api.TicketApi
 {
 
@@ -21,9 +22,11 @@ namespace VenueGo.Controllers.Api.TicketApi
             _ticketQuery = ticketQuery;
             _env = env;
         }
-    
+
         // 前台「我的票券」頁 >> GET /api/tickets/mine
         // 回傳這位會員持有或已轉出的票券（已取消的不回傳）
+        [Authorize(
+       AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [HttpGet("mine")]
         public async Task<IActionResult> GetMine(
             [FromQuery] int? testUserId, CancellationToken cancellationToken)

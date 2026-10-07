@@ -9,7 +9,17 @@ const http = axios.create({
   // 10 秒沒回應就當成失敗
   timeout: 10000,
 });
+// ── 送出請求前：已登入就自動帶上 JWT ──
+// 各 API 檔案不用自己處理 token，之後登入資訊有調整也只要改這個檔案
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
 
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
 // 判斷是不是後端的 ApiResult 格式：{ success, message, errorCode, data }
 const isApiResult = (body) =>
   body !== null && typeof body === "object" && typeof body.success === "boolean";

@@ -1,6 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "../views/HomeView.vue";
-
+import { useMemberStore } from "@/stores/member";
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -62,6 +62,12 @@ const router = createRouter({
           name: "tickets",
           component: () => import("../views/member/MyTicketsView.vue"),
         },
+        //個人資料
+        {
+          path: "",
+          name: "member-profile",
+          component: () => import("../views/member/MemberProfileView.vue"),
+        },
       ],
     },
     {
@@ -78,6 +84,26 @@ const router = createRouter({
       component: () => import("../views/NotFoundView.vue"),
     },
   ],
+});
+// 路由守衛：未登入或 Token 無效時，禁止進入會員中心。
+router.beforeEach(async (to) => {
+  const token = localStorage.getItem("token");
+  const memberStore = useMemberStore();
+
+  if (to.path.startsWith("/member")) {
+    if (!token) {
+      return { name: "login" };
+    }
+
+    if (!memberStore.member) {
+      try {
+        await memberStore.fetchCurrentMember();
+      } catch (error) {
+        memberStore.logout();
+        return { name: "login" };
+      }
+    }
+  }
 });
 
 export default router;

@@ -5,7 +5,12 @@
 export const ErrorCodes = Object.freeze({
   // ── 後端回傳 ──
   NotFound: "NotFound", // 找不到資料
-
+  LoginFailed: "LoginFailed", // 備用，理論上登入失敗現在都會有更明確的代碼
+  // ── 會員登入（MemberAuthApiController）──
+  InvalidCredentials: "InvalidCredentials", // 帳號不存在 / 密碼錯誤
+  AccountLocked: "AccountLocked", // 密碼連續打錯，暫時鎖定中
+  AccountSuspended: "AccountSuspended", // 帳號已被停權
+  AccountInactive: "AccountInactive", // 帳號已註銷 / 狀態異常
   // ── 前台 src/api/http.js 產生（不是後端回傳）──
   ValidationFailed: "ValidationFailed", // [ApiController] 自動產生的輸入驗證錯誤
 });

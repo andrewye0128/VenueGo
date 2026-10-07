@@ -3,7 +3,6 @@ using System.Net.Mail;
 using Microsoft.Extensions.Options;
 using VenueGo.Models;
 using VenueGo.Services;
-using VenueGo.Models;
 namespace VenueGo.Services
 {
     public class EmailService : IEmailService

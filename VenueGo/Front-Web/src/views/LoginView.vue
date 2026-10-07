@@ -1,11 +1,15 @@
 <script setup>
 import { reactive, ref } from "vue";
 import { z } from "zod";
+import { useRouter } from "vue-router";
+import { useMemberStore } from "@/stores/member";
+
+const router = useRouter();
+const memberStore = useMemberStore();
 
 // 登入表單驗證規則
 const schema = z.object({
   email: z.string().trim().min(1, "請輸入 Email").email("Email 格式不正確"),
-
   password: z.string().min(1, "請輸入密碼"),
 });
 
@@ -15,27 +19,19 @@ const state = reactive({
   password: "",
 });
 
-// 登入按鈕 Loading 狀態
-const loading = ref(false);
-
 // 登入錯誤訊息
 const loginError = ref("");
 
 // 登入
-async function onSubmit(event) {
+async function onSubmit() {
   loginError.value = "";
-  loading.value = true;
 
   try {
-    // 目前先模擬登入
-    // 下一步再改成呼叫後端 API
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    console.log("登入資料：", event.data);
+    await memberStore.login(state.email, state.password);
+    console.log(memberStore.member);
+    await router.push({ name: "member" });
   } catch (error) {
-    loginError.value = "登入失敗，請稍後再試。";
-  } finally {
-    loading.value = false;
+    loginError.value = error.message;
   }
 }
 </script>
@@ -79,8 +75,10 @@ async function onSubmit(event) {
           </div>
 
           <!-- 登入按鈕 -->
-          <UButton type="submit" color="primary" size="lg" block :loading="loading"> 登入 </UButton>
-
+          <!--<UButton type="submit" color="primary" size="lg" block :loading="loading"> 登入 </UButton>-->
+          <UButton type="submit" color="primary" size="lg" block :loading="memberStore.loading">
+            登入
+          </UButton>
           <!-- 其他功能 -->
           <div class="flex items-center justify-between pt-1 text-sm">
             <RouterLink to="/register" class="text-brand-primary hover:underline">

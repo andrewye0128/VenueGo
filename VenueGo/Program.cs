@@ -1,5 +1,9 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
+using System.Text;
 using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.CheckinModels;
@@ -15,9 +19,6 @@ using VenueGo.Services.Reservations;
 using VenueGo.Services.Ticket;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
-using System.Text;
 using VenueGo.Services.VenueSchedules;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -117,6 +118,7 @@ builder.Services.AddSession();
 builder.Services.AddScoped<IRoleManagementService, RoleManagementService>();
 builder.Services.AddScoped<IEmployeeAccountService, EmployeeAccountService>();
 
+
 builder.Services.AddScoped<IMemberAccountService, MemberAccountService>();
 
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
@@ -152,6 +154,8 @@ builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUse
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();
 // 註冊密碼重設服務
 builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
+//註冊 IJwtService
+builder.Services.AddScoped<IJwtService, JwtService>();
 
 // 註冊關於訂單編號產生器的服務：介面 → 實作
 builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();
@@ -191,7 +195,26 @@ builder.Services.AddHostedService<TicketSettlementHostedService>();
 
 // 註冊 Swagger 服務
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+//builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "請輸入 JWT Token"
+    });
+
+    options.AddSecurityRequirement(document =>
+        new OpenApiSecurityRequirement
+        {
+            [new OpenApiSecuritySchemeReference("Bearer", document)] =
+                new List<string>()
+        });
+});
 
 //builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
 

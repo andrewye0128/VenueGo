@@ -22,10 +22,10 @@ async function loadTickets() {
   loading.value = true;
   errorMsg.value = "";
   try {
-    tickets.value = await getMyTickets(2);
+    tickets.value = await getMyTickets(3);
   } catch (err) {
     console.error("loadTickets 發生錯誤", err);
-    errorMsg.value = e.message;
+    errorMsg.value = err.message;
   } finally {
     loading.value = false;
   }

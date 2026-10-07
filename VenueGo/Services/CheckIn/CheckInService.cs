@@ -2,7 +2,7 @@
 using VenueGo.Data;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
-using VenueGo.Models.ReviewModels;
+using VenueGo.Services.ReviewTickets;
 using static VenueGo.Services.CheckIn.ICheckInService;
 
 namespace VenueGo.Services.CheckIn
@@ -18,6 +18,7 @@ namespace VenueGo.Services.CheckIn
             _visitReviewTicketFactory = visitReviewTicketFactory;
         }
 
+        // 儀錶板
         public async Task<int> SettleAllDueTicketsAsync()
         {
             // 只有 Valid/Used 是非終態,才需要檢查是否過期
@@ -103,7 +104,8 @@ namespace VenueGo.Services.CheckIn
                 ActionTime = DateTime.Now,
                 IsValid = isVaild,
                 IsManualOverride = isManualOverride,
-                OperatorId = operatorId
+                OperatorId = operatorId,
+                FailReason = isVaild ? null : (byte)CheckInFailReason.InvalidSequence
             });
 
             await _db.SaveChangesAsync();
@@ -161,7 +163,8 @@ namespace VenueGo.Services.CheckIn
                 ActionTime = DateTime.Now,
                 IsValid = isValid,
                 IsManualOverride = isManualOverride,
-                OperatorId = operatorId
+                OperatorId = operatorId,
+                FailReason = isValid ? null : (byte)CheckInFailReason.InvalidSequence
             });
             await _db.SaveChangesAsync();
             if (isValid)
@@ -172,98 +175,99 @@ namespace VenueGo.Services.CheckIn
         }
 
         // 專給人工取消(後台) --> 自動取取消功能已同步在取消票券
-        public async Task<CheckInResult> CancelAsync(int ticketId, int operatorId, bool isManualOverride)
-        {
-            var ticket = await _db.EntryTickets.FirstOrDefaultAsync(t => t.TicketId == ticketId);
-            if (ticket == null)
-            {
-                return CheckInResult.Fail(CheckInFailReason.TicketNotFound);
-            }
+        //public async Task<CheckInResult> CancelAsync(int ticketId, int operatorId, bool isManualOverride)
+        //{
+        //    var ticket = await _db.EntryTickets.FirstOrDefaultAsync(t => t.TicketId == ticketId);
+        //    if (ticket == null)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.TicketNotFound);
+        //    }
 
-            // 重複取消也會有錯誤訊息(出現已取消)
-            if (ticket.Status == (byte)EntryTicketStatus.Cancelled)
-            {
-                return CheckInResult.Fail(CheckInFailReason.AlreadyCancelled);
-            }
+        //    // 重複取消也會有錯誤訊息(出現已取消)
+        //    if (ticket.Status == (byte)EntryTicketStatus.Cancelled)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.AlreadyCancelled);
+        //    }
 
-            // 終態無法執行取消動作
-            if (ticket.Status == (byte)EntryTicketStatus.Expired)
-            {
-                return CheckInResult.Fail(CheckInFailReason.AlreadyExpired);
-            }
+        //    // 終態無法執行取消動作
+        //    if (ticket.Status == (byte)EntryTicketStatus.Expired)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.AlreadyExpired);
+        //    }
 
-            if (ticket.Status == (byte)EntryTicketStatus.Completed)
-            {
-                return CheckInResult.Fail(CheckInFailReason.AlreadyCompleted);
-            }
+        //    if (ticket.Status == (byte)EntryTicketStatus.Completed)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.AlreadyCompleted);
+        //    }
 
-            // 防呆 --> 以入場使用過的票券不得取消
-            if (ticket.Status != (byte)EntryTicketStatus.Valid)
-            {
-                return CheckInResult.Fail(CheckInFailReason.InvalidSequence);
-            }
+        //    // 防呆 --> 以入場使用過的票券不得取消
+        //    if (ticket.Status != (byte)EntryTicketStatus.Valid)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.InvalidSequence);
+        //    }
 
-            //紀錄人工取消 --> CheckInLog以改成對於這張票券的動作狀態
-            ticket.Status = (byte)EntryTicketStatus.Cancelled;
-            _db.CheckInLogs.Add(new CheckInLog
-            {
-                TicketId = ticketId,
-                Action = (byte)CheckInAction.ManualCancel,
-                ActionTime = DateTime.Now,
-                IsValid = true,
-                IsManualOverride = isManualOverride,
-                OperatorId = operatorId
-            });
-            await _db.SaveChangesAsync();
-            return CheckInResult.Ok();
-        }
+        //    //紀錄人工取消 --> CheckInLog以改成對於這張票券的動作狀態
+        //    ticket.Status = (byte)EntryTicketStatus.Cancelled;
+        //    _db.CheckInLogs.Add(new CheckInLog
+        //    {
+        //        TicketId = ticketId,
+        //        Action = (byte)CheckInAction.ManualCancel,
+        //        ActionTime = DateTime.Now,
+        //        IsValid = true,
+        //        IsManualOverride = isManualOverride,
+        //        OperatorId = operatorId
+        //    });
+        //    await _db.SaveChangesAsync();
+        //    return CheckInResult.Ok();
+        //}
 
-        public async Task<CheckInResult> ExpireAsync(int ticketId, int operatorId, bool isManualOverride)
-        {
-            var ticket = await _db.EntryTickets.FirstOrDefaultAsync(t => t.TicketId == ticketId);
-            if (ticket == null)
-            {
-                return CheckInResult.Fail(CheckInFailReason.TicketNotFound);
-            }
+        //public async Task<CheckInResult> ExpireAsync(int ticketId, int operatorId, bool isManualOverride)
+        //{
+        //    var ticket = await _db.EntryTickets.FirstOrDefaultAsync(t => t.TicketId == ticketId);
+        //    if (ticket == null)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.TicketNotFound);
+        //    }
 
-            if (ticket.Status == (byte)EntryTicketStatus.Expired)
-            {
-                return CheckInResult.Fail(CheckInFailReason.AlreadyExpired);
-            }
+        //    if (ticket.Status == (byte)EntryTicketStatus.Expired)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.AlreadyExpired);
+        //    }
 
-            if (ticket.Status == (byte)EntryTicketStatus.Cancelled)
-            {
-                return CheckInResult.Fail(CheckInFailReason.AlreadyCancelled);
-            }
+        //    if (ticket.Status == (byte)EntryTicketStatus.Cancelled)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.AlreadyCancelled);
+        //    }
 
-            if (ticket.Status == (byte)EntryTicketStatus.Completed)
-            {
-                return CheckInResult.Fail(CheckInFailReason.AlreadyCompleted);
-            }
+        //    if (ticket.Status == (byte)EntryTicketStatus.Completed)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.AlreadyCompleted);
+        //    }
 
-            // 有問題: 已使用未照預約時間出場 / 未在預約入場時段入場 --> 統一逾時
-            if (ticket.Status != (byte)EntryTicketStatus.Valid)
-            {
-                return CheckInResult.Fail(CheckInFailReason.InvalidSequence);
-            }
+        //    // 有問題: 已使用未照預約時間出場 / 未在預約入場時段入場 --> 統一逾時
+        //    if (ticket.Status != (byte)EntryTicketStatus.Valid)
+        //    {
+        //        return CheckInResult.Fail(CheckInFailReason.InvalidSequence);
+        //    }
 
-            ticket.Status = (byte)EntryTicketStatus.Expired;
-            _db.CheckInLogs.Add(new CheckInLog
-            {
-                TicketId = ticketId,
-                Action = (byte)CheckInAction.ManualExpire,
-                ActionTime = DateTime.Now,
-                IsValid = true,
-                IsManualOverride = isManualOverride,
-                OperatorId = operatorId
-            });
-            await _db.SaveChangesAsync();
-            return CheckInResult.Ok();
-        }
+        //    ticket.Status = (byte)EntryTicketStatus.Expired;
+        //    _db.CheckInLogs.Add(new CheckInLog
+        //    {
+        //        TicketId = ticketId,
+        //        Action = (byte)CheckInAction.ManualExpire,
+        //        ActionTime = DateTime.Now,
+        //        IsValid = true,
+        //        IsManualOverride = isManualOverride,
+        //        OperatorId = operatorId
+        //    });
+        //    await _db.SaveChangesAsync();
+        //    return CheckInResult.Ok();
+        //}
 
 
 
         // 共用查詢, 能檢查預約時間減查早到或是超時/未到逾時
+
         private async Task<(DateOnly BookingDate, TimeOnly StartTIme, TimeOnly EndTime)?> GetReservationTime(int orderId)
         {
             // 根據票券查詢訂單對應的預約時間
@@ -329,7 +333,8 @@ namespace VenueGo.Services.CheckIn
                 ActionTime = DateTime.Now,
                 IsValid = false,
                 IsManualOverride = isManualOverride,
-                OperatorId = operatorId
+                OperatorId = operatorId,
+                FailReason = (byte)reason
             });
             await _db.SaveChangesAsync();
             return CheckInResult.Fail(reason);

@@ -1,4 +1,4 @@
-namespace VenueGo.Helpers
+namespace VenueGo.Models.ReviewModels
 {
     /// <summary>
     /// 評論子系統的業務規則常數。
@@ -7,6 +7,9 @@ namespace VenueGo.Helpers
     /// </summary>
     public static class ReviewPolicy
     {
+        /// <summary>評論資格（憑證）的有效天數，從憑證建立起算。</summary>
+        public const int TicketValidDays = 14;
+
         /// <summary>評論建立後幾天，沒回覆也會自動公開。</summary>
         public const int PublicBufferDays = 7;
 

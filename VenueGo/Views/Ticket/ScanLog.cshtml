@@ -1,0 +1,44 @@
+﻿@model VenueGo.ViewModels.CheckinViewModels.TicketScanTabViewModel
+@using VenueGo.Models.CheckinModels
+@{
+    ViewData["Title"] = "報到管理";
+}
+
+<partial name="_TicketHeader" model="Model" />
+<partial name="_TicketTabs" model="Model.TicketId" />
+
+<div class="border border-top-0 p-3">
+    <div class="mb-3 d-flex flex-wrap gap-2">
+        <form asp-action="ManualCheckIn" asp-route-id="@Model.TicketId" method="post">
+            <button type="submit" class="btn btn-sm btn-success" disabled="@(!Model.CanCheckIn)">手動報到</button>
+        </form>
+        <form asp-action="ManualCheckOut" asp-route-id="@Model.TicketId" method="post">
+            <button type="submit" class="btn btn-sm btn-outline-secondary" disabled="@(!Model.CanCheckOut)">手動離場</button>
+        </form>
+    </div>
+
+    <table class="table table-sm">
+        <thead>
+            <tr><th>時間</th><th>動作</th><th>人工覆核</th><th>操作結果</th><th>員工編號</th></tr>
+        </thead>
+        <tbody>
+            @if (!Model.Logs.Any())
+            {
+                <tr><td colspan="5" class="text-center text-muted">尚無報到紀錄</td></tr>
+            }
+            else
+            {
+                @foreach (var log in Model.Logs)
+                {
+                    <tr>
+                        <td>@log.ActionTime</td>
+                        <td>@CheckinDisplayText.ActionText(log.Action)</td>
+                        <td>@(log.IsManualOverride ? "是" : "否")</td>
+                        <td>@CheckinDisplayText.ResultText(log.Action, log.IsValid, log.FailReason)</td>
+                        <td>@log.OperatorId</td>
+                    </tr>
+                 }
+            }
+        </tbody>
+    </table>
+</div>

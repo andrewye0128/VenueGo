@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
+using VenueGo.Dtos;
 using VenueGo.Dtos.VenueDtos;
 using VenueGo.Models.VenueModels;
-using VenueGo.ViewModels;   //ApiResult 在這個命名空間
 
 namespace VenueGo.Controllers.Api.VenuesApi
 {

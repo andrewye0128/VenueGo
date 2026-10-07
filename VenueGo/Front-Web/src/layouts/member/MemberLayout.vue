@@ -1,66 +1,95 @@
-<!-- js -->
+<!-- 會員中心版面：電腦版左側選單＋右側內容；手機、平板版選單改成上方可左右滑動的分頁列 -->
+<!-- UIcon 由 Nuxt UI 自動匯入 -->
 <script setup>
-import IconUsers from "@/components/icons/IconUsers.vue";
+import { nextTick, onMounted, ref, watch } from "vue";
 import { RouterLink, RouterView, useRoute } from "vue-router";
+
 const route = useRoute();
 
-const sideMenuItem = [
-  { label: "個人資料", icon: IconUsers, to: { name: "member" } },
-  { label: "我的預約", icon: IconUsers, to: { name: "not-found" } },
-  { label: "訂單與付款", icon: IconUsers, to: { name: "not-found" } },
-  { label: "我的票券", icon: IconUsers, to: { name: "tickets" } },
-  { label: "我的評論", icon: IconUsers, to: { name: "not-found" } },
+// 網址用路徑字串：頁面還沒做好時會自動顯示 404；組員做好頁面、路由加上同樣的路徑後，這裡不用改
+// 圖示名稱要寫完整，Nuxt UI 打包時才掃描得到
+const sideMenuItems = [
+  { label: "個人資料", to: "/member/profile", icon: "i-mdi-card-account-details-outline" },
+  { label: "我的預約", to: "/member/reservations", icon: "i-mdi-calendar-month-outline" },
+  { label: "訂單與付款", to: "/member/orders", icon: "i-mdi-credit-card-outline" },
+  { label: "我的票券", to: "/member/tickets", icon: "i-mdi-ticket-confirmation-outline" },
+  { label: "我的評論", to: "/member/reviews", icon: "i-mdi-star-outline" },
 ];
 
+// 假資料：登入功能完成後，改成讀取登入的會員資料
 const user = {
   name: "王小明",
   email: "member@example.com",
   avatar: null,
 };
+
+// ── 手機、平板：把目前頁的分頁捲到分頁列中間 ──
+// 例如進入「我的評論」時，它在分頁列最右邊，可能被擠到畫面外
+// 只捲動分頁列本身（scrollTo），不用 scrollIntoView，避免連整個頁面一起捲動
+// 電腦版分頁列不會左右捲動，這段不會有任何效果
+const navRef = ref(null);
+
+function scrollActiveTabIntoView() {
+  const nav = navRef.value;
+  // is-active：寫在下方 active-class 裡的標記
+  // （設定 active-class 之後，RouterLink 就不會再加預設的 router-link-active，所以要自己加標記）
+  const active = nav?.querySelector(".is-active");
+  if (!active) return;
+  nav.scrollTo({ left: active.offsetLeft - (nav.clientWidth - active.offsetWidth) / 2 });
+}
+
+onMounted(scrollActiveTabIntoView);
+watch(
+  () => route.path,
+  () => nextTick(scrollActiveTabIntoView),
+);
 </script>
 
 <template>
-  <div class="bg-gray-50">
-    <div class="mx-auto max-w-6xl md:flex items-start px-4 py-6 gap-6">
-      <!-- sideBar -->
-      <aside class="w-56 shrink-0 border border-gray-200 bg-white">
-        <div class="flex items-center border-b border-gray-200 p-4 gap-3">
+  <div class="bg-brand-background">
+    <!-- 寬度跟 NavBar、Footer 一致：max-w-7xl + px-4 md:px-6，各尺寸左右邊界都對齊 -->
+    <div class="mx-auto max-w-7xl px-4 py-6 md:px-6 lg:flex lg:items-start lg:gap-6">
+      <!-- 會員卡片：手機、平板在上方；電腦在左側 -->
+      <aside class="rounded border border-neutral-border bg-neutral-surface lg:w-56 lg:shrink-0">
+        <!-- 會員資訊 -->
+        <div class="flex items-center gap-3 border-b border-neutral-border p-4 lg:gap-4">
           <div
-            class="w-10 h-10 shrink-0 rounded-full bg-gray-700 text-white flex justify-center items-center text-xl font-bold"
+            class="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-background text-neutral-text-primary ring ring-neutral-border lg:size-14"
           >
-            {{ user.name.charAt(0) }}
+            <UIcon name="i-mdi-account-outline" class="size-6 lg:size-8" />
           </div>
           <div class="min-w-0">
-            <p class="text-sm font-semibold text-gray-900">{{ user.name }}</p>
-            <p class="truncate text-xs text-gray-500">{{ user.email }}</p>
+            <p class="font-semibold text-neutral-text-primary">{{ user.name }}</p>
+            <p class="truncate text-xs text-neutral-text-secondary">{{ user.email }}</p>
           </div>
         </div>
 
-        <!-- nav -->
-        <nav class="flex flex-col gap-1">
+        <!-- 選單：手機、平板橫排（放不下時左右滑動，目前頁下方藍線）；電腦直排（目前頁淡藍底＋左側藍線）
+             active-class：目前頁的樣式，寫法跟 NavBar.vue 一樣；「!」讓它蓋過一般狀態的顏色
+             目前頁的判斷是「網址開頭符合」，之後做 /member/reservations/12 這類子頁面時，「我的預約」一樣會標示
+             手機版不用 -mb-px 讓藍線往下凸，避免分頁列多出 1px 而出現直向小捲軸 -->
+        <nav
+          ref="navRef"
+          aria-label="會員中心"
+          class="relative flex overflow-x-auto px-2 lg:flex-col lg:overflow-visible lg:px-0 lg:py-2"
+        >
           <RouterLink
-            v-for="item in sideMenuItem"
+            v-for="item in sideMenuItems"
             :key="item.label"
             :to="item.to"
-            class="flex items-center gap-3 px-4 py-3 rounded-lg text-sm transition-colors"
-            :class="
-              route.name === item.to.name
-                ? 'bg-gray-900 text-white'
-                : 'text-gray-600 hover:bg-gray-100'
-            "
+            class="flex shrink-0 items-center gap-3 border-b-2 border-transparent px-4 py-3 text-sm text-neutral-text-secondary transition-colors hover:text-brand-primary focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary lg:border-b-0 lg:border-l-3 lg:hover:bg-brand-primary/8"
+            active-class="is-active !border-brand-primary font-semibold !text-brand-primary lg:!bg-brand-primary/8"
           >
-            <component :is="item.icon" />
+            <UIcon :name="item.icon" class="hidden size-5 lg:block" />
             {{ item.label }}
           </RouterLink>
         </nav>
       </aside>
 
-      <!-- Main -->
-      <main class="flex-1 min-w-0">
+      <!-- 內容：min-w-0 讓寬表格可以在內容區裡左右捲動，不會把整個版面撐寬 -->
+      <main class="mt-4 min-w-0 flex-1 lg:mt-0">
         <RouterView />
       </main>
     </div>
   </div>
 </template>
-
-<style scoped></style>

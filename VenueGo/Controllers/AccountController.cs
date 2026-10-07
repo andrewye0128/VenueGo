@@ -387,6 +387,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using VenueGo.Data;
+using VenueGo.Extensions;
 using VenueGo.Helpers;
 using VenueGo.Models;
 using VenueGo.Models.Entities;

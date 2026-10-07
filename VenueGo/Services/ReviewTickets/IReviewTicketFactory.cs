@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Models.ReviewModels
+﻿namespace VenueGo.Services.ReviewTickets
 {
     // ════════════════════════════════════════════════════════
     //  評論憑證工廠：拆成兩個介面，而不是一個大的

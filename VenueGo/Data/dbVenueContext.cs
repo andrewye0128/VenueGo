@@ -26,6 +26,8 @@ public partial class dbVenueContext : DbContext
 
     public virtual DbSet<OrdersDetail> OrdersDetails { get; set; }
 
+    public virtual DbSet<OvertimeCharge> OvertimeCharges { get; set; }
+
     public virtual DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
     public virtual DbSet<Payment> Payments { get; set; }
@@ -58,15 +60,15 @@ public partial class dbVenueContext : DbContext
 
     public virtual DbSet<SportTypePriceRule> SportTypePriceRules { get; set; }
 
+    public virtual DbSet<TicketStatusLog> TicketStatusLogs { get; set; }
+
+    public virtual DbSet<TicketTransfer> TicketTransfers { get; set; }
+
     public virtual DbSet<User> Users { get; set; }
 
     public virtual DbSet<UserRole> UserRoles { get; set; }
 
     public virtual DbSet<VBookingTicketInfo> VBookingTicketInfos { get; set; }
-
-    public virtual DbSet<VReservationSummary> VReservationSummaries { get; set; }
-
-    public virtual DbSet<VReviewFullInfo> VReviewFullInfos { get; set; }
 
     public virtual DbSet<Venue> Venues { get; set; }
 
@@ -182,6 +184,21 @@ public partial class dbVenueContext : DbContext
                 .HasFilter("([SlotTime] IS NOT NULL)");
 
             entity.Property(e => e.SlotTime).HasPrecision(0);
+        });
+
+        modelBuilder.Entity<OvertimeCharge>(entity =>
+        {
+            entity.ToTable("OvertimeCharge");
+
+            entity.HasIndex(e => e.OrderId, "UQ_OvertimeCharge_OrderId").IsUnique();
+
+            entity.Property(e => e.BillingHours).HasColumnType("decimal(2, 1)");
+            entity.Property(e => e.ConfirmedAt).HasPrecision(0);
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_OvertimeCharge_CreatedAt");
+            entity.Property(e => e.Remark).HasMaxLength(100);
+            entity.Property(e => e.Status).HasDefaultValue((byte)1, "DF_OvertimeCharge_Status");
         });
 
         modelBuilder.Entity<PasswordResetToken>(entity =>
@@ -427,6 +444,45 @@ public partial class dbVenueContext : DbContext
             entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });
 
+        modelBuilder.Entity<TicketStatusLog>(entity =>
+        {
+            entity.HasKey(e => e.LogId);
+
+            entity.ToTable("TicketStatusLog");
+
+            entity.HasIndex(e => e.TicketId, "IX_TicketStatusLog_TicketId");
+
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_TicketStatusLog_CreatedAt");
+            entity.Property(e => e.Reason).HasMaxLength(200);
+        });
+
+        modelBuilder.Entity<TicketTransfer>(entity =>
+        {
+            entity.HasKey(e => e.TransferId);
+
+            entity.ToTable("TicketTransfer");
+
+            entity.HasIndex(e => e.FromUserId, "IX_TicketTransfer_FromUserId");
+
+            entity.HasIndex(e => e.TicketId, "UQ_TicketTransfer_TicketId_Pending")
+                .IsUnique()
+                .HasFilter("([Status]=(1))");
+
+            entity.HasIndex(e => e.TransferCode, "UQ_TicketTransfer_TransferCode").IsUnique();
+
+            entity.Property(e => e.CompletedAt).HasPrecision(0);
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_TicketTransfer_CreatedAt");
+            entity.Property(e => e.ExpiresAt).HasPrecision(0);
+            entity.Property(e => e.Status).HasDefaultValue((byte)1, "DF_TicketTransfer_Status");
+            entity.Property(e => e.TransferCode)
+                .HasMaxLength(16)
+                .IsUnicode(false);
+        });
+
         modelBuilder.Entity<User>(entity =>
         {
             entity.HasIndex(e => e.Email, "UQ_Users_Email").IsUnique();
@@ -485,6 +541,9 @@ public partial class dbVenueContext : DbContext
                 .HasColumnName("TicketQRToken");
             entity.Property(e => e.TicketStatusName).HasMaxLength(17);
             entity.Property(e => e.UserName).HasMaxLength(100);
+            entity.Property(e => e.UserPhone)
+                .HasMaxLength(20)
+                .IsUnicode(false);
             entity.Property(e => e.VenueName).HasMaxLength(40);
         });
 

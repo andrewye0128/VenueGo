@@ -1,5 +1,5 @@
 ﻿using System.Text.RegularExpressions;
-using VenueGo.Helpers;
+using VenueGo.Models.ReviewModels;
 
 namespace VenueGo.ViewModels.ReviewVM
 {
@@ -116,7 +116,7 @@ namespace VenueGo.ViewModels.ReviewVM
     ///         N 個人就有 N 次現場評論的機會，再加上一則預約評論。
     /// 依場地：選了運動類型時自動改用這個，把同一個場地的問題放在一起看（9/29）。
     /// </summary>
-    public sealed class ReviewQueueGroupVM
+    public sealed record ReviewQueueGroupVM
     {
         public QueueGroupKind Kind { get; init; } = QueueGroupKind.Order;
 
@@ -151,7 +151,7 @@ namespace VenueGo.ViewModels.ReviewVM
     public sealed record SportTypeOption(int SportTypeId, string Text);
 
     /// <summary>館方評論清單的整頁資料。Index 與 QueueList 共用同一份。</summary>
-    public class ReviewQueueVM
+    public sealed record ReviewQueueVM
     {
         public string Tab    { get; init; } = QueueTab.Unread;
         public string Source { get; init; } = QueueSource.All;
@@ -171,7 +171,9 @@ namespace VenueGo.ViewModels.ReviewVM
 
         /// <summary>
         /// 依訂單分組。預設關閉。
-        /// ⚠️ 有選運動類型時一律是 false（改成依場地分組），開關也會停用。
+        /// （9/29 舊說明，v2 已不成立）⚠️ 有選運動類型時一律是 false（改成依場地分組），開關也會停用。
+        /// v2：這裡存的是「使用者有沒有打開開關」，選了運動類型或場地時也照樣記著，
+        ///     條件拿掉後就恢復分組。畫面上實際有沒有依訂單分組，看 GroupByOrder。
         /// </summary>
         public bool Grouped { get; init; }
 
@@ -180,7 +182,11 @@ namespace VenueGo.ViewModels.ReviewVM
         /// <summary>選了哪個運動類型。null＝全部。只篩得到現場評論（預約評論沒有場地資料）。</summary>
         public int? SportTypeId { get; init; }
 
-        /// <summary>只看某個場地。null＝不限。有值的時候，SportTypeId 一定是這個場地的運動類型。</summary>
+        /// <summary>
+        /// 只看某個場地。null＝不限。
+        /// （9/29 舊說明）有值的時候，SportTypeId 一定是這個場地的運動類型。
+        /// v2：有值的時候，SportTypeId 是 null（全部）或這個場地的運動類型。
+        /// </summary>
         public int? VenueId { get; init; }
 
         /// <summary>目前篩選的場地名稱，給「正在篩選『某場地』的評論」那行字用。</summary>
@@ -188,8 +194,15 @@ namespace VenueGo.ViewModels.ReviewVM
 
         public List<SportTypeOption> SportTypeOptions { get; init; } = new();
 
-        /// <summary>選了運動類型就依場地分組，取代依訂單分組。</summary>
-        public bool GroupByVenue => SportTypeId != null;
+        /// <summary>選了運動類型或場地就依場地分組，取代依訂單分組。</summary>
+        // 原本：public bool GroupByVenue => SportTypeId != null;
+        public bool GroupByVenue => SportTypeId != null || VenueId != null;
+
+        /// <summary>
+        /// 實際上有沒有依訂單分組（v2）：使用者打開了，而且沒有被依場地分組擋住。
+        /// 開關的勾選狀態看這個；網址與 data-grouped 仍然用 Grouped，才記得住使用者的選擇。
+        /// </summary>
+        public bool GroupByOrder => Grouped && !GroupByVenue;
 
         /// <summary>沒分組時看這個。</summary>
         public List<ReviewQueueItemVM> Items { get; init; } = new();

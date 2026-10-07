@@ -152,7 +152,7 @@
                                           <form asp-action="SetSatisfaction" method="post"
                                                 class="d-flex gap-2">
                                                 <input type="hidden" name="token" value="@Model.Qrtoken" />
-                                                <input type="hidden" name="bookingId" value="@Model.ReviewPerBookingId" />
+                                                <input type="hidden" name="orderId" value="@Model.OrderId" />
                                                 <button type="submit" name="satisfaction" value="2"
                                                         class="btn btn-sm btn-outline-success">
                                                       <i class="bi bi-emoji-smile"></i> 滿意

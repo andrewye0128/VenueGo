@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using VenueGo.Data;
+using VenueGo.Dtos.VenueDtos;
 using VenueGo.Models.Entities;
 using VenueGo.ViewModels.VenueViewModels;
 
@@ -258,9 +259,9 @@ namespace VenueGo.Models.VenueModels
             //未被軟刪除、名稱相同、排除自己(編輯時) >> 只要有一筆符合條件就算重複
             using (dbVenueContext db = new dbVenueContext())
             {
-                var data = from v in db.Venues 
-                           where (v.VenueName == venueName) && (v.IsActive == true) && (excludeId == null || v.VenueId != excludeId) 
-                           select v ;
+                var data = from v in db.Venues
+                           where (v.VenueName == venueName) && (v.IsActive == true) && (excludeId == null || v.VenueId != excludeId)
+                           select v;
                 return data.Any();
             }
         }
@@ -287,6 +288,35 @@ namespace VenueGo.Models.VenueModels
                     data.UpdatedBy = userId;
                 }
                 db.SaveChanges();
+            }
+        }
+
+
+        /*組合DTO*/
+        //前台首頁的"場館介紹"資料DTO >> GET /api/venues
+        public List<VenueCardDto> QueryVenueCards()
+        {
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var datas = from v in db.Venues
+                            //1. 每個場地找出它所屬的運動類型(兩邊的 SportTypeId 相同)
+                            join s in db.SportTypes on v.SportTypeId equals s.SportTypeId
+                            //2. 場地、運動類型都要是未刪除
+                            where v.IsActive == true && s.IsActive == true
+                            //3. 依運動類型排序,同一運動再依場地 Id 排序
+                            orderby v.SportTypeId, v.VenueId
+                            //4. 只取前台需要的欄位,轉成 VenueCardDto
+                            select new VenueCardDto
+                            {
+                                VenueId = v.VenueId,
+                                VenueName = v.VenueName,
+                                SportTypeId = v.SportTypeId,
+                                SportTypeName = s.SportName,
+                                PhotoPath = v.PhotoPath
+                            };
+
+                //5. 執行查詢,轉成 List 回傳
+                return datas.ToList();
             }
         }
     }

@@ -1,0 +1,3 @@
+P:System.DateTime.Now;請改用 ITimeService.Now（時光機和自動校時才會生效）
+P:System.DateTime.Today;請改用 ITimeService.Today
+P:System.DateTimeOffset.Now;請改用 ITimeService.Now

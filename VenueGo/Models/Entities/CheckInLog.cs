@@ -18,4 +18,6 @@ public partial class CheckInLog
     public bool IsManualOverride { get; set; }
 
     public int? OperatorId { get; set; }
+
+    public byte? FailReason { get; set; }
 }

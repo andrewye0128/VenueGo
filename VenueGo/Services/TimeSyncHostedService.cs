@@ -13,12 +13,14 @@ namespace VenueGo.Services
     /// 只要在 Program.cs 呼叫 AddHostedService，框架就會在網站啟動後
     /// 自己呼叫 ExecuteAsync，並在關站時透過 stoppingToken 通知它收工。
     /// </summary>
-    public class TimeSyncHostedService(
+    public sealed class TimeSyncHostedService(
         ITimeService timeService,
-        ILogger<TimeSyncHostedService> logger) : BackgroundService
+        ILogger<TimeSyncHostedService> logger,
+        TimeProvider timeProvider) : BackgroundService
     {
         private readonly ITimeService _timeService = timeService;
         private readonly ILogger<TimeSyncHostedService> _logger = logger;
+        private readonly TimeProvider _timeProvider = timeProvider;
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -26,7 +28,7 @@ namespace VenueGo.Services
 
             // PeriodicTimer 是 .NET 6 之後的做法，比 Task.Delay 迴圈好在
             // 它不會把「這一輪工作花掉的時間」疊加到下一輪的間隔上。
-            using var timer = new PeriodicTimer(TimeService.SyncInterval);
+            using var timer = new PeriodicTimer(TimeService.SyncInterval, _timeProvider);
 
             // 先校一次，不然網站剛開的前 30 分鐘偏移量都是 0
             await SyncSafelyAsync(stoppingToken);

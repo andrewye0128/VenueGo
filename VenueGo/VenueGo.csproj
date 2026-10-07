@@ -9,6 +9,11 @@
     <SpaRoot>Front-Web\</SpaRoot>
     <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)node_modules\**;$(SpaRoot)dist\**</DefaultItemExcludes>
     <UserSecretsId>e6b7ebab-4d60-491d-a38b-5af9cb94721d</UserSecretsId>
+
+    <!-- 開啟 XML 註解產出（讓 Scalar / Swagger 抓得到中文說明） -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- 前端 Vue 專案防禦設定：防止 C# 編譯器誤掃描 Vue 產出的靜態檔案 -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);$(SpaRoot)src\**</DefaultItemExcludes>
   </PropertyGroup>
 
   <!-- 前台 Vue 專案：不當成網站內容發佈，只在方案總管顯示原始碼 -->
@@ -40,12 +45,14 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.Diagnostics.EntityFrameworkCore" Version="10.0.11" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" Version="10.0.11" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
     </PackageReference>
     <PackageReference Include="QRCoder" Version="1.8.0" />
+    <PackageReference Include="Scalar.AspNetCore" Version="2.17.12" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="10.2.3" />
   </ItemGroup>
 
@@ -55,17 +62,23 @@
     <Folder Include="Models\ReservationModels\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="Mappers\" />
-    <Folder Include="ViewModels\CheckinViewModels\" />
     <Folder Include="Models\TimeSlots\" />
     <Folder Include="Models\VenueModels\" />
     <Folder Include="ViewModels\MemberViewModels\" />
     <Folder Include="ViewModels\VenueViewModels\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />
-    <Folder Include="wwwroot\images\venues\" />
     <Folder Include="wwwroot\uploads\" />
   </ItemGroup>
 
   <ProjectExtensions><VisualStudio><UserProperties wwwroot_4lib_4bootstrap_4dist_4css_4bootstrap-grid_1css_1map__JsonSchema="" /></VisualStudio></ProjectExtensions>
+
+  <ItemGroup>
+    <EditorConfigFiles Remove=".editorconfig" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include=".editorconfig" />
+  </ItemGroup>
 
 </Project>

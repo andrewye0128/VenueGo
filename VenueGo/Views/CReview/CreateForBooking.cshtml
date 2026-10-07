@@ -28,7 +28,7 @@
     <div class="col-md-6">
 
         <form id="reviewForm" asp-action="CreateForBooking" method="post"
-              asp-route-id="@Model.ReviewPerBookingId"
+              asp-route-id="@Model.OrderId"
               onsubmit="return confirm('確定要送出評論嗎？\n送出後無法修改呦')">
 
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>

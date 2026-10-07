@@ -788,7 +788,8 @@ public class AuthenticationService : IAuthenticationService
         }
 
         // 驗證密碼
-        bool passwordValid = PasswordHelper.VerifyPassword(
+        bool passwordValid = 
+            PasswordHelper.VerifyPassword(
             password,
             user.PasswordHash
         );

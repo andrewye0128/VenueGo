@@ -1,7 +1,6 @@
 <script setup>
 import { RouterLink } from "vue-router";
-// 換 logo 檔只要改這一行
-import logo from "@/assets/images/logo/logo.png";
+import logo from "@/assets/images/logo/logo.svg";
 </script>
 
 <template>

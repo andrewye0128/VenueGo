@@ -6,8 +6,9 @@ using System.Security.Claims;
 using VenueGo.Data;
 using VenueGo.Services.Auth;
 using VenueGo.ViewModels.MemberViewModels;
-using VenueGo.ViewModels;
 using VenueGo.Dtos.MemberDtos;
+
+using VenueGo.Dtos;
 namespace VenueGo.Controllers.Api
 {
     [ApiController]
@@ -57,7 +58,7 @@ namespace VenueGo.Controllers.Api
                 // 直接透傳 AuthenticationService 判斷好的 ErrorCode，
                 // 前台才能依不同原因（帳號鎖定/已停權/密碼錯誤）顯示不同畫面
                 return Unauthorized(
-                 ApiResultVM.Fail(
+                 ApiResult.Fail(
                      loginResult.ErrorMessage ?? "登入失敗",
                      loginResult.ErrorCode ?? "LoginFailed"
                  )
@@ -106,7 +107,7 @@ namespace VenueGo.Controllers.Api
             if (userId == null)
             {
                 return Unauthorized(
-                    ApiResultVM.Fail(
+                    ApiResult.Fail(
                         "無效的登入資訊，請重新登入。",
                         "InvalidToken"
                     )
@@ -120,7 +121,7 @@ namespace VenueGo.Controllers.Api
             if (user == null)
             {
                 return Unauthorized(
-                    ApiResultVM.Fail(
+                    ApiResult.Fail(
                         "找不到對應的會員資料，請重新登入。",
                         "InvalidToken"
                     )

@@ -4,7 +4,7 @@ using System.ComponentModel.DataAnnotations;
 namespace VenueGo.ViewModels.ReviewVM
 {
     /// <summary>現場評論撰寫頁（CreateForVisit）</summary>
-    public class ReviewCreateForVisitVM : ReviewCreateInputVM
+    public sealed class ReviewCreateForVisitVM : ReviewCreateInputVM
     {
         [Key]
         public int? ReviewPerVisitId { get; set; }

@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using VenueGo.Helpers;
-using VenueGo.Models.ReviewModels;
+using VenueGo.Services.ReviewTickets;
 
 namespace VenueGo.Controllers
 {

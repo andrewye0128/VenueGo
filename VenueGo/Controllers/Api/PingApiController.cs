@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using VenueGo.ViewModels;   // ← （ApiResult 在這個命名空間）
+using VenueGo.Dtos;
 
 namespace VenueGo.Controllers.Api
 {

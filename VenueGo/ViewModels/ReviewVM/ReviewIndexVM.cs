@@ -50,7 +50,7 @@
     }
 
     /// <summary>運動類型分頁的一個選項。null 代表「全部類型」。</summary>
-    public record SportTabVM(int? SportTypeId, string Name);
+    public sealed record SportTabVM(int? SportTypeId, string Name);
 
     /// <summary>
     /// 星等分布。同時是畫面上的篩選控制項。
@@ -59,7 +59,7 @@
     ///    但「不」套用星等篩選——否則點了 5 星之後分布圖只會剩一條，
     ///    使用者就失去切換回去的參照了。
     /// </summary>
-    public class StarDistributionVM
+    public sealed record StarDistributionVM
     {
         public int Star5 { get; init; }
         public int Star4 { get; init; }
@@ -95,7 +95,7 @@
     /// <summary>
     /// 顧客端評論專區（CReview/Index）整頁的資料。
     /// </summary>
-    public class ReviewIndexVM
+    public sealed record ReviewIndexVM
     {
         // ── 篩選狀態（從查詢字串來，要原樣帶回 View）──
 

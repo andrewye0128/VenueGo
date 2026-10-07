@@ -6,6 +6,7 @@ using System.Security.Claims;
 using VenueGo.Helpers;
 using VenueGo.ViewModels.MemberViewModels;
 using VenueGo.Services.Auth;
+using VenueGo.Extensions;
 namespace VenueGo.Controllers
 {
     [AllowAnonymous] // 確保登入控制器完全公開，不觸發任何攔截

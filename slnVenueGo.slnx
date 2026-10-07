@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="VenueGo.Tests/VenueGo.Tests.csproj" Id="f6f1ea50-2415-42ce-958f-8941dc973684" />
   <Project Path="VenueGo/VenueGo.csproj" />
 </Solution>

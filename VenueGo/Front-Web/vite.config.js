@@ -14,7 +14,9 @@ export default defineConfig({
       // Design System v1 沒有深色模式，關掉 Nuxt UI 依系統設定自動切換
       colorMode: false,
       // 把用到的 Iconify icon 打包進專案，不在執行時向網路抓
-      icon: { clientBundle: { scan: true } },
+          // 掃描範圍加上 src 裡的 .js（昱）：預設只掃 .vue 等檔案，寫在 .js 的圖示名稱
+          // （例如 constants/sportTypes.js 的運動圖示）不會被打包，執行時才向網路要，沒網路就是空白
+          icon: { clientBundle: { scan: { globInclude: ["src/**/*.{vue,js}"] } } },
       // 團隊規則：只有 Nuxt UI 的 U 開頭元件自動匯入，專案自己的元件（src/components）一律要寫 import
       // dirs: [] 代表不自動掃描任何專案資料夾；忘了 import 時，瀏覽器 console 會出現 Failed to resolve component 警告
       components: { dirs: [] },
@@ -39,8 +41,11 @@ export default defineConfig({
           },
           variants: {
             size: {
-              md: { base: "h-10 px-3 text-sm gap-2" },
-            },
+                      // 原本：md: { base: "h-10 px-3 text-sm gap-2" },
+                      // 手機（< 768px）用 16px（昱）：iOS Safari 碰到字小於 16px 的輸入框，點下去會自動放大整頁，
+                      // 而且輸入完不會縮回來。平板以上維持設計規範的 14px。
+                      md: { base: "h-10 px-3 text-base md:text-sm gap-2" },
+                },
           },
           compoundVariants: [
             {
@@ -51,14 +56,24 @@ export default defineConfig({
             },
           ],
         },
+        // 日期輸入框：高度跟 UInput、USelect、UButton 一樣是 40px（Nuxt UI 預設 32px）
+        inputDate: {
+          variants: {
+            size: {
+              md: { base: "h-10" },
+            },
+          },
+        },
         textarea: {
           slots: {
             base: "rounded disabled:opacity-100 disabled:bg-brand-background disabled:text-neutral-text-secondary",
           },
           variants: {
             size: {
-              md: { base: "px-3 py-2 text-sm" },
-            },
+                      // 原本：md: { base: "px-3 py-2 text-sm" },
+                      // 同上（昱）：手機 16px，避免 iOS 自動放大
+                      md: { base: "px-3 py-2 text-base md:text-sm" },
+                },
           },
           compoundVariants: [
             {

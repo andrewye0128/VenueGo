@@ -1,0 +1,49 @@
+﻿@model VenueGo.ViewModels.CheckinViewModels.TicketManualModalViewModel
+
+<div class="modal fade" id="@Model.ModalId" tabindex="-1" aria-labelledby="@(Model.ModalId)Label" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <form asp-controller="Ticket" asp-action="@Model.ActionName" method="post">
+            <input type="hidden" name="id" value="@Model.TicketId" />
+
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="@(Model.ModalId)Label">@Model.Title @Model.TicketText</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+                </div>
+
+                <div class="modal-body d-flex flex-column gap-3">
+                    <dl class="row mb-0 small">
+                        <dt class="col-sm-3">場地</dt>
+                        <dd class="col-sm-9">@Model.VenueName</dd>
+                        <dt class="col-sm-3">時段</dt>
+                        <dd class="col-sm-9">@Model.TimeText</dd>
+                        <dt class="col-sm-3">目前狀態</dt>
+                        <dd class="col-sm-9">@Model.StatusText</dd>
+                    </dl>
+
+                    <div class="alert alert-warning py-2 px-3 mb-0" role="alert">@Model.WarningText</div>
+
+                    <div>
+                        <label class="form-label fw-medium" for="@(Model.ModalId)ReasonType">
+                            原因類別 <span class="text-danger">*</span>
+                        </label>
+                        <select class="form-select" id="@(Model.ModalId)ReasonType" name="reasonType" required
+                                asp-items="Model.ReasonOptions">
+                            <option value="">請選擇原因類別</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label fw-medium" for="@(Model.ModalId)Remark">備註（選「其他」時必填）</label>
+                        <textarea class="form-control" id="@(Model.ModalId)Remark" name="remark"
+                                  rows="3" maxlength="200"></textarea>
+                    </div>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">返回</button>
+                    <button type="submit" class="btn @Model.ConfirmButtonClass">@Model.ConfirmButtonText</button>
+                </div>
+            </div>
+        </form>
+    </div>
+</div>

@@ -11,6 +11,18 @@ export const ErrorCodes = Object.freeze({
   AccountLocked: "AccountLocked", // 密碼連續打錯，暫時鎖定中
   AccountSuspended: "AccountSuspended", // 帳號已被停權
   AccountInactive: "AccountInactive", // 帳號已註銷 / 狀態異常
+  NotLoggedIn: "NotLoggedIn", // 沒登入（/api 開頭的網址，後端 ApiResponses.RedirectToLogin 回的）
+  Forbidden: "Forbidden", // 登入了但身分不對，例如員工帳號打會員專用的 API
+
+  // ── 評論（昱）──
+  Expired: "Expired", // 超過可以評論的時間
+  AlreadyReviewed: "AlreadyReviewed", // 這張憑證已經評論過了
+  AlreadyRated: "AlreadyRated", // 已經對館方回覆表態過了
+  NoReply: "NoReply", // 館方還沒回覆，不能表態
+  SpamMarked: "SpamMarked", // 評論已下架，不能切換公開
+  InvalidSatisfaction: "InvalidSatisfaction", // 表態的值不是 0／1／2
+
   // ── 前台 src/api/http.js 產生（不是後端回傳）──
   ValidationFailed: "ValidationFailed", // [ApiController] 自動產生的輸入驗證錯誤
+  PageExpired: "PageExpired", // 防偽 token 驗證失敗，重拿一次也不行（昱）
 });

@@ -1,0 +1,25 @@
+@*
+    時光機提示條（後台用）。放在 _Layout.cshtml 的 <partial name="_Header" /> 上面一行：
+        <partial name="_TimeMachineBanner_Claude" />
+    _Layout.cshtml 原本就是這樣放的，不用改。
+
+    - 旅行中：顯示黃色提示條，捲動時會跟著 Header 黏在最上面
+    - 沒旅行：右下角一顆半透明的 ⏰，點了開時光機小視窗
+    - 其他分頁、小視窗調整時間，這裡會馬上更新，不用重新整理
+    - 只在開發環境輸出，正式環境什麼都不會有
+
+    提示條的畫面和行為都在 wwwroot/js/time-machine.js。
+*@
+@using System.Text.Json
+@using VenueGo.Controllers
+@using VenueGo.Services
+@inject ITimeMachine TimeMachine
+@inject ITimeService TimeService
+@inject Microsoft.AspNetCore.Mvc.ViewFeatures.IFileVersionProvider FileVersionProvider
+
+@if (TimeMachine.IsAvailable)
+{
+    var state = TimeMachineState.Create(TimeMachine, TimeService, Context.Request, FileVersionProvider);
+    <div id="vgTimeMachine"></div>
+    <script src="@state.ScriptUrl" data-mode="inline" data-state="@JsonSerializer.Serialize(state, TimeMachineState.Json)"></script>
+}

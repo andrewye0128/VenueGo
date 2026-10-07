@@ -70,6 +70,7 @@ builder.Services.AddSingleton<TimeProvider, TaipeiTimeProvider>();
 // 自動校時（TimeAgo 等全站共用）
 builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<ITimeService, TimeService>();
+builder.Services.AddSingleton<ITimeMachine, TimeMachine>();   // 開發用時光機
 builder.Services.AddHostedService<TimeSyncHostedService>();
 
 // ── 各子系統的服務（Extensions/*ModuleExtensions）────────────────

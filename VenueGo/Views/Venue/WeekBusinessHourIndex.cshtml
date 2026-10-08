@@ -82,9 +82,13 @@
                         {
                             <tr>
                                 <td class="fw-bold">
-                                    <input type="hidden" asp-for="Days[i].BusinessHoursId" />
                                     <input type="hidden" asp-for="Days[i].DayOfWeek" />
                                     @Model.Days[i].DayName
+                                    @if (Model.Days[i].IsNotSet)
+                                    {
+                                        //資料表沒有這一天的資料:設定營業並儲存後才會產生資料,標示就會消失
+                                        <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-2 fw-normal">本日尚未設定</span>
+                                    }
                                 </td>
                                 <td>
                                     <div class="form-check form-switch">

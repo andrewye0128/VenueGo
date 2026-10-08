@@ -103,9 +103,11 @@ namespace VenueGo.Helpers
             if (_requiredRoles != null && _requiredRoles.Length > 0)
             {
                 // 明確的 EF Core Join 語法，防止 AsyncEnumerable 類型推導失敗
+                // [Role.Status] 只計入「啟用中」的角色：角色被停用後，持有者立刻失去該角色的權限
+                // （原本沒有檢查 Status，停用角色只是畫面上的標記，實際授權完全不受影響）
                 var userRoles = await _db.UserRoles
                     .Where(ur => ur.UserId == userId)
-                    .Join(_db.Roles,
+                    .Join(_db.Roles.Where(r => r.Status),
                           ur => ur.RoleId,
                           r => r.RoleId,
                           (ur, r) => r.RoleName)

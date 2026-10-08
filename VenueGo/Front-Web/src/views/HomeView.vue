@@ -1,6 +1,7 @@
 <script setup>
 import BannerCarousel from "@/components/banner/BannerCarousel.vue";
 import BookingSearchCard from "@/components/booking/BookingSearchCard.vue";
+import VenueCarousel from "@/components/venues/VenueCarousel.vue";
 </script>
 
 <template>
@@ -15,6 +16,14 @@ import BookingSearchCard from "@/components/booking/BookingSearchCard.vue";
     <!-- 電腦版：-mt-16 往上移，壓在輪播照片的下緣；relative z-10 讓卡片疊在照片上面 -->
     <div class="relative z-10 mx-auto max-w-6xl px-4 pb-16 md:px-6 xl:-mt-16">
       <BookingSearchCard />
+    </div>
+
+    <!-- 區塊三 : 最新消息 -->
+    <div class="news"></div>
+
+    <!-- 區塊四 : 場地介紹 -->
+    <div class="mx-auto max-w-6xl px-4 pb-16 md:px-6">
+      <VenueCarousel />
     </div>
   </main>
 </template>

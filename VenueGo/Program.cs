@@ -32,19 +32,6 @@ builder.Services.AddDbContext<dbVenueContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection")
     ));
 
-// ==========================================
-// 1. [新增] 註冊 Cookie 身份認證服務
-// ==========================================
-//builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-//    .AddCookie(options =>
-//    {
-//        options.LoginPath = "/Account/Login";              // 未登入時自動導向的頁面
-//        options.AccessDeniedPath = "/Account/Login";       // 權限不足時導向的頁面
-//        options.ExpireTimeSpan = TimeSpan.FromHours(8);    // Cookie 預設有效時間
-//        options.Cookie.HttpOnly = true;                    // 防範 XSS 存取 Cookie
-//        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // 限定 HTTPS 傳輸
-//    });
-
 builder.Services.AddAuthentication(options =>
 {
     // 預設仍然使用 Cookie
@@ -65,6 +52,8 @@ builder.Services.AddAuthentication(options =>
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Events.OnRedirectToLogin = ApiResponses.RedirectToLogin;
+    options.Events.OnRedirectToAccessDenied = ApiResponses.RedirectToAccessDenied;
 })
 .AddJwtBearer(options =>
 {
@@ -94,6 +83,7 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 });
+
 //builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
 //    .AddCookie(options =>
 //    {
@@ -141,14 +131,6 @@ builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 C
 // 全站共用的時間來源，本地時區固定為台北
 builder.Services.AddSingleton<TimeProvider, TaipeiTimeProvider>();
 
-// 註冊關於時段方法的服務：介面 → 實作
-//builder.Services.AddScoped<ITimeSlotService, TimeSlotService>();
-
-// 註冊關於時段選取驗證的服務：介面 → 實作
-//builder.Services.AddScoped<ISlotSelectionValidator, SlotSelectionValidator>();
-
-// 註冊關於預約計價的服務：介面 → 實作
-//builder.Services.AddScoped<IReservationPricingService, ReservationPricingService>();
 
 // 註冊關於目前登入者的服務：介面 → 實作
 builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUserService>();
@@ -160,32 +142,6 @@ builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
 //註冊 IJwtService
 builder.Services.AddScoped<IJwtService, JwtService>();
 
-// 註冊關於訂單編號產生器的服務：介面 → 實作
-//builder.Services.AddScoped<IOrderNoGenerator, OrderNoGenerator>();
-
-// 註冊關於預約建立的服務：介面 → 實作
-//builder.Services.AddScoped<IReservationCreationService, ReservationCreationService>();
-
-// 註冊關於預約查詢與指令的服務：介面 → 實作
-//builder.Services.AddScoped<IReservationQueryService, ReservationQueryService>();
-// 註冊關於預約指令的服務：介面 → 實作
-//builder.Services.AddScoped<IReservationCommandService, ReservationCommandService>();
-
-// 註冊關於球館預約的業務邏輯的服務：介面 → 實作
-//builder.Services.Configure<ReservationRulesOptions>(
-    //builder.Configuration.GetSection(ReservationRulesOptions.SectionName));
-
-// 註冊關於票券的服務：介面 → 實作
-//builder.Services.AddScoped<IEntryTicketService, EntryTicketService>();
-//builder.Services.AddScoped<IMemberTicketQueryService, MemberTicketQueryService>();
-//builder.Services.AddScoped<CTicketViewModelFactory>();
-
-//builder.Services.AddScoped<VenueMonitorFactory>();
-
-// 評論系統使用
-//builder.Services.AddScoped<ReviewTicketFactory>(); // 3者共用這個 ReviewTicketFactory 實例
-//builder.Services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
-//builder.Services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
 // 自動校時使用
 builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 CreateClient()
 // 自動校時（TimeAgo 等全站共用）

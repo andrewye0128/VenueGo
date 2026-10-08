@@ -1,10 +1,11 @@
 <!--
   會員中心／我的預約：篩選、列表（電腦表格／手機卡片）、分頁、明細、取消
-  資料目前來自假資料（api/reservationApi.js），串接 API 時這個檔案不用改
+  資料來自後端 GET /api/reservations（api/reservationApi.js），會員身分由登入的 JWT 決定
   UFormField、UInput、USelect、UAlert 與 useOverlay、useToast 由 Nuxt UI 自動匯入
 -->
 <script setup>
 import { onMounted, ref, watch } from "vue";
+import { useRouter } from "vue-router";
 import CancelConfirmModal from "@/components/CancelConfirmModal.vue";
 import DatePickerInput from "@/components/DatePickerInput.vue";
 import ListFilterPanel from "@/components/list/ListFilterPanel.vue";
@@ -12,6 +13,9 @@ import ListTable from "@/components/list/ListTable.vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import ReservationDetailModal from "@/components/reservations/ReservationDetailModal.vue";
 import { cancelMyReservation, getMyReservations } from "@/api/reservationApi";
+import { useSiteClock } from "@/composables/useSiteClock";
+import { ErrorCodes } from "@/constants/errorCodes";
+import { useMemberStore } from "@/stores/member";
 import {
   ALL,
   PAYMENT_STATUS,
@@ -20,9 +24,17 @@ import {
   RESERVATION_STATUS_OPTIONS,
 } from "@/constants/statuses";
 import { formatAmount, formatDate, formatTimeRange } from "@/utils/format";
-import { canCancel, formatReservationNo } from "@/utils/reservation";
+import { canCancel, formatPersonCount, formatReservationNo } from "@/utils/reservation";
 
 const PAGE_SIZE = 10;
+
+const router = useRouter();
+const memberStore = useMemberStore();
+
+// 網站的「現在時間」：開發時跟著後端的時光機走，正式版本就是電腦時間（說明見 useSiteClock.js）
+// 判斷「還沒到開始時間、可以取消」要用它，前後端對「現在」的認定才會一致
+const { now } = useSiteClock();
+const isCancellable = (reservation) => canCancel(reservation, now.value);
 
 // ── 篩選條件 ──
 // filters 是「已套用」的條件；欄位正在編輯的草稿由 ListFilterPanel 管理，按查詢才會改到這裡
@@ -59,6 +71,13 @@ async function load() {
     result.value = data;
   } catch (err) {
     if (requestId !== latestRequestId) return;
+    // 登入失效（例如 token 過期）：留在這頁也什麼都做不了，登出並回登入頁
+    // 跟路由守衛「進入會員中心時 token 無效」的處理一致
+    if (err.errorCode === ErrorCodes.NotLoggedIn) {
+      memberStore.logout();
+      router.push({ name: "login" });
+      return;
+    }
     // http.js 已經把錯誤整理成中文的 err.message
     errorMessage.value = err.message || "讀取預約資料失敗，請稍後再試";
     result.value = { items: [], totalCount: 0 };
@@ -97,7 +116,11 @@ const cancelModal = overlay.create(CancelConfirmModal);
 const toast = useToast();
 
 async function openDetail(reservation) {
-  const choice = await detailModal.open({ reservation });
+  // 能不能取消由頁面決定後傳進去：判斷要用網站時間，明細視窗不必自己處理
+  const choice = await detailModal.open({
+    reservation,
+    cancellable: isCancellable(reservation),
+  });
   if (choice === "cancel") openCancel(reservation);
 }
 
@@ -197,11 +220,19 @@ async function openCancel(reservation) {
       <template #time-cell="{ row }">
         {{ formatTimeRange(row.original.startTime, row.original.endTime) }}
       </template>
+      <!-- 人數、付款狀態：預約沒有訂單或付款紀錄時是 null，顯示「—」 -->
+      <template #personCount-cell="{ row }">
+        {{ row.original.personCount ?? "—" }}
+      </template>
       <template #reservationStatus-cell="{ row }">
         <StatusBadge :status="RESERVATION_STATUS[row.original.reservationStatus]" />
       </template>
       <template #paymentStatus-cell="{ row }">
-        <StatusBadge :status="PAYMENT_STATUS[row.original.paymentStatus]" />
+        <StatusBadge
+          v-if="row.original.paymentStatus != null"
+          :status="PAYMENT_STATUS[row.original.paymentStatus]"
+        />
+        <span v-else>—</span>
       </template>
       <template #actions-cell="{ row }">
         <div class="flex gap-4">
@@ -215,7 +246,7 @@ async function openCancel(reservation) {
             查看
           </button>
           <button
-            v-if="canCancel(row.original)"
+            v-if="isCancellable(row.original)"
             type="button"
             class="cursor-pointer rounded font-medium text-brand-action underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
             :aria-label="`取消 ${formatReservationNo(row.original.reservationId)} 預約`"
@@ -238,10 +269,16 @@ async function openCancel(reservation) {
           <p class="text-base font-semibold text-neutral-text-primary">{{ row.venueName }}</p>
           <p class="text-neutral-text-secondary">
             {{ formatDate(row.bookingDate) }}
-            {{ formatTimeRange(row.startTime, row.endTime) }} · {{ row.personCount }} 人
+            {{ formatTimeRange(row.startTime, row.endTime) }} ·
+            {{ formatPersonCount(row.personCount) }}
           </p>
           <div class="flex items-center justify-between gap-2">
-            <StatusBadge :status="PAYMENT_STATUS[row.paymentStatus]" />
+            <!-- 沒有付款紀錄時不顯示付款標籤，用空的 span 佔位，讓「查看／取消」維持靠右 -->
+            <StatusBadge
+              v-if="row.paymentStatus != null"
+              :status="PAYMENT_STATUS[row.paymentStatus]"
+            />
+            <span v-else />
             <div class="flex gap-4">
               <button
                 type="button"
@@ -252,7 +289,7 @@ async function openCancel(reservation) {
                 查看
               </button>
               <button
-                v-if="canCancel(row)"
+                v-if="isCancellable(row)"
                 type="button"
                 class="cursor-pointer rounded px-1 py-2 font-medium text-brand-action underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-primary"
                 :aria-label="`取消 ${formatReservationNo(row.reservationId)} 預約`"

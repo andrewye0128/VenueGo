@@ -5,7 +5,13 @@ export function formatReservationNo(reservationId) {
   return `R${String(reservationId).padStart(3, "0")}`;
 }
 
+// 預約人數 → "4 人"；預約沒有訂單時人數是 null，顯示「—」
+export function formatPersonCount(personCount) {
+  return personCount == null ? "—" : `${personCount} 人`;
+}
+
 // 能不能取消：待確認（0）或已確認（1），而且還沒到開始使用的時間
+// now：頁面請傳 useSiteClock() 的網站時間，開發時才會跟後端的時光機一致
 // 跟後端 EnumExtensions.IsActive() 的「有效預約」規則一致；取消期限是營運決定的「開始使用前都可以取消」
 // ⚠️ 這裡只決定「要不要顯示取消按鈕」，真正能不能取消要由後端 API 再檢查一次
 const CANCELLABLE_STATUSES = [0, 1];

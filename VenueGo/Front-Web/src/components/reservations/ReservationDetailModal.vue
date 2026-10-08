@@ -3,8 +3,11 @@
 
   用法（useOverlay 是 Nuxt UI 的函式，不用 import）：
     const detailModal = useOverlay().create(ReservationDetailModal);
-    const choice = await detailModal.open({ reservation });
+    const choice = await detailModal.open({ reservation, cancellable: true });
     // choice：按「取消預約」→ "cancel"（由頁面接著打開取消視窗）；按「關閉」、Esc、點外面 → undefined
+
+  cancellable：要不要顯示「取消預約」按鈕，由頁面用 canCancel(reservation, 網站時間) 算好傳進來
+  （判斷要用 useSiteClock 的網站時間，交給頁面處理，這裡只負責顯示）
 
   為什麼不在這裡直接取消：取消的流程（確認視窗、呼叫 API、重新載入列表）由頁面統一處理，
   表格、手機卡片、明細視窗三個入口都走同一段程式
@@ -14,10 +17,11 @@ import { computed } from "vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import { PAYMENT_STATUS, RESERVATION_STATUS } from "@/constants/statuses";
 import { formatAmount, formatDate, formatDateTime, formatTimeRange } from "@/utils/format";
-import { canCancel, formatReservationNo } from "@/utils/reservation";
+import { formatPersonCount, formatReservationNo } from "@/utils/reservation";
 
 const props = defineProps({
   reservation: { type: Object, required: true },
+  cancellable: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["close"]);
@@ -30,8 +34,9 @@ const rows = computed(() => [
   { label: "運動類型", value: r.value.sportName },
   { label: "預約日期", value: formatDate(r.value.bookingDate) },
   { label: "使用時段", value: formatTimeRange(r.value.startTime, r.value.endTime) },
-  { label: "預約人數", value: `${r.value.personCount} 人` },
-  { label: "金額", value: formatAmount(r.value.totalAmount) },
+  // 人數、金額：預約沒有訂單時是 null，顯示「—」
+  { label: "預約人數", value: formatPersonCount(r.value.personCount) },
+  { label: "金額", value: formatAmount(r.value.totalAmount) || "—" },
 ]);
 
 // 只在特定狀態才顯示的欄位
@@ -61,7 +66,10 @@ const extraRows = computed(() =>
         <dt class="self-center text-neutral-text-secondary">預約狀態</dt>
         <dd><StatusBadge :status="RESERVATION_STATUS[r.reservationStatus]" /></dd>
         <dt class="self-center text-neutral-text-secondary">付款狀態</dt>
-        <dd><StatusBadge :status="PAYMENT_STATUS[r.paymentStatus]" /></dd>
+        <dd>
+          <StatusBadge v-if="r.paymentStatus != null" :status="PAYMENT_STATUS[r.paymentStatus]" />
+          <span v-else class="text-neutral-text-primary">—</span>
+        </dd>
 
         <template v-for="item in extraRows" :key="item.label">
           <dt class="text-neutral-text-secondary">{{ item.label }}</dt>
@@ -80,7 +88,7 @@ const extraRows = computed(() =>
           @click="emit('close')"
         />
         <UButton
-          v-if="canCancel(r)"
+          v-if="cancellable"
           label="取消預約"
           color="error"
           variant="outline"

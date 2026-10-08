@@ -1,8 +1,10 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer; 
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using VenueGo.Dtos;
 using VenueGo.Dtos.ReservationDtos;
-using VenueGo.Extensions;
 using VenueGo.Models.Constants;
+using VenueGo.Services.Auth;
 using VenueGo.Services.Reservations;
 
 namespace VenueGo.Controllers.Api.ReservationApi
@@ -19,38 +21,42 @@ namespace VenueGo.Controllers.Api.ReservationApi
     public class ReservationApiController : ControllerBase
     {
         private readonly IReservationQueryService _reservationQuery;
-        private readonly IWebHostEnvironment _env;
+        private readonly ICurrentUserService _currentUser;
 
         public ReservationApiController(
             IReservationQueryService reservationQuery,
-            IWebHostEnvironment env)
+            ICurrentUserService currentUser)
         {
             _reservationQuery = reservationQuery;
-            _env = env;
+            _currentUser = currentUser;
         }
 
         /// <summary>我的預約列表（篩選、分頁）</summary>
         /// <remarks>
         /// 前台會員中心「我的預約」頁使用，不含已作廢的預約。
         ///
-        /// 排序：預約日期新到舊 → 開始時間晚到早 → 預約編號大
+        /// 需要會員的 JWT（Authorization: Bearer ...）。
         ///
-        /// 開發環境還沒有會員登入時，可以帶 testUserId 假裝某位會員。
+        /// 排序：預約日期新到舊 → 開始時間晚到早 → 預約編號大到小。
         /// </remarks>
         /// <param name="query">篩選條件與分頁</param>
-        /// <param name="testUserId">開發用：假裝某位會員（正式環境無效）</param>
         /// <param name="cancellationToken">使用者離開頁面時取消查詢</param>
         /// <response code="200">成功；查無資料時 items 是空陣列</response>
-        /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
+        /// <response code="401">沒有登入或 token 失效</response>
+        /// <response code="403">登入的不是會員</response>
         [HttpGet]
+        [Authorize(
+            AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme,
+            Roles = RoleNames.Member)]
         [ProducesResponseType<ApiResult<PagedResult<MyReservationDto>>>(StatusCodes.Status200OK)]
-        [ProducesResponseType<ApiResult>(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> GetMine(
             [FromQuery] MyReservationQuery query,
-            [FromQuery] int? testUserId,
             CancellationToken cancellationToken)
         {
-            var userId = ResolveMemberUserId(testUserId);
+            // [Authorize] 已經擋掉沒登入的人；這裡是保險（token 有效但沒有 UserId）
+            var userId = _currentUser.UserId;
             if (userId is null)
             {
                 return Unauthorized(ApiResult.Fail("請先登入", "NotLoggedIn"));
@@ -60,36 +66,6 @@ namespace VenueGo.Controllers.Api.ReservationApi
                 userId.Value, query, cancellationToken);
 
             return Ok(ApiResult<PagedResult<MyReservationDto>>.Ok(result));
-        }
-
-        /// <summary>
-        /// 決定是哪位會員。
-        /// <para>
-        /// 1. 登入的是會員 → 用登入的 UserId。
-        /// 2. 開發環境 → 用網址的 testUserId（前台會員登入還沒完成）。
-        /// 3. 其他 → null（沒登入）。
-        /// </para>
-        /// <para>
-        /// 只認「會員」角色：員工登入後台後，Cookie 裡是員工的 UserId，
-        /// 不能被當成會員查預約（TicketApiController 也是因此不讀 Cookie）。
-        /// </para>
-        /// <para>
-        /// TODO：前台會員登入完成後，刪掉 testUserId（參數和第 2 點）。
-        /// </para>
-        /// </summary>
-        private int? ResolveMemberUserId(int? testUserId)
-        {
-            if (User.IsInRole(RoleNames.Member))
-            {
-                return User.GetUserId();
-            }
-
-            if (_env.IsDevelopment())
-            {
-                return testUserId;
-            }
-
-            return null;
         }
     }
 }

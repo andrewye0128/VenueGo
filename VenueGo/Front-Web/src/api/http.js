@@ -14,7 +14,17 @@ const http = axios.create({
     "X-Requested-With": "XMLHttpRequest",
   },
 });
+// ── 送出請求前：已登入就自動帶上 JWT ──
+// 各 API 檔案不用自己處理 token，之後登入資訊有調整也只要改這個檔案
+http.interceptors.request.use((config) => {
+  const token = localStorage.getItem("token");
 
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  return config;
+});
 // ── 防偽 token（昱）────────────────────────────────────────
 // 後端的 POST／PUT／DELETE 有 [AutoValidateAntiforgeryToken] 時，要帶防偽 token 才會通過。
 // 流程：第一次要送這類請求時，先 GET /api/antiforgery/token，後端會把 token 寫進 XSRF-TOKEN 這個 Cookie；

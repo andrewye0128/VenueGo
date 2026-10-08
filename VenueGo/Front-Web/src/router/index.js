@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "../views/HomeView.vue";
+import { useMemberStore } from "@/stores/member";
 // 顧客端評論的路由（昱）：評論專區、撰寫、我的評論、員工預覽
 import reviewRoutes from "./reviewRoutes";
 
@@ -23,6 +24,11 @@ const router = createRouter({
       path: "/booking",
       name: "booking",
       component: () => import("../views/BookingView.vue"),
+    },
+    {
+      path: "/login",
+      name: "login",
+      component: () => import("../views/LoginView.vue"),
     },
     {
       // SportTypeSelect 元件使用說明頁
@@ -65,6 +71,12 @@ const router = createRouter({
           name: "tickets",
           component: () => import("../views/member/MyTicketsView.vue"),
         },
+        //個人資料
+        {
+          path: "profile",
+          name: "profile",
+          component: () => import("../views/member/MemberProfileView.vue"),
+        },
       ],
     },
     {
@@ -93,6 +105,26 @@ const router = createRouter({
     if (to.path === from.path) return false;
     return { top: 0 };
   },
+});
+// 路由守衛：未登入或 Token 無效時，禁止進入會員中心。
+router.beforeEach(async (to) => {
+  const token = localStorage.getItem("token");
+  const memberStore = useMemberStore();
+
+  if (to.path.startsWith("/member")) {
+    if (!token) {
+      return { name: "login" };
+    }
+
+    if (!memberStore.member) {
+      try {
+        await memberStore.fetchCurrentMember();
+      } catch (error) {
+        memberStore.logout();
+        return { name: "login" };
+      }
+    }
+  }
 });
 
 export default router;

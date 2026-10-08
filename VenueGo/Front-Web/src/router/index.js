@@ -84,7 +84,7 @@ const router = createRouter({
       // (\\d+) 限定只接受數字，避免吃掉 /venues/transport 之類的其他頁面
       path: "/venues/:sportTypeId(\\d+)?",
       name: "venues",
-      component: () => import("../views/VenueIntro.vue"),
+      component: () => import("../views/VenueIntroView.vue"),
     },
     // 顧客端評論（昱）：要放在 404 前面
     ...reviewRoutes,

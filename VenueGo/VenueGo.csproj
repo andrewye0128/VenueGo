@@ -62,6 +62,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Folder Include="Controllers\Api\VenuesApi\" />
     <Folder Include="Models\MemberModels\" />
     <Folder Include="Models\OperationModels\" />
     <Folder Include="Models\ReservationModels\" />

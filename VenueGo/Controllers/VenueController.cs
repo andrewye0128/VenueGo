@@ -10,26 +10,34 @@ using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;
 using VenueGo.Services;
 using VenueGo.ViewModels.VenueViewModels;
+using VenueGo.Services.Auth;
 
 namespace VenueGo.Controllers
 {
-    [EmployeeAuthorize(RoleNames.Admin,RoleNames.Manager,RoleNames.Staff)]
+    [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     public class VenueController : Controller
     {
+        //類別常數
+        //每頁顯示3種運動類型分組,固定寫死在這裡,之後要調整頁數大小改這個數字就好
+        private const int VenuePageSize = 3;
+
         //取得照片路徑 >> 取得wwwroot的實際路徑(Controller建構子注入)
         private readonly IWebHostEnvironment _env;
 
         //取得校時後的系統時間(取代 DateTime.Now,Controller建構子注入)
         private readonly ITimeService _timeService;
+        //取得目前登入者資訊(Controller建構子注入)
+        private readonly ICurrentUserService _currentUser;
 
-        public VenueController(IWebHostEnvironment env, ITimeService timeService)
+        public VenueController(IWebHostEnvironment env, ITimeService timeService, ICurrentUserService currentUser)
         {
             _env = env;
             _timeService = timeService;
+            _currentUser = currentUser;
         }
 
 
-    
+
         /****SportType****/
 
         //列出所有運動類型
@@ -52,14 +60,28 @@ namespace VenueGo.Controllers
         [HttpPost]
         public async Task<IActionResult> SportTypeCreate(CSportTypeWrap Wrap, IFormFile? PhotoFile)
         {
-            //先檢查填寫是否通過
-            if (!ModelState.IsValid)
+            //檢查運動類型名稱是否重複 >> 若重複,則ModelState.IsValid 會變成 false,並往下落入 if (!ModelState.IsValid)處理
+            if (!String.IsNullOrWhiteSpace(Wrap.SportName))
             {
-                return View(Wrap);
+                //對字串進行處理
+                Wrap.SportName = Wrap.SportName.Trim();
+                //檢查是否現有資料名稱重複
+                bool isSportNameDuplicate = new CSportTypeFactory().IsSportNameDuplicate(Wrap.SportName, null);
+
+                if (isSportNameDuplicate)
+                {
+                    ModelState.AddModelError("SportName", "運動類型名稱已存在,請重新填寫");
+                }
+
             }
 
+
+            //檢查填寫內容是否合規
+            if (!ModelState.IsValid)
+                return View(Wrap);
+
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -109,16 +131,32 @@ namespace VenueGo.Controllers
         [HttpPost]
         public async Task<IActionResult> SportTypeEdit(CSportTypeWrap Wrap, IFormFile? PhotoFile)
         {
+            //檢查運動類型名稱是否重複 >> 若重複,則ModelState.IsValid 會變成 false,並往下落入 if (!ModelState.IsValid)處理
+            if (!String.IsNullOrWhiteSpace(Wrap.SportName))
+            {
+                //對字串進行處理
+                Wrap.SportName = Wrap.SportName.Trim();
+                //檢查是否現有資料名稱重複
+                bool isSportNameDuplicate = new CSportTypeFactory().IsSportNameDuplicate(Wrap.SportName, Wrap.SportTypeId);
+
+                if (isSportNameDuplicate)
+                {
+                    ModelState.AddModelError("SportName", "運動類型名稱已存在,請重新填寫");
+                }
+
+            }
+
+
             //驗證送回的資料非null
-            if (!ModelState.IsValid) 
-            { 
+            if (!ModelState.IsValid)
+            {
                 //表單沒有送回照片路徑 >> 只從DB補回照片,其他欄位保留使用者剛剛填的內容
                 Wrap.PhotoPath = new CSportTypeFactory().QueryById(Wrap.SportTypeId).PhotoPath;
                 return View(Wrap);
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -147,7 +185,7 @@ namespace VenueGo.Controllers
                 return RedirectToAction("SportTypeIndex");
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -190,11 +228,9 @@ namespace VenueGo.Controllers
         //列出所有場地,依運動類型分組顯示,並依分組換頁
         public IActionResult VenueIndex(int page = 1)
         {
-            //每頁顯示3種運動類型分組,固定寫死在這裡,之後要調整頁數大小改這個數字就好
-            int pageSize = 3;
-
+            //查出所有場地資料,依運動類型分組,並依分組換頁
             CVenueFactory venueFactory = new CVenueFactory();
-            VenueIndexViewModel vm = venueFactory.QueryGroupedBySportType(page, pageSize);
+            VenueIndexViewModel vm = venueFactory.QueryGroupedBySportType(page, VenuePageSize);
 
             return View(vm);
         }
@@ -218,6 +254,21 @@ namespace VenueGo.Controllers
         [HttpPost]
         public async Task<IActionResult> VenueCreate(VenueCreateViewModel vm)
         {
+            //有填寫場地名稱才檢查是否重複
+            if (!String.IsNullOrWhiteSpace(vm.VenueName))
+            {
+                //字串處理 >> 清除空白
+                vm.VenueName = vm.VenueName.Trim();
+                //呼叫檢查重複方法 >> 檢查傳回的場地名稱是否重複,若重複,則ModelState.IsValid 會變成 false,並往下落入 if (!ModelState.IsValid)處理
+                bool isVenueNameDuplicate = new CVenueFactory().IsVenueNameDuplicate(vm.VenueName, null);
+
+                if (isVenueNameDuplicate)
+                {
+                    ModelState.AddModelError("VenueName", "場地名稱已存在,請重新填寫");
+                }
+
+            }
+
             //判斷填寫欄位是否合規 >> 不合規就重新填寫
             if (!ModelState.IsValid)
             {
@@ -228,7 +279,7 @@ namespace VenueGo.Controllers
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
             //放在照片上傳之前檢查,取不到就不存照片,避免留下沒人用的檔案
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -277,7 +328,10 @@ namespace VenueGo.Controllers
             CVenueFactory VenueFactory = new CVenueFactory();
             VenueFactory.Create(VenueWrap);
 
-            return RedirectToAction("VenueIndex");
+            //新增完成,回到新場地所在的頁面
+            //必須在存檔之後才算:這個運動類型原本可能沒有場地,存檔後才會出現在分組清單裡
+            int page = VenueFactory.GetPageBySportTypeId(VenueWrap.SportTypeId, VenuePageSize);
+            return RedirectToAction("VenueIndex", new { page = page });
         }
 
 
@@ -308,6 +362,8 @@ namespace VenueGo.Controllers
             //要把運動類型清單一起送到前端
             vm.SportTypes = new CVenueFactory().GetSportTypes();
 
+            //取消、返回列表時回到的頁數 >> 用場地原本的運動類型計算,回到使用者點編輯之前看的那一頁
+            vm.ReturnPage = VenueFactory.GetPageBySportTypeId(data.SportTypeId, VenuePageSize);
 
             return View(vm);
         }
@@ -318,6 +374,22 @@ namespace VenueGo.Controllers
         [HttpPost]
         public async Task<IActionResult> VenueEdit(VenueEditViewModel vm)
         {
+                
+            //有填寫場地名稱才檢查是否重複
+            if (!String.IsNullOrWhiteSpace(vm.VenueName))
+            {
+                //字串處理 >> 清除空白
+                vm.VenueName = vm.VenueName.Trim();
+                //呼叫檢查重複方法 >> 檢查傳回的場地名稱是否重複,若重複,則ModelState.IsValid 會變成 false,並往下落入 if (!ModelState.IsValid)處理
+                bool isVenueNameDuplicate = new CVenueFactory().IsVenueNameDuplicate(vm.VenueName, vm.VenueId);
+
+                if (isVenueNameDuplicate)
+                {
+                    ModelState.AddModelError("VenueName", "場地名稱已存在,請重新填寫");
+                }
+            }
+
+
             //驗證欄位填寫是否合規
             if (!ModelState.IsValid)
             {
@@ -327,7 +399,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -365,10 +437,10 @@ namespace VenueGo.Controllers
             CVenueFactory VenueFactory = new CVenueFactory();
             VenueFactory.Edit(vm, userId.Value, _timeService.Now);
 
-
-
-            //編輯完成,回到場地清單
-            return RedirectToAction("VenueIndex");
+            //編輯完成,回到該場地所在的頁面
+            //用存檔後的運動類型計算:編輯時改了運動類型,場地會移到新的分組,要跳到新分組所在的頁面
+            int page = VenueFactory.GetPageBySportTypeId(vm.SportTypeId, VenuePageSize);
+            return RedirectToAction("VenueIndex", new { page = page });
         }
 
 
@@ -381,7 +453,7 @@ namespace VenueGo.Controllers
                 return RedirectToAction("VenueIndex");
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -472,7 +544,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -559,7 +631,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -621,42 +693,18 @@ namespace VenueGo.Controllers
         /*WeekBusinessHour*/
 
         //場館營業時間管理 >> 頁面產生,一次顯示7天,星期一排最前面、星期日排最後面
+        //不管資料表有幾筆,永遠顯示7列;沒有資料的那天標示「本日尚未設定」,預設不營業、時間空白
         [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
         public IActionResult WeekBusinessHourIndex()
         {
             CWeekBusinessHourFactory WeekBusinessHourFactory = new CWeekBusinessHourFactory();
             List<CWeekBusinessHourWrap> datas = WeekBusinessHourFactory.QueryAll();
 
-            //把星期一排最前面、星期日排最後面
-            //QueryAll()回傳的是DayOfWeek 0~6的原始順序,星期日(0)會排最前面,所以這裡另外排序一次
-            var orderedDatas = datas.OrderBy(data =>
-            {
-                int sortKey;
-                if (data.DayOfWeek == DayOfWeek.Sunday)
-                {
-                    sortKey = 7;
-                }
-                else
-                {
-                    sortKey = (int)data.DayOfWeek;
-                }
-                return sortKey;
-            });
-
             WeekBusinessHourEditViewModel vm = new WeekBusinessHourEditViewModel();
             vm.TimeOptions = WeekBusinessHourFactory.GetWholeHourOptions();
 
-            foreach (var data in orderedDatas)
-            {
-                WeekBusinessHourRowViewModel row = new WeekBusinessHourRowViewModel();
-                row.BusinessHoursId = data.BusinessHoursId;
-                row.DayOfWeek = data.DayOfWeek;
-                row.DayName = GetDayName(data.DayOfWeek);
-                row.IsOpen = data.IsOpen;
-                row.OpenTime = data.OpenTime;
-                row.CloseTime = data.CloseTime;
-                vm.Days.Add(row);
-            }
+            //GET沒有表單送回的資料,傳null:有資料的那天由BuildBusinessHourRows帶入DB的值
+            vm.Days = BuildBusinessHourRows(null, datas);
 
             return View(vm);
         }
@@ -667,6 +715,9 @@ namespace VenueGo.Controllers
         public IActionResult WeekBusinessHourIndex(WeekBusinessHourEditViewModel vm)
         {
             CWeekBusinessHourFactory WeekBusinessHourFactory = new CWeekBusinessHourFactory();
+
+            //不相信畫面送回的結構,先整理成週一~週日各一列(防竄改),「尚未設定」的標示也依DB重新判斷
+            vm.Days = BuildBusinessHourRows(vm.Days, WeekBusinessHourFactory.QueryAll());
 
             //逐列驗證:IsOpen=true時,OpenTime/CloseTime必填,且OpenTime必須早於CloseTime
             for (int i = 0; i < vm.Days.Count; i++)
@@ -690,19 +741,14 @@ namespace VenueGo.Controllers
             if (!ModelState.IsValid)
             {
                 //下拉選單選項要重新帶回去,不然畫面上的選單會是空的
+                //DayName、IsNotSet已在BuildBusinessHourRows重新算過,不用另外處理
                 vm.TimeOptions = WeekBusinessHourFactory.GetWholeHourOptions();
-
-                //DayName是[ValidateNever],表單送回來時不會帶值,要用DayOfWeek(隱藏欄位)重新算一次,不然畫面上星期名稱會不見
-                for (int i = 0; i < vm.Days.Count; i++)
-                {
-                    vm.Days[i].DayName = GetDayName(vm.Days[i].DayOfWeek);
-                }
 
                 return View(vm);
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -714,23 +760,12 @@ namespace VenueGo.Controllers
 
             foreach (WeekBusinessHourRowViewModel row in vm.Days)
             {
+                //IsOpen=false時的OpenTime/CloseTime已在BuildBusinessHourRows強制清成null
                 CWeekBusinessHourWrap wrap = new CWeekBusinessHourWrap();
-                wrap.BusinessHoursId = row.BusinessHoursId;
                 wrap.DayOfWeek = row.DayOfWeek;
                 wrap.IsOpen = row.IsOpen;
-
-                //IsOpen=false時,不管前端有沒有正確disable掉選單、送回來的值是什麼,後端一律強制清成null,
-                //避免「已關閉」的當天還存著開始/結束時間造成之後查詢邏輯混亂
-                if (row.IsOpen)
-                {
-                    wrap.OpenTime = row.OpenTime;
-                    wrap.CloseTime = row.CloseTime;
-                }
-                else
-                {
-                    wrap.OpenTime = null;
-                    wrap.CloseTime = null;
-                }
+                wrap.OpenTime = row.OpenTime;
+                wrap.CloseTime = row.CloseTime;
 
                 wraps.Add(wrap);
             }
@@ -739,6 +774,84 @@ namespace VenueGo.Controllers
             TempData["VenueSuccessMessage"] = "營業時間設定已儲存";
 
             return RedirectToAction("WeekBusinessHourIndex");
+        }
+
+        //組出營業時間表單的7列(GET顯示、POST整理送回資料共用)
+        //1. 照週一~週日的順序產生7列,不管資料表有幾筆
+        //2. 每一天的值:有表單送回的資料就用送回的(POST);沒有就用DB的資料(GET);兩者都沒有 >> 不營業、時間空白
+        //3. 同一天送回好幾列、或DB同一天有好幾筆 >> 只取第一筆
+        //4. 不營業的那天,不管送回什麼,開始/打烊時間一律強制清成null(避免「已關閉」還存著時間值)
+        //5. IsNotSet(本日尚未設定)只看DB有沒有那天的資料,不看表單
+        private List<WeekBusinessHourRowViewModel> BuildBusinessHourRows(List<WeekBusinessHourRowViewModel>? postedDays, List<CWeekBusinessHourWrap> datas)
+        {
+            DayOfWeek[] displayOrder = new DayOfWeek[]
+            {
+                DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday,
+                DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+            };
+
+            List<WeekBusinessHourRowViewModel> result = new List<WeekBusinessHourRowViewModel>();
+
+            foreach (DayOfWeek day in displayOrder)
+            {
+                WeekBusinessHourRowViewModel row = new WeekBusinessHourRowViewModel();
+                row.DayOfWeek = day;
+                row.DayName = GetDayName(day);
+
+                //找出DB中同一天的第一筆
+                CWeekBusinessHourWrap? data = null;
+                foreach (CWeekBusinessHourWrap item in datas)
+                {
+                    if (item.DayOfWeek == day)
+                    {
+                        data = item;
+                        break;
+                    }
+                }
+                row.IsNotSet = data == null;
+
+                //找出送回的資料中同一天的第一列
+                WeekBusinessHourRowViewModel? posted = null;
+                if (postedDays != null)
+                {
+                    foreach (WeekBusinessHourRowViewModel item in postedDays)
+                    {
+                        if (item.DayOfWeek == day)
+                        {
+                            posted = item;
+                            break;
+                        }
+                    }
+                }
+
+                if (postedDays != null)
+                {
+                    //POST:只用送回的值;某一天沒有送回 >> 當作不營業
+                    if (posted != null)
+                    {
+                        row.IsOpen = posted.IsOpen;
+                        row.OpenTime = posted.OpenTime;
+                        row.CloseTime = posted.CloseTime;
+                    }
+                }
+                else if (data != null)
+                {
+                    //GET:帶入DB的值
+                    row.IsOpen = data.IsOpen;
+                    row.OpenTime = data.OpenTime;
+                    row.CloseTime = data.CloseTime;
+                }
+
+                if (!row.IsOpen)
+                {
+                    row.OpenTime = null;
+                    row.CloseTime = null;
+                }
+
+                result.Add(row);
+            }
+
+            return result;
         }
 
         //依DayOfWeek轉成中文星期名稱,顯示用
@@ -782,7 +895,7 @@ namespace VenueGo.Controllers
         /*VenueUnavailableSlot*/
 
         //場地不開放時段管理 >> 頁面產生,顯示某場地某天的所有時段按鈕
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager,RoleNames.Staff)]
+        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
         public IActionResult VenueUnavailableSlotManage(int venueId, DateOnly? date)
         {
             //今天跟現在時間都從同一個校時後的時間拆出來,避免跨午夜時兩者對不上
@@ -900,7 +1013,7 @@ namespace VenueGo.Controllers
             }
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
-            int? userId = User.GetUserId();
+            int? userId = _currentUser.UserId;
             if (userId == null)
             {
                 TempData["VenueErrorMessage"] = "無法取得登入者資訊,請重新登入。";
@@ -1093,14 +1206,11 @@ namespace VenueGo.Controllers
             {
                 Directory.CreateDirectory(folderPath);
             }
-
             using (var stream = new FileStream(Path.Combine(folderPath, fileName), FileMode.Create))
             {
                 await photoFile.CopyToAsync(stream);
             }
             return "/images/sporttypes/" + fileName;
         }
-
-
     }
 }

@@ -5,7 +5,7 @@
 }
 
 <div class="mb-3">
-    <a asp-action="VenueIndex" class="btn btn-outline-secondary btn-sm">
+    <a asp-action="VenueIndex" asp-route-page="@Model.ReturnPage" class="btn btn-outline-secondary btn-sm">
         <i class="bi bi-arrow-left me-1"></i>返回列表
     </a>
 </div>
@@ -22,6 +22,8 @@
 
             <input asp-for="VenueId" type="hidden" />
             <input asp-for="PhotoPath" type="hidden" />
+            @* 取消、返回列表要回到的頁數,跟著表單來回傳遞,驗證失敗退回表單時才不會遺失 *@
+            <input asp-for="ReturnPage" type="hidden" />
 
             <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-card-heading me-1"></i>基本資料</h6>
             <div class="row g-3 mb-4">
@@ -72,7 +74,7 @@
             </div>
 
             <div class="mt-4 pt-3 border-top text-end">
-                <a asp-action="VenueIndex" class="btn btn-light me-2">取消</a>
+                <a asp-action="VenueIndex" asp-route-page="@Model.ReturnPage" class="btn btn-light me-2">取消</a>
                 <button type="submit" class="btn btn-primary px-4">
                     <i class="bi bi-check-lg me-1"></i>送出修改
                 </button>

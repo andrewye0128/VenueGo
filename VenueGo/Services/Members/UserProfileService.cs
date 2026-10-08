@@ -39,6 +39,7 @@ namespace VenueGo.Services.Members
                 Name = user.Name,
                 Email = user.Email,
                 Phone = user.Phone,
+                CarrierNo = user.CarrierNo,
                 EmployeeNo = employee?.EmployeeNo ?? "無",
                 JobTitle = employee?.JobTitle ?? "一般會員",
                 Roles = roleNames
@@ -71,7 +72,9 @@ namespace VenueGo.Services.Members
             user.Name = model.Name.Trim();
             user.Phone = model.Phone.Trim();
             user.UpdatedAt = _time.Now;
-
+            user.CarrierNo = string.IsNullOrWhiteSpace(model.CarrierNo)
+            ? null
+            : model.CarrierNo.Trim().ToUpperInvariant();
             _db.AuditLogs.Add(new AuditLog
             {
                 UserId = userId,

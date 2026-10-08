@@ -59,6 +59,11 @@ const router = createRouter({
       name: "member",
       component: () => import("../layouts/member/MemberLayout.vue"),
       children: [
+        // 進入會員中心時，預設顯示個人資料
+        {
+          path: "",
+          redirect: { name: "profile" },
+        },
         // 我的預約
         {
           path: "reservations",
@@ -111,7 +116,7 @@ router.beforeEach(async (to) => {
   const token = localStorage.getItem("token");
   const memberStore = useMemberStore();
 
-  if (to.path.startsWith("/member")) {
+  if (to.path === "/member" || to.path.startsWith("/member/")) {
     if (!token) {
       return { name: "login" };
     }

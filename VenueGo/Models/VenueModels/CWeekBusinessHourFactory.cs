@@ -104,15 +104,31 @@ namespace VenueGo.Models.VenueModels
 
         //批次修改 >> 一次把7天的營業時間設定存回去,7筆都在同一個DbContext裡處理,最後一次SaveChanges
         //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
+        //依星期幾找資料(不用BusinessHoursId),資料表沒有那天的資料也能處理:
+        //1. 那天沒有資料、設為營業 >> 新增一筆(該天從「尚未設定」變成有設定)
+        //2. 那天沒有資料、維持不營業 >> 不新增,維持「尚未設定」(系統查不到本來就當公休,行為不變)
+        //3. 那天已有資料 >> 內容有變才更新,沒變就不動
         public void EditAll(List<CWeekBusinessHourWrap> wraps, int userId, DateTime now)
         {
             using (dbVenueContext db = new dbVenueContext())
             {
                 foreach (var wrap in wraps)
                 {
-                    //依BusinessHoursId查找對應資料
-                    var data = db.WeekBusinessHours.FirstOrDefault(w => w.BusinessHoursId == wrap.BusinessHoursId);
-                    if (data != null)
+                    //依星期幾查找對應資料,同一天有多筆時只認第一筆(跟GetByDayOfWeek一致)
+                    byte dayValue = (byte)wrap.DayOfWeek;
+                    var data = db.WeekBusinessHours.FirstOrDefault(w => w.DayOfWeek == dayValue);
+
+                    if (data == null)
+                    {
+                        if (wrap.IsOpen)
+                        {
+                            //新增時一併寫入稽核欄位,記錄這一天是誰、何時第一次設定的
+                            wrap.UpdatedAt = now;
+                            wrap.UpdatedBy = userId;
+                            db.WeekBusinessHours.Add(wrap.weekBusinessHour);
+                        }
+                    }
+                    else
                     {
                         //表單每次都會送回7天,只有內容真的有變的那天才更新
                         //這樣每一天的UpdatedAt/UpdatedBy才看得出「這一天」最後是誰、何時改的

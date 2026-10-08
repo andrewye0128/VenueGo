@@ -30,6 +30,7 @@ namespace VenueGo.Services.Reservations
         /// <param name="venueId">場地 Id。</param>
         /// <param name="date">使用日期。</param>
         /// <param name="slotTimes">所選時段的起始時間，順序不限。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         /// <returns>
         /// 驗證結果。通過時 <see cref="SlotSelectionResult.Slots"/> 會帶回
         /// 由伺服器端重新查詢的時段狀態（含單價），計價請使用這份資料。

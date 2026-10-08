@@ -30,6 +30,7 @@ namespace VenueGo.Services.Reservations
         /// <param name="draft">Session 中的暫存資料。</param>
         /// <param name="input">確認頁的表單輸入。</param>
         /// <param name="operatorUserId">操作人員的 Users.UserId，寫入 CreatedBy 與稽核紀錄。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的資料庫操作。</param>
         Task<ReservationCreationResult> CreateAsync(
             ReservationDraft draft,
             ConfirmReservationInputModel input,

@@ -35,6 +35,7 @@ namespace VenueGo.Services.TimeSlots
         /// </summary>
         /// <param name="venueId">場地 Id。時段可用性是「場地 + 日期 + 時段」綁在一起的，缺一不可。</param>
         /// <param name="date">要查詢的日期。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         Task<IReadOnlyList<TimeSlotStatus>> GetDaySlotsAsync(
             int venueId, DateOnly date, CancellationToken cancellationToken = default);
 
@@ -46,8 +47,10 @@ namespace VenueGo.Services.TimeSlots
         /// 呼叫端不需要處理找不到鍵值的情況。
         /// </para>
         /// </summary>
+        /// <param name="venueId">場地 Id。</param>
         /// <param name="fromDate">起始日期（含）。</param>
         /// <param name="toDate">結束日期（含）。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         Task<IReadOnlyDictionary<DateOnly, DayAvailability>> GetRangeAvailabilityAsync(
             int venueId, DateOnly fromDate, DateOnly toDate,
             CancellationToken cancellationToken = default);

@@ -1,11 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using VenueGo.Dtos;
 using VenueGo.Dtos.TicketDtos;
 using VenueGo.Extensions;
 using VenueGo.Helpers;
 using VenueGo.Services.Ticket;
 using VenueGo.ViewModels;
-
 namespace VenueGo.Controllers.Api.TicketApi
 {
 
@@ -23,16 +24,18 @@ namespace VenueGo.Controllers.Api.TicketApi
             _ticketQuery = ticketQuery;
             _env = env;
         }
-    
+
         // 前台「我的票券」頁 >> GET /api/tickets/mine
         // 回傳這位會員持有或已轉出的票券（已取消的不回傳）
+        [Authorize(
+       AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         [HttpGet("mine")]
         public async Task<IActionResult> GetMine(
             [FromQuery] int? testUserId, CancellationToken cancellationToken)
         {
 
-            //int? userId = User.GetUserId();
-            int? userId = null; // 先強制為null不抓後台存在Cookie的ID
+            int? userId = User.GetUserId();
+            //int? userId = null; // 先強制為null不抓後台存在Cookie的ID
 
             // 前台登入還沒串好：只有開發環境允許用 ?testUserId=1 假裝某個會員
             // TODO: 前台登入完成後，整段 testUserId 刪掉

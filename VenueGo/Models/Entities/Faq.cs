@@ -3,11 +3,19 @@ using System.Collections.Generic;
 
 namespace VenueGo.Models.Entities;
 
-public partial class SportType
+public partial class Faq
 {
-    public int SportTypeId { get; set; }
+    public int FaqId { get; set; }
 
-    public string SportName { get; set; } = null!;
+    public string Category { get; set; } = null!;
+
+    public string Question { get; set; } = null!;
+
+    public string Answer { get; set; } = null!;
+
+    public int SortOrder { get; set; }
+
+    public bool IsPublished { get; set; }
 
     public bool IsActive { get; set; }
 
@@ -18,10 +26,4 @@ public partial class SportType
     public DateTime? UpdatedAt { get; set; }
 
     public int? UpdatedBy { get; set; }
-
-    public string? PhotoPath { get; set; }
-
-    public string? Notice { get; set; }
-
-    public string? IconName { get; set; }
 }

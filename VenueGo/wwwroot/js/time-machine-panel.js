@@ -248,7 +248,21 @@
                     if (event.isComposing) return;
                     handleTyped(input, index);
               });
-              input.addEventListener('compositionend', () => handleTyped(input, index));
+              // 中文輸入法：在「已經有兩位數、又沒選取任何字」的格子裡組字時，maxlength 會把組出來的字擋掉，
+              // 組字結束時格子裡還是原本的兩位數，就被當成「打完了」直接跳下一格。
+              // 所以組字開始時先記下「要不要從頭打」，組字結束時用輸入法交出來的字（event.data）取代原本的內容。
+              let restartOnCompose = false;
+              input.addEventListener('compositionstart', () => {
+                    restartOnCompose = normalized(input).length >= 2 && input.selectionStart === input.selectionEnd;
+              });
+              input.addEventListener('compositionend', (event) => {
+                    if (restartOnCompose) {
+                          const typed = toDigits(event.data);
+                          if (typed) input.value = typed.slice(0, 2);
+                          restartOnCompose = false;
+                    }
+                    handleTyped(input, index);
+              });
 
               // 已經有兩位數、又沒有選取任何字時打字：改成從頭打。
               // 單擊只放游標（不全選），沒有這段的話 maxlength="2" 會把新打的字擋掉，看起來像打不進去

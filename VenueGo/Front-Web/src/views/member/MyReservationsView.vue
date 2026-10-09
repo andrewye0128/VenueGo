@@ -4,10 +4,11 @@
   UFormField、UInput、USelect、UAlert 與 useOverlay、useToast 由 Nuxt UI 自動匯入
 -->
 <script setup>
-import { onMounted, ref, watch } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import CancelConfirmModal from "@/components/CancelConfirmModal.vue";
 import DatePickerInput from "@/components/DatePickerInput.vue";
+import EmptyState from "@/components/EmptyState.vue";
 import ListFilterPanel from "@/components/list/ListFilterPanel.vue";
 import ListTable from "@/components/list/ListTable.vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
@@ -47,6 +48,24 @@ const DEFAULT_FILTERS = {
 const filters = ref({ ...DEFAULT_FILTERS });
 const page = ref(1);
 
+// 有沒有套用篩選條件：決定沒有資料時顯示哪一種空狀態
+//   沒有篩選 → 「目前沒有預約紀錄」（真的沒預約過）
+//   有篩選   → 「查無符合條件的預約」（有預約，只是條件太嚴格；避免會員以為預約不見了）
+const hasActiveFilters = computed(() => {
+  const f = filters.value;
+  return (
+    f.keyword.trim() !== "" ||
+    f.date !== null ||
+    f.reservationStatus !== ALL ||
+    f.paymentStatus !== ALL
+  );
+});
+
+// 清除篩選條件：改回預設值，ListFilterPanel 的欄位會跟著更新，列表也會重新查詢
+function resetFilters() {
+  filters.value = { ...DEFAULT_FILTERS };
+}
+
 // ── 取資料 ──
 const result = ref({ items: [], totalCount: 0 });
 const loading = ref(false);
@@ -69,6 +88,8 @@ async function load() {
     });
     if (requestId !== latestRequestId) return;
     result.value = data;
+    // 測試空資料時用：
+    // result.value = { items: [], totalCount: 0 };
   } catch (err) {
     if (requestId !== latestRequestId) return;
     // 登入失效（例如 token 過期）：留在這頁也什麼都做不了，登出並回登入頁
@@ -200,7 +221,9 @@ async function openCancel(reservation) {
       :actions="[{ label: '重新載入', color: 'error', variant: 'outline', onClick: load }]"
     />
 
+    <!-- 取資料失敗時只顯示上面的錯誤訊息，不顯示列表（不然會同時出現「目前沒有預約紀錄」，讓人誤會） -->
     <ListTable
+      v-else
       v-model:page="page"
       :rows="result.items"
       :columns="columns"
@@ -208,8 +231,34 @@ async function openCancel(reservation) {
       :total="result.totalCount"
       :page-size="PAGE_SIZE"
       row-key="reservationId"
-      empty-text="查無符合條件的預約"
     >
+      <!-- ── 沒有資料：依「有沒有篩選」顯示不同的空狀態 ── -->
+      <template #empty>
+        <EmptyState
+          v-if="hasActiveFilters"
+          icon="i-mdi-magnify-close"
+          title="查無符合條件的預約"
+          description="請調整篩選條件後再查詢。"
+          :actions="[
+            {
+              label: '清除篩選條件',
+              color: 'primary',
+              variant: 'outline',
+              onClick: resetFilters,
+            },
+          ]"
+        />
+        <EmptyState
+          v-else
+          icon="i-mdi-close"
+          title="目前沒有預約紀錄"
+          description="預約場地後，紀錄會顯示在這裡。"
+          :actions="[
+            { label: '立即預約場地', to: '/booking', trailingIcon: 'i-lucide-arrow-right' },
+          ]"
+        />
+      </template>
+
       <!-- ── 電腦版表格：每一欄的顯示內容（資料在 row.original 裡） ── -->
       <template #reservationId-cell="{ row }">
         {{ formatReservationNo(row.original.reservationId) }}

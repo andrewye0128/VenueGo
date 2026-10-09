@@ -20,7 +20,11 @@ public partial class dbVenueContext : DbContext
 
     public virtual DbSet<EntryTicket> EntryTickets { get; set; }
 
+    public virtual DbSet<Faq> Faqs { get; set; }
+
     public virtual DbSet<LoginLog> LoginLogs { get; set; }
+
+    public virtual DbSet<News> News { get; set; }
 
     public virtual DbSet<Order> Orders { get; set; }
 
@@ -69,6 +73,10 @@ public partial class dbVenueContext : DbContext
     public virtual DbSet<UserRole> UserRoles { get; set; }
 
     public virtual DbSet<VBookingTicketInfo> VBookingTicketInfos { get; set; }
+
+    public virtual DbSet<VReservationSummary> VReservationSummaries { get; set; }
+
+    public virtual DbSet<VReviewFullInfo> VReviewFullInfos { get; set; }
 
     public virtual DbSet<Venue> Venues { get; set; }
 
@@ -132,6 +140,10 @@ public partial class dbVenueContext : DbContext
 
             entity.ToTable("EntryTicket");
 
+            entity.HasIndex(e => new { e.OrderId, e.ReceivedUserId }, "UQ_EntryTicket_OrderId_ReceivedUserId")
+                .IsUnique()
+                .HasFilter("([ReceivedUserId] IS NOT NULL)");
+
             entity.HasIndex(e => e.Qrtoken, "UQ_EntryTicket_QRToken").IsUnique();
 
             entity.Property(e => e.CreatedAt).HasPrecision(0);
@@ -139,6 +151,19 @@ public partial class dbVenueContext : DbContext
                 .HasMaxLength(64)
                 .IsUnicode(false)
                 .HasColumnName("QRToken");
+        });
+
+        modelBuilder.Entity<Faq>(entity =>
+        {
+            entity.Property(e => e.Answer).HasMaxLength(1500);
+            entity.Property(e => e.Category)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasPrecision(0);
+            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_Faqs_IsActive");
+            entity.Property(e => e.IsPublished).HasDefaultValue(true, "DF_Faqs_IsPublished");
+            entity.Property(e => e.Question).HasMaxLength(200);
+            entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });
 
         modelBuilder.Entity<LoginLog>(entity =>
@@ -153,6 +178,24 @@ public partial class dbVenueContext : DbContext
             entity.Property(e => e.LoginTime)
                 .HasPrecision(0)
                 .HasDefaultValueSql("(sysdatetime())", "DF_LoginLogs_LoginTime");
+        });
+
+        modelBuilder.Entity<News>(entity =>
+        {
+            entity.Property(e => e.Category)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Content).HasMaxLength(4000);
+            entity.Property(e => e.CoverText).HasMaxLength(200);
+            entity.Property(e => e.CoverTextStyles).IsUnicode(false);
+            entity.Property(e => e.CoverTitle).HasMaxLength(50);
+            entity.Property(e => e.CoverTitleStyles).IsUnicode(false);
+            entity.Property(e => e.CreatedAt).HasPrecision(0);
+            entity.Property(e => e.ImagePath).HasMaxLength(500);
+            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_News_IsActive");
+            entity.Property(e => e.PublishedAt).HasPrecision(0);
+            entity.Property(e => e.Title).HasMaxLength(100);
+            entity.Property(e => e.UpdatedAt).HasPrecision(0);
         });
 
         modelBuilder.Entity<Order>(entity =>
@@ -420,6 +463,9 @@ public partial class dbVenueContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(0)
                 .HasDefaultValueSql("(sysdatetime())", "DF_SportTypes_CreatedAt");
+            entity.Property(e => e.IconName)
+                .HasMaxLength(50)
+                .IsUnicode(false);
             entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_SportTypes_IsActive");
             entity.Property(e => e.Notice).HasMaxLength(3000);
             entity.Property(e => e.PhotoPath).HasMaxLength(500);

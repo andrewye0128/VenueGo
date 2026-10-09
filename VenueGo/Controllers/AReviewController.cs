@@ -1,12 +1,12 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;   // 新增：Database.SqlQuery<T> 在這個命名空間
-using System.Linq.Expressions;
 using VenueGo.Data;
 using VenueGo.Dtos;
 using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
+using static VenueGo.Models.ReviewModels.ReviewQueueRules;   // 10/6 新增：規則搬出去之後，呼叫的地方不用改名字
 using VenueGo.Services;
 using VenueGo.Services.Auth;
 using VenueGo.ViewModels.ReviewVM;
@@ -24,82 +24,6 @@ namespace VenueGo.Controllers
         //  第一區：規則判定
         //  這一區只回答「這則評論現在屬於哪個清單、能不能做某個操作」。
         // ════════════════════════════════════════════════════════
-
-        // ── 三個清單的條件，各只寫一次 ──
-        //
-        //  Expression<Func<...>> 就是「還沒執行的 Where 條件」。
-        //  寫成欄位之後，查清單和算數量可以共用同一個條件，
-        //  不會出現「清單改了、數量忘了改」的情況。
-        private static readonly Expression<Func<ReviewMain, bool>> UnreadRule =
-            r => r.ReadAt == null;
-
-        private static readonly Expression<Func<ReviewMain, bool>> PendingRule =
-            r => r.ReadAt != null && r.RepliedAt == null && r.SpamMarkedAt == null;
-
-        private static readonly Expression<Func<ReviewMain, bool>> SpamRule =
-            r => r.SpamMarkedAt != null;
-
-        // ── 單筆操作的前置條件（已經從資料庫拿出來的物件用這兩個）──
-        //  ⚠️ CanHandle 的內容必須和上面的 PendingRule 一致。
-        private static bool CanMarkRead(ReviewMain r) => r.ReadAt == null;
-
-        private static bool CanHandle(ReviewMain r) =>
-            r.ReadAt != null && r.RepliedAt == null && r.SpamMarkedAt == null;
-
-        // ── 查詢字串的值不可信任，不認得的一律改回預設 ──
-        private static string NormalizeTab(string? tab) => tab switch
-        {
-            QueueTab.All => QueueTab.All,
-            QueueTab.Pending => QueueTab.Pending,
-            QueueTab.Completed => QueueTab.Completed,
-            QueueTab.Spam    => QueueTab.Spam,
-            _                => QueueTab.Unread
-        };
-
-        private static string NormalizeSource(string? source) => source switch
-        {
-            QueueSource.Visit   => QueueSource.Visit,
-            QueueSource.Booking => QueueSource.Booking,
-            _                   => QueueSource.All
-        };
-
-        private static string NormalizeRange(string? range) => range switch
-        {
-            QueueRange.Today    => QueueRange.Today,
-            QueueRange.Week     => QueueRange.Week,
-            QueueRange.Quarter  => QueueRange.Quarter,
-            QueueRange.HalfYear => QueueRange.HalfYear,
-            QueueRange.All      => QueueRange.All,
-            _                   => QueueRange.Default   // 不認得就回預設（一個月內）
-        };
-
-        private static string NormalizeSearchField(string? field) => field switch
-        {
-            QueueSearchField.OrderNo  => QueueSearchField.OrderNo,
-            QueueSearchField.Employee => QueueSearchField.Employee,
-            _                         => QueueSearchField.Default
-        };
-
-        /// <summary>
-        /// 把使用者打的字拆成多個關鍵字，空格等於「而且」。
-        /// 輸入「網球 破掉」→ 找同時含有「網球」和「破掉」的評論。
-        ///
-        /// ⚠️ 全形空格也要當分隔。中文輸入法很容易打出全形空格，
-        ///    使用者看起來跟半形一樣，但字元不同，不處理的話會變成
-        ///    去搜「網球　破掉」這一整串，當然搜不到。
-        /// </summary>
-        private static List<string> SplitKeywords(string? keyword)
-        {
-            if (string.IsNullOrWhiteSpace(keyword)) return new List<string>();
-
-            char[] separators = { ' ', '　', '\t' };
-
-            return keyword.Split(separators,
-                                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                          .Distinct()
-                          .Take(QueueSearchField.MaxKeywords)
-                          .ToList();
-        }
 
         /// <summary>
         /// 回傳 null 代表「是員工，繼續」。
@@ -293,15 +217,6 @@ namespace VenueGo.Controllers
                                  .OrderBy(r => r.CreatedAt)
         };
 
-        private static OverdueLevel GetOverdueLevel(ReviewMain r, DateTime now)
-        {
-            if (r.RepliedAt != null || r.SpamMarkedAt != null) return OverdueLevel.None;
-
-            var age = now - r.CreatedAt;
-            if (age >= TimeSpan.FromDays(ReviewPolicy.PublicBufferDays)) return OverdueLevel.Overdue;
-            if (age >= TimeSpan.FromDays(ReviewPolicy.OverdueWarnDays))  return OverdueLevel.Soon;
-            return OverdueLevel.None;
-        }
 
         /*  ══════════════════════════════════════════════════════════════════
             以下整段改用檢視表 dbo.v_ReviewFullInfo，原本的版本保留在註解裡。
@@ -697,28 +612,6 @@ namespace VenueGo.Controllers
         //  只改實體的值，SaveChanges 由 Action 呼叫。
         // ════════════════════════════════════════════════════════
 
-        private static void ApplyRead(ReviewMain r, int employeeId, DateTime now)
-        {
-            r.ReadAt = now;
-            r.ReadByEmployeeId = employeeId;
-        }
-
-        private static void ApplyReply(ReviewMain r, string content, int employeeId, DateTime now)
-        {
-            r.ReplyContent = content;
-            r.RepliedAt = now;
-            r.RepliedByEmployeeId = employeeId;
-            r.IsPinned = false;     // 回覆後就離開待回覆清單，置頂沒有意義了
-        }
-
-        private static void ApplySpam(ReviewMain r, byte reason, int employeeId, DateTime now)
-        {
-            r.SpamMarkedAt = now;
-            r.SpamMarkedByEmployeeId = employeeId;
-            r.SpamReason = reason;
-            r.IsPublic = false;     // 規則：垃圾強制不公開
-            r.IsPinned = false;
-        }
 
         // ════════════════════════════════════════════════════════
         //  第四區：Action

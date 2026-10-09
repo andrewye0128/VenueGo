@@ -5,9 +5,23 @@
  * 跳到指定時間的六個欄位：
  *   - 年：下拉選單，只有去年／今年／明年
  *   - 月 1–12、日 1–當月天數、時 0–23、分／秒 0–59
- *   - 只能打數字；打滿兩位數自動跳到下一格；↑↓ 鍵加減（超過範圍會繞回來）
+ *   - 只留數字：全形數字（１２）轉成半形，其他字元直接拿掉
+ *   - 打完自動跳下一格：第一個數字「不可能再接第二個數字」時就跳，不必等兩位數
+ *       月：0、1 會等第二個數字，2～9 直接跳
+ *       日：0～3 會等，4～9 直接跳（2 月只有 0～2 會等，打 3 就直接跳）
+ *       時：0～2 會等，3～9 直接跳
+ *       分、秒：0～5 會等，6～9 直接跳（秒是最後一格，不跳）
+ *     打了兩位數但不合理（例如月 13）就不跳，留在原地讓使用者改
+ *   - 中文輸入法「組字中」先不處理，等字確定了才處理
+ *     （10/7 版在組字途中就跳格，輸入法會把同一個數字也打進下一格）
+ *   - 還沒打完的不算錯：例如月打了「0」還在等第二個數字，不會先標紅；但「出發」會先停用
+ *   - 換了年或月，日超過當月天數時，自動改成當月最後一天並提示（例如 2/31 → 2/28）
+ *     直接在「日」打了不存在的日期（例如 11 月打 31）則不改，標紅讓使用者自己改
+ *   - 單擊只放游標、雙擊整格選取；Tab 鍵或自動跳格進來時整格選取
+ *     整格已經有兩位數、又沒有選取時打字 → 改成從頭打（不然 maxlength 會擋住，打了沒反應）
+ *   - 離開欄位時補成兩位數（7 → 07）
+ *   - ↑↓ 鍵加減（超過範圍會繞回來）
  *   - 還沒動過的話，欄位會跟著網站時間一起走；一動就停住，按「↺ 填入目前網站時間」恢復
- *   - 換了年或月，日超過當月天數時自動改成最後一天，並提示
  */
 (function () {
     'use strict';
@@ -26,9 +40,19 @@
     const fields = ['tmMonth', 'tmDay', 'tmHour', 'tmMinute', 'tmSecond'].map($);
     const byPart = Object.fromEntries(fields.map((f) => [f.dataset.part, f]));
     const LABELS = { month: '月', day: '日', hour: '時', minute: '分', second: '秒' };
-    const DEFAULT_HINT = el.hint.textContent;
 
-    let dirty = false;   // 使用者動過欄位了，就不再自動跟著網站時間走
+      /**
+       * 只打了一個數字時，後面還能不能接第二個數字：「這個數字 × 10」沒超過上限就還能接。
+       * 例如月（上限 12）打了 1 → 10 還在範圍內，要等；打了 2 → 20 超過，直接跳。
+       * 日的上限跟著月份變，所以 2 月打了 3 → 30 超過 28，也會直接跳。
+       */
+      function canTakeSecondDigit(input, digit) {
+            return Number(digit) * 10 <= Number(input.dataset.max);
+      }
+      const DEFAULT_HINT = el.hint.textContent;
+
+      let dirty = false;   // 使用者動過欄位了，就不再自動跟著網站時間走
+      let notice = null;   // 「日已改成 30」這類提示；使用者下一次輸入時清掉
     let busy = false;
 
     const pad = (n) => String(n).padStart(2, '0');
@@ -92,9 +116,34 @@
         el.hint.textContent = '已停住。按「出發」跳到這個時間。';
     }
 
-    function readNumber(input) {
-        return input.value === '' ? NaN : Number(input.value);
-    }
+      /** 全形數字轉半形，再拿掉所有不是數字的字元。 */
+      function toDigits(text) {
+            return String(text ?? '')
+                  .replace(/[０-９]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0))
+                  .replace(/\D/g, '');
+      }
+
+      function normalized(input) {
+            return toDigits(input.value);
+      }
+
+      /**
+       * 「還沒打完」：游標還在這格，而且是空的、或只打了一個「後面還能接第二個數字」的數字。
+       * 例如月打了「0」——現在看是錯的，但使用者八成正要打「08」，先不要標紅。
+       */
+      function isPending(input) {
+            if (document.activeElement !== input) return false;
+            const digits = normalized(input);
+            if (digits.length === 0) return true;
+            if (digits.length === 1) return canTakeSecondDigit(input, digits);
+            return false;
+      }
+
+      /** 讀成數字：空的或不是純數字都回 NaN。 */
+      function readNumber(input) {
+            const text = normalized(input);
+            return /^\d+$/.test(text) ? Number(text) : NaN;
+      }
 
     function updateDayMax() {
         const year = Number(el.year.value);
@@ -109,7 +158,8 @@
         const min = Number(input.dataset.min);
         const max = Number(input.dataset.max);
 
-        if (Number.isNaN(value)) return `請填寫${label}`;
+          if (normalized(input) === '') return `請填寫${label}`;
+          if (Number.isNaN(value)) return `${label}只能填數字`;
         if (value < min || value > max) {
             if (input.dataset.part === 'day' && value >= 1 && value <= 31) {
                 return `${el.year.value} 年 ${readNumber(byPart.month)} 月只有 ${max} 天`;
@@ -123,57 +173,100 @@
     function validateAll() {
         updateDayMax();
         let firstError = null;
-        let firstInvalid = null;
+          let firstInvalid = null;
+          let anyError = false;
         for (const input of fields) {
             const error = checkField(input);
-            input.setAttribute('aria-invalid', error ? 'true' : 'false');
-            if (error && !firstError) { firstError = error; firstInvalid = input; }
+              if (error) anyError = true;
+              // 還沒打完的那一格先不標紅、不顯示原因（「出發」還是會停用）
+              const show = error && !isPending(input);
+              input.setAttribute('aria-invalid', show ? 'true' : 'false');
+              if (show && !firstError) { firstError = error; firstInvalid = input; }
         }
         if (firstError) {
             el.hint.textContent = firstError;
             el.hint.classList.add('error');
-        } else if (el.hint.classList.contains('error')) {
-            el.hint.classList.remove('error');
-            el.hint.textContent = dirty ? '已停住。按「出發」跳到這個時間。' : DEFAULT_HINT;
-        }
-        el.go.disabled = busy || !!firstError;
-        return firstInvalid;
-    }
+            } else {
+                  // 沒有錯誤：顯示提示（如果有），不然回到一般說明
+                  el.hint.classList.remove('error');
+                  el.hint.textContent = notice ?? (dirty ? '已停住。按「出發」跳到這個時間。' : DEFAULT_HINT);
+            }
+            el.go.disabled = busy || anyError;
+            return firstInvalid ?? fields.find((input) => checkField(input) !== null) ?? null;
+      }
 
-    /** 換了年或月：日超過當月天數就改成最後一天，並說一聲。 */
-    function clampDay() {
+      /** 月是不是已經打完了（兩位數，或第一個數字就不可能再接）。 */
+      function isMonthComplete() {
+            const digits = normalized(byPart.month);
+            return digits.length === 2 || (digits.length === 1 && !canTakeSecondDigit(byPart.month, digits));
+      }
+
+      /**
+       * 換了年或月之後，日超過當月天數 → 改成當月最後一天，並在下面說一聲。
+       * 只在「年或月改變」時做；使用者自己在日打了不存在的日期，不改，讓它標紅。
+       */
+      function clampDayAfterMonthChange() {
         updateDayMax();
-        const day = readNumber(byPart.day);
-        const max = Number(byPart.day.dataset.max);
-        if (!Number.isNaN(day) && day > max) {
+            const month = readNumber(byPart.month);
+            const day = readNumber(byPart.day);
+            const max = Number(byPart.day.dataset.max);
+            if (!isMonthComplete() || month < 1 || month > 12) return;
+            if (Number.isNaN(day) || day <= max) return;
+
             byPart.day.value = pad(max);
+            notice = `${el.year.value} 年 ${month} 月只有 ${max} 天，日已改成 ${max}。`;
             validateAll();
-            el.hint.classList.remove('error');
-            el.hint.textContent = `${el.year.value} 年 ${readNumber(byPart.month)} 月只有 ${max} 天，已改成 ${max} 日。`;
-            return;
+      }
+
+      /** 跳到下一格並整格選取，直接打字就會取代原本的數字。 */
+      function focusNext(index) {
+            const next = fields[index + 1];
+            if (!next) return;
+            next.focus();
+            next.select();
+      }
+
+      /** 這一格的字確定了（不是組字中）：整理成數字、檢查、決定要不要跳下一格。 */
+      function handleTyped(input, index) {
+            notice = null;
+            const digits = normalized(input).slice(0, 2);
+            if (digits !== input.value) input.value = digits;
+
+            markDirty();
+            validateAll();
+            if (input.dataset.part === 'month') clampDayAfterMonthChange();
+
+              const done = digits.length === 2
+                    || (digits.length === 1 && !canTakeSecondDigit(input, digits));
+              if (done && checkField(input) === null) focusNext(index);
         }
-        validateAll();
-    }
 
     fields.forEach((input, index) => {
-        input.addEventListener('input', () => {
-            const digits = input.value.replace(/\D/g, '').slice(0, 2);
-            if (digits !== input.value) input.value = digits;
-            markDirty();
+              input.addEventListener('input', (event) => {
+                    // 中文輸入法「組字中」先不處理，等 compositionend 再處理，
+                    // 不然字還沒確定就跳格，輸入法會把同一個數字也打進下一格
+                    if (event.isComposing) return;
+                    handleTyped(input, index);
+              });
+              input.addEventListener('compositionend', () => handleTyped(input, index));
 
-            if (input.dataset.part === 'month' && digits.length === 2) clampDay();
-            else validateAll();
-
-            // 打滿兩位數就跳下一格（最後一格就停在原地）
-            if (digits.length === 2 && index < fields.length - 1) {
-                fields[index + 1].focus();
-                fields[index + 1].select();
-            }
-        });
+              // 已經有兩位數、又沒有選取任何字時打字：改成從頭打。
+              // 單擊只放游標（不全選），沒有這段的話 maxlength="2" 會把新打的字擋掉，看起來像打不進去
+              input.addEventListener('beforeinput', (event) => {
+                    if (event.isComposing || event.inputType !== 'insertText') return;
+                    const typed = toDigits(event.data);
+                    const full = normalized(input).length >= 2;
+                    const nothingSelected = input.selectionStart === input.selectionEnd;
+                    if (!typed || !full || !nothingSelected) return;
+                    event.preventDefault();
+                    input.value = typed.slice(0, 2);
+                    handleTyped(input, index);
+              });
 
         input.addEventListener('keydown', (event) => {
             if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
-            event.preventDefault();
+              if (event.isComposing) return;
+              event.preventDefault();
             updateDayMax();
             const min = Number(input.dataset.min);
             const max = Number(input.dataset.max);
@@ -183,28 +276,32 @@
             if (value > max) value = min;   // 超過範圍就繞回來，例如 59 → 00
             if (value < min) value = max;
             input.value = pad(value);
-            markDirty();
-            if (input.dataset.part === 'month') clampDay();
-            else validateAll();
+              notice = null;
+              markDirty();
+              validateAll();
+              if (input.dataset.part === 'month') clampDayAfterMonthChange();
         });
 
-        input.addEventListener('focus', () => input.select());
+          // 雙擊整格選取（瀏覽器本來雙擊就會選取整串數字，這裡確保一定是整格）
+          input.addEventListener('dblclick', () => input.select());
 
-        // 離開欄位時補成兩位數（7 → 07）
-        input.addEventListener('blur', () => {
-            if (/^\d$/.test(input.value)) input.value = pad(Number(input.value));
-            if (input.dataset.part === 'month') clampDay();
-            else validateAll();
+          // 離開欄位時補成兩位數（7 → 07），再檢查一次（「還沒打完」的那格這時才會標紅）
+          input.addEventListener('blur', () => {
+                if (/^\d$/.test(input.value)) input.value = pad(Number(input.value));
+                validateAll();
         });
     });
 
     el.year.addEventListener('change', () => {
-        markDirty();
-        clampDay();
+          notice = null;
+          markDirty();
+          validateAll();
+          clampDayAfterMonthChange();
     });
 
     el.refill.addEventListener('click', () => {
-        dirty = false;
+          dirty = false;
+          notice = null;
         fillFromSite();
         validateAll();
         el.hint.classList.remove('error');

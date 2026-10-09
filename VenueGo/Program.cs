@@ -1,6 +1,5 @@
-using Microsoft.AspNetCore.Authentication.Cookies;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.Cookies; // Cookie 認證
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -133,7 +132,7 @@ builder.Services.AddSingleton<TimeProvider, TaipeiTimeProvider>();
 
 
 // 註冊關於目前登入者的服務：介面 → 實作
-builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUserService>();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
 // 註冊會員登入驗證服務
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();

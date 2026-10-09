@@ -35,5 +35,11 @@
 
         /// <summary>是否已登入。</summary>
         bool IsAuthenticated { get; }
+
+        /// <summary>
+        /// 🌟 新增：目前登入者的 Employees.EmployeeId。未登入或非員工回傳 null。
+        /// <para>同一個請求內只會查一次資料庫，自帶效能快取。</para>
+        /// </summary>
+        int? EmployeeId { get; }
     }
 }

@@ -22,4 +22,6 @@ public partial class SportType
     public string? PhotoPath { get; set; }
 
     public string? Notice { get; set; }
+
+    public string? IconName { get; set; }
 }

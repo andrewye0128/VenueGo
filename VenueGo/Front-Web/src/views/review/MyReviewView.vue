@@ -1,15 +1,15 @@
 <!--
     MyReviewView.vue — 我的評論（取代 Views/CReview/ShowMyReviewPage.cshtml）
 
-    路由：/reviews/visit/:token        → kind='visit'
+    路由：/reviews/visit/:id           → kind='visit'（id ＝ 現場評論憑證 ReviewPerVisitId）
           /reviews/booking/:orderId    → kind='booking'
           /reviews/preview/:reviewId   → previewId（員工預覽，從館方清單開過來）
 
     ── 員工預覽（2026-09-26 取代原本的 ?preview=1）──────────────
     跟顧客用同一個畫面，員工看到的就是顧客看到的（包括「館方回覆了你的評論」提示）。
     差別只有三個：
-      1. 資料從員工專用的 API 拿（規格 2-8）。員工不需要知道顧客的 QR token，
-         預約評論也不會因為「要會員登入」而打不開。
+      1. 資料從員工專用的 API 拿（規格 2-8）。顧客的評論要會員本人登入才打得開，
+         員工用這支才看得到。
       2. 所有會改資料的按鈕都停用（公開開關、滿意度）。
       3. 不送「已看過回覆」的紀錄，不會汙染營運分析的已讀率。
     原本的 ?preview=1 拿掉了：它只是一個網址參數，有沒有加全靠自覺。

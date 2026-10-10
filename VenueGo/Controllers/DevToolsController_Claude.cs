@@ -60,8 +60,9 @@ namespace VenueGo.Controllers
         /// 手動觸發「建立現場評論憑證」。
         /// 例：/DevTools/MakeVisitTicket?token=TESTENTRY02
         ///
-        /// 前提：那張 EntryTicket 的狀態必須已經是 Used。
-        /// 回 false 不代表壞掉——可能是已經建過了，或狀態還不是 Used。
+        /// 前提（10/9 起）：那張 EntryTicket 的狀態必須已經是 Used、有領票的會員（ReceivedUserId），
+        /// 而且預約時段內有一筆成功的入場紀錄。
+        /// 回 false 不代表壞掉——可能是已經建過了（同一張訂單、同一位會員只有一張），或條件不符。
         /// </summary>
         [HttpGet]
         public async Task<IActionResult> MakeVisitTicket(string? token)
@@ -72,7 +73,9 @@ namespace VenueGo.Controllers
             bool created = await _visitFactory.CreateReviewPerVisitAsync(token);
             return Content($"CreateReviewPerVisitAsync(\"{token}\") => {created}\r\n"
                          + (created ? "已建立現場評論憑證。"
-                                    : "沒有建立。可能原因：查無票券／狀態不是 Used／已經建過了。"));
+                                    : "沒有建立。可能原因：查無票券／狀態不是 Used or Completed／沒有領票的會員（ReceivedUserId）"
+                                      + "／預約時段內沒有成功的入場紀錄／這位會員在這張訂單已經有憑證了"
+                                      + "／網站時間還沒到預約時段（10/10 起：請先用時光機撥到時段開始之後，入場紀錄的時間也不能晚於網站時間）。"));
         }
 
         /// <summary>
@@ -88,7 +91,7 @@ namespace VenueGo.Controllers
             bool updated = await _visitFactory.RecordVisitEndTimeAsync(ticketId);
             return Content($"RecordVisitEndTimeAsync({ticketId}) => {updated}\r\n"
                          + (updated ? "已寫入 ReviewPerVisit.ActualEndTime。"
-                                    : "沒有寫入。可能原因：查無票券／查無離場紀錄／離場時間早於租借開始／還沒有評論憑證。"));
+                                    : "沒有寫入。可能原因：查無票券／沒有領票的會員／查無離場紀錄／離場時間早於租借開始／還沒有評論憑證。"));
         }
 
         /// <summary>
@@ -106,7 +109,7 @@ namespace VenueGo.Controllers
 
             bool created = await _bookingFactory.CreateReviewPerBookingAsync(orderId);
             return Content($"CreateReviewPerBookingAsync({orderId}) => {created}\r\n"
-                         + (created ? "已建立預約評論憑證，可以去 /CReview/CreateForBooking?id=… 寫評論了。"
+                         + (created ? $"已建立預約評論憑證，可以用訂購人的帳號登入前台，到 /reviews/booking/{orderId}/write 寫評論了。"
                                     : "沒有建立。可能原因：查無已付款紀錄／已經建過了。"));
         }
     }

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Authentication.Cookies; // Cookie 認證
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;

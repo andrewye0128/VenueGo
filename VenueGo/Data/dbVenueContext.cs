@@ -385,17 +385,15 @@ public partial class dbVenueContext : DbContext
 
             entity.HasIndex(e => new { e.VenueId, e.RentStartTime }, "IX_ReviewPerVisit_VenueId").IsDescending(false, true);
 
-            entity.HasIndex(e => e.Qrtoken, "UQ_ReviewPerVisit_QRToken").IsUnique();
+            entity.HasIndex(e => e.TicketId, "UQ_ReviewPerVisit_TicketId").IsUnique();
+
+            entity.HasIndex(e => new { e.UserId, e.OrderId }, "UQ_ReviewPerVisit_UserId_OrderId").IsUnique();
 
             entity.Property(e => e.ActualEndTime).HasPrecision(0);
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(0)
                 .HasDefaultValueSql("(sysdatetime())", "DF_ReviewPerVisit_CreatedAt");
             entity.Property(e => e.ExpiredAt).HasPrecision(0);
-            entity.Property(e => e.Qrtoken)
-                .HasMaxLength(64)
-                .IsUnicode(false)
-                .HasColumnName("QRToken");
             entity.Property(e => e.RentEndTime).HasPrecision(0);
             entity.Property(e => e.RentStartTime).HasPrecision(0);
         });
@@ -496,7 +494,7 @@ public partial class dbVenueContext : DbContext
 
             entity.ToTable("TicketStatusLog");
 
-            entity.HasIndex(e => e.TicketId, "IX_TicketStatusLog_TicketId");
+            entity.HasIndex(e => e.TicketId, "IX_TicketStatusLog_tusLog");
 
             entity.Property(e => e.CreatedAt)
                 .HasPrecision(0)

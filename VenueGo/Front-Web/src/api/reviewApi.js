@@ -1,8 +1,9 @@
 // 顧客端評論的 API（規格：《API規格_CReview.md》）
 // 每個函式對應一支端點；頁面只呼叫這裡的函式，不自己拼網址——網址規則只寫在這一個檔案。
 //
-// kind   = "visit"（現場評論，ticket 是 QRToken）
-//        | "booking"（預約評論，ticket 是 OrderId，要會員本人登入）
+// kind   = "visit"（現場評論，ticket 是憑證 Id＝ReviewPerVisitId）
+//        | "booking"（預約評論，ticket 是 OrderId）
+// 10/9 起兩種都要會員本人登入（http.js 會自動帶上 JWT）。
 //
 // 共用的 http.js 會自動取出 ApiResult 的 data，所以這裡的函式回傳的就是真正的資料。
 // 失敗時丟出的錯誤有 error.message（中文）與 error.errorCode（對照 @/constants/errorCodes）。
@@ -11,7 +12,7 @@
 // 錯誤訊息 http.js 已經整理成中文（欄位錯誤在 error.fieldErrors），要顯示在哪裡、要不要重試，只有頁面知道。
 import http from "./http";
 
-// QRToken 理論上只有英數字，但包一層 encodeURIComponent 是習慣：
+// ticket 現在都是數字，但包一層 encodeURIComponent 是習慣：
 // 萬一哪天格式改了、出現 / 或 ? 之類的字元，網址才不會斷掉。
 function base(kind, ticket) {
   return `/reviews/${kind}/${encodeURIComponent(ticket)}`;
@@ -58,10 +59,10 @@ export async function markReplyViewed(kind, ticket) {
   return data;
 }
 
-// 切換公開：[POST] /api/reviews/visit/{token}/visibility
+// 切換公開：[POST] /api/reviews/visit/{id}/visibility
 // 只有現場評論有這支。
-export async function setVisibility(token, isPublic) {
-  const { data } = await http.post(`${base("visit", token)}/visibility`, { isPublic });
+export async function setVisibility(id, isPublic) {
+  const { data } = await http.post(`${base("visit", id)}/visibility`, { isPublic });
   return data;
 }
 

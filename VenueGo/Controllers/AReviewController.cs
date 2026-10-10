@@ -151,16 +151,11 @@ namespace VenueGo.Controllers
                                             .Select(b => b.ReviewPerBookingId)
                                             .ToList();
 
-                        var tokens = _db.EntryTickets
-                                        .Where(t => orderIds.Contains(t.OrderId))
-                                        .Select(t => t.Qrtoken)
-                                        .ToList();
-
+                        // 10/9：現場憑證本身就有 OrderId，不用再透過票券的 QRToken 轉一手
                         var visitIds = _db.ReviewPerVisits
-                                          .Where(v => tokens.Contains(v.Qrtoken))
+                                          .Where(v => orderIds.Contains(v.OrderId))
                                           .Select(v => v.ReviewPerVisitId)
                                           .ToList();
-
                         return q.Where(r =>
                             (r.ReviewPerBookingId != null && bookingIds.Contains(r.ReviewPerBookingId.Value))
                          || (r.ReviewPerVisitId   != null && visitIds.Contains(r.ReviewPerVisitId.Value)));

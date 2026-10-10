@@ -6,13 +6,18 @@
 //      routes: [ ...原本的路由, ...reviewRoutes, 404 那一筆（一定要在最後） ]
 //  導覽列「會員評價」（constants/navigation.js 的 /reviews）就是這裡的評論專區。
 //
-//  原本的 Razor 頁面 → 現在的路由：
-//    CReview/Index                         → /reviews
-//    CReview/CreateForVisit?token=…        → /reviews/visit/:token/write
-//    CReview/CreateForBooking/{orderId}    → /reviews/booking/:orderId/write
-//    CReview/ShowMyReviewPage?token=…      → /reviews/visit/:token
-//    CReview/ShowMyReviewPage?orderId=…    → /reviews/booking/:orderId
-//    （新增）員工預覽                       → /reviews/preview/:reviewId
+//  路由（Razor 版 CReview 已在 10/9 退役）：
+//    評論專區                → /reviews
+//    撰寫現場評論            → /reviews/visit/:id/write        （id ＝ 現場評論憑證 ReviewPerVisitId）
+//    撰寫預約評論            → /reviews/booking/:orderId/write
+//    查看我的現場評論        → /reviews/visit/:id
+//    查看我的預約評論        → /reviews/booking/:orderId
+//    員工預覽                → /reviews/preview/:reviewId
+//
+//  ── 10/9 現場評論改限會員 ─────────────────────────────
+//  網址從 QRToken 改成憑證 Id，兩種評論都要會員本人登入（後端用 JWT 擋）。
+//  這幾頁不在 /member 底下，組裡的路由守衛不會先擋；沒登入時後端回 401，頁面顯示「請先登入」。
+//  :id(\d+) 表示只接受數字，網址打錯（例如舊的 QRToken 連結）會直接進 404 頁。
 //
 //  ── 為什麼兩種撰寫頁共用一個 View ─────────────────────
 //  Razor 時期分成兩個 .cshtml，是因為兩者的 ViewModel 型別不同
@@ -43,17 +48,17 @@ export default [
 
   // ── 撰寫 ────────────────────────────────────────────
   {
-    // 現場評論：憑 QRToken，不需要登入（未登入強制匿名）
-    path: "/reviews/visit/:token/write",
+    // 現場評論：憑證 Id，要會員本人登入
+    path: "/reviews/visit/:id(\\d+)/write",
     name: "review-write-visit",
     component: ReviewWriteView,
-    props: (route) => ({ kind: "visit", ticket: String(route.params.token) }),
-    meta: { title: "撰寫評論" },
+    props: (route) => ({ kind: "visit", ticket: String(route.params.id) }),
+    meta: { title: "撰寫評論", requiresMember: true },
   },
   {
-    // 預約評論：後端有 [Authorize(Roles = Member)]。
-    // requiresMember 只是「標記」，要不要在前端先擋，看組裡的登入流程怎麼做。
-    // 就算前端不擋，後端也會擋，前端只是讓使用者早一步知道。
+    // 預約評論：要會員本人登入。
+    // requiresMember 只是「標記」：組裡的路由守衛只擋 /member 開頭的網址，不看這個標記。
+    // 就算前端不擋，後端也會擋（JWT＋Member 角色）。
     path: "/reviews/booking/:orderId/write",
     name: "review-write-booking",
     component: ReviewWriteView,
@@ -63,11 +68,11 @@ export default [
 
   // ── 檢視自己的評論 ──────────────────────────────────
   {
-    path: "/reviews/visit/:token",
+    path: "/reviews/visit/:id(\\d+)",
     name: "review-mine-visit",
     component: MyReviewView,
-    props: (route) => ({ kind: "visit", ticket: String(route.params.token) }),
-    meta: { title: "我的評論" },
+    props: (route) => ({ kind: "visit", ticket: String(route.params.id) }),
+    meta: { title: "我的評論", requiresMember: true },
   },
   {
     path: "/reviews/booking/:orderId",
@@ -95,13 +100,13 @@ export default [
  * 頁面之間互相跳轉都走這兩個函式，網址規則只寫在這個檔案。
  */
 export function writeRoute(kind, ticket) {
-  if (kind === "visit") return { name: "review-write-visit", params: { token: ticket } };
+  if (kind === "visit") return { name: "review-write-visit", params: { id: ticket } };
   if (kind === "booking") return { name: "review-write-booking", params: { orderId: ticket } };
   throw new Error(`[reviewRoutes] 不認得的評論種類：${kind}`);
 }
 
 export function mineRoute(kind, ticket) {
-  if (kind === "visit") return { name: "review-mine-visit", params: { token: ticket } };
+  if (kind === "visit") return { name: "review-mine-visit", params: { id: ticket } };
   if (kind === "booking") return { name: "review-mine-booking", params: { orderId: ticket } };
   throw new Error(`[reviewRoutes] 不認得的評論種類：${kind}`);
 }

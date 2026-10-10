@@ -1,6 +1,7 @@
 ﻿using VenueGo.Models.Options;
 using VenueGo.Services.ReviewScreening;
 using VenueGo.Services.ReviewTickets;
+using VenueGo.Services.Reviews;
 
 namespace VenueGo.Extensions
 {
@@ -17,6 +18,9 @@ namespace VenueGo.Extensions
             services.AddScoped<ReviewTicketFactory>();
             services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
             services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
+
+            // 評論資格判定：撰寫、送出、我的評論共用同一套規則（10/9）
+            services.AddScoped<IReviewEligibilityService, ReviewEligibilityService>();
 
             // 評論預審：AI 設定、呼叫 AI 用的連線（30 秒逾時）、AI 服務、背景分析
             services.Configure<GeminiOptions>(configuration.GetSection(GeminiOptions.SectionName));

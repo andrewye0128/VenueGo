@@ -60,5 +60,21 @@ namespace VenueGo.Models.CheckinModels
             if (string.IsNullOrEmpty(reason)) return "—";
             return reason;
         }
+
+
+        // ---------- 超時費用(OvertimeCharge) ----------
+
+        //收費狀態:待收/已收/已免收
+        public static string OvertimeStatusText(byte status)
+        {
+            return ((OvertimeChargeStatus)status).GetDisplayName();
+        }
+
+        //付款方式,免收或還沒收是 NULL
+        public static string OvertimePaymentMethodText(byte? method)
+        {
+            if (method == null) return "—";
+            return ((PaymentMethodOnSite)method.Value).GetDisplayName();
+        }
     }
 }

@@ -4,6 +4,7 @@ namespace VenueGo.ViewModels.CheckinViewModels
 {
     public class TicketIndexViewModel
     {
+        public DateOnly Today { get; set; }
         public DateOnly SelectedDate { get; set; }
         public string? Keyword { get; set; }
         public int? SelectedVenueId { get; set; }

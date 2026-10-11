@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Models.Enums;
+using VenueGo.Services;
 using VenueGo.ViewModels.DashboardViewModels;
 
 
@@ -9,10 +10,12 @@ namespace VenueGo.Models.DashboardModels
     public class VenueMonitorFactory
     {
         private readonly dbVenueContext _db;
+        private readonly ITimeService _time;
 
-        public VenueMonitorFactory(dbVenueContext db)
+        public VenueMonitorFactory(dbVenueContext db, ITimeService time)
         {
             _db = db;
+            _time = time;
         }
 
         public async Task<List<VenueOccupancyViewModel>> GetVenueOccupancyAsync()
@@ -62,15 +65,22 @@ namespace VenueGo.Models.DashboardModels
                                            UserName = u.Name,
                                            BookingDate = r.BookingDate,
                                            StartTime = r.StartTime,
-                                           EndTime = r.EndTime
+                                           EndTime = r.EndTime,
                                        }).ToListAsync();
 
             // DateOnly+TimeOnly 組合比較放在 C# 端做(EF Core 翻譯不穩定,跟排程那邊踩過的坑一樣)
-            var now = DateTime.Now;
-            return insideDetails
+            var now = _time.Now;
+            var overdueList = insideDetails
                 .Where(x => x.EndAt < now)
                 .OrderBy(x => x.EndAt)
                 .ToList();
+
+            foreach (var item in overdueList)
+            {
+                item.OverdueDuration = now - item.EndAt;
+            }
+
+            return overdueList;
         }
 
         // 共用:目前在場的票(最後一筆有效紀錄是入場)

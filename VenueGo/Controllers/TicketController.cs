@@ -24,18 +24,22 @@ namespace VenueGo.Controllers
 
         private readonly CTicketStatusLogFactory _ticketStatusLogFactory;
 
+        private readonly COvertimeChargeFactory _overtimeChargeFactory;
+
         private int? GetCurrentUserId()
         {
             var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
             return int.TryParse(value, out var id) ? id : null;
         }
 
-        public TicketController(ICheckInService checkInService, ITicketManualService ticketManualService, CTicketViewModelFactory ticketFactory, CTicketStatusLogFactory ticketStatusLogFactory)
+        public TicketController(ICheckInService checkInService, ITicketManualService ticketManualService, 
+            CTicketViewModelFactory ticketFactory, CTicketStatusLogFactory ticketStatusLogFactory, COvertimeChargeFactory overtimeChargeFactory)
         {
             _checkInService = checkInService;
             _ticketManualService = ticketManualService;
             _ticketFactory = ticketFactory;
             _ticketStatusLogFactory = ticketStatusLogFactory;
+            _overtimeChargeFactory = overtimeChargeFactory;
         }
 
         public IActionResult Index(string? txtKeyword, DateOnly? selectedDate, int? venueId, int? status)
@@ -53,10 +57,11 @@ namespace VenueGo.Controllers
             }
 
             //防呆
-            DateOnly targetDate = selectedDate ?? DateOnly.FromDateTime(DateTime.Now);       
+            DateOnly targetDate = selectedDate ?? _ticketFactory.GetToday();
 
             var vm = new TicketIndexViewModel
             {
+                Today = _ticketFactory.GetToday(),
                 SelectedDate = targetDate,
                 Keyword = txtKeyword,
                 SelectedVenueId = venueId,
@@ -178,6 +183,12 @@ namespace VenueGo.Controllers
             if (userId is null) return Unauthorized();
 
             var result = await _checkInService.CheckOutAsync(id, userId, isManualOverride: true);
+            
+            if(!result.Success && result.Reason == CheckInFailReason.ConfirmOvertimeCharge)
+            {
+                return RedirectToAction("OvertimeCheckout", new { id });
+            }
+
             if (result.Success)
             {
                 TempData[CDictionary.TK_MSG_操作成功] = "手動離場成功";
@@ -267,6 +278,41 @@ namespace VenueGo.Controllers
                 TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "補發QRcode"); // 失敗一定有值
             }
             return RedirectToAction("ManualLog", new { id });
+        }
+
+        public async Task<IActionResult> OvertimeCheckout(int id)
+        {
+            var vm = _ticketFactory.GetOvertimeTab(id);
+            if (vm == null) return NotFound();
+            return View(vm);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ConfirmOvertimeCheckout(int id, bool isWaived, PaymentMethodOnSite? method, string? remark)
+        {
+            var userId = GetCurrentUserId();
+            if (userId is null) return Unauthorized();
+
+            // 輸入驗證(付款方式、免收備註)
+            string? error = _overtimeChargeFactory.ValidateInput(isWaived, method, remark);
+            if (error != null)
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = error;
+                return RedirectToAction("OvertimeCheckout", new { id });
+            }
+
+            var result = await _checkInService.OvertimeCheckOutAsync(id, userId.Value, isWaived, method, remark);
+            if (!result.Success)
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = result.Reason;
+                return RedirectToAction("OvertimeCheckout", new { id });
+            }
+
+            TempData[CDictionary.TK_MSG_操作成功] = isWaived
+                ? $"已免收超時費用 {result.ChargeAmount} 元，票券已完成離場"
+                : $"已收取超時費用 {result.ChargeAmount} 元，票券已完成離場";
+            return RedirectToAction("ScanLog", new { id });
         }
 
         public async Task<IActionResult> QrImage(int id)

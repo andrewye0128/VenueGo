@@ -11,6 +11,6 @@
         public TimeOnly EndTime { get; set; }
 
         public DateTime EndAt => BookingDate.ToDateTime(EndTime);
-        public TimeSpan OverdueDuration => DateTime.Now - EndAt;
+        public TimeSpan OverdueDuration { get; set; }
     }
 }

@@ -2,7 +2,7 @@
 
 @{
     ViewData["Title"] = "今日票券";
-    DateOnly todayDate = DateOnly.FromDateTime(DateTime.Now);
+    DateOnly todayDate = Model.Today;
 }
 
 <div class="d-flex align-items-center gap-3 mb-3">

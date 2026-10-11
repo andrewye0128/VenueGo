@@ -16,7 +16,7 @@
         // log方法 -> 讓 log 系統知道「這則訊息是哪個類別印出來的」
         ILogger<TicketSettlementHostedService> logger) : BackgroundService
     {
-        private static readonly TimeSpan Interval = TimeSpan.FromMinutes(30);
+        private static readonly TimeSpan Interval = TimeSpan.FromMinutes(5);
 
         private readonly IServiceScopeFactory _scopeFactory = scopeFactory;
         private readonly ILogger<TicketSettlementHostedService> _logger = logger;
@@ -54,7 +54,8 @@
                 using var scope = _scopeFactory.CreateScope();
                 var checkInService = scope.ServiceProvider.GetRequiredService<ICheckInService>();
                 var count = await checkInService.SettleAllDueTicketsAsync();
-                _logger.LogInformation("本輪結算了 {Count} 張票券", count);
+                var overtimeCount = await checkInService.SettleOvertimeAsync();
+                _logger.LogInformation("本輪代建超時待收 {Count} 筆", overtimeCount);
             }
             catch (OperationCanceledException)
             {

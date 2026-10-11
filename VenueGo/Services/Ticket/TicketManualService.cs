@@ -10,9 +10,12 @@ namespace VenueGo.Services.Ticket
     public class TicketManualService : ITicketManualService
     {
         private readonly dbVenueContext _db;
+        private readonly ITimeService _time;
 
-        public TicketManualService(dbVenueContext db)
+
+        public TicketManualService(dbVenueContext db, ITimeService time)
         {
+            _time = time;
             _db = db;
         }
 
@@ -133,7 +136,7 @@ namespace VenueGo.Services.Ticket
                 ReasonType = (byte)reasonType,
                 Reason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim(),
                 OperatorId = operatorId,
-                CreatedAt = DateTime.Now
+                CreatedAt = _time.Now
             });
         }
     }

@@ -34,7 +34,7 @@ namespace VenueGo.Services.VenueSchedules
 
 
         /***** 對外方法 *****/
-
+        //回傳選取場地當天的時段格子
         public async Task<IReadOnlyList<VenueSlotInfo>?> GetDayScheduleAsync(
             int venueId, DateOnly date, CancellationToken cancellationToken = default)
         {
@@ -59,6 +59,7 @@ namespace VenueGo.Services.VenueSchedules
             //4. 組出這天的每一格
             return BuildDaySlots(date, businessHours, new HashSet<TimeOnly>(unavailableTimes), priceRule, peakHours);
         }
+
 
 
         public async Task<IReadOnlyDictionary<DateOnly, IReadOnlyList<VenueSlotInfo>>?> GetRangeScheduleAsync(
@@ -250,6 +251,28 @@ namespace VenueGo.Services.VenueSchedules
                     SportName = s.SportName
                 })
                 .ToListAsync(cancellationToken);
+        }
+
+
+        public async Task<TimeOnly?> GetPeakStartTimeAsync(
+            int sportTypeId, DateOnly date, CancellationToken cancellationToken = default)
+        {
+            //1. 沒有價格規則或規則停用 >> null(沒有尖峰),跟 BuildDaySlots 的判斷一致
+            //   刻意不檢查 Venues、SportTypes 的 IsActive >> 已刪除場地的歷史預約也要能標示尖峰
+            bool hasActivePriceRule = await _db.SportTypePriceRules.AsNoTracking()
+                .AnyAsync(r => r.SportTypeId == sportTypeId && r.IsActive == true, cancellationToken);
+            if (!hasActivePriceRule)
+            {
+                return null;
+            }
+
+            //2. 這天是星期幾的尖峰起始時間;只讀新表 SportTypePeakHours,不讀舊欄位 SportTypePriceRules.PeakStartTime
+            //   沒有這天的資料,或這天不分尖峰/離峰 >> null
+            byte dayOfWeek = (byte)date.DayOfWeek;
+            return await _db.SportTypePeakHours.AsNoTracking()
+                .Where(p => p.SportTypeId == sportTypeId && p.DayOfWeek == dayOfWeek)
+                .Select(p => p.PeakStartTime)
+                .FirstOrDefaultAsync(cancellationToken);
         }
 
 

@@ -21,5 +21,13 @@
 
         /// <summary>已註銷：會員自行申請刪除帳號。</summary>
         public const string Inactive = "Inactive";
+
+        /// <summary>
+        /// 白名單，供寫入前驗證用，避免任意字串被存進 Users.Status。
+        /// [補修正] 原本 MemberController.UpdateMemberStatus 直接把前端送來的字串寫入，
+        /// 完全沒有驗證，這裡補上跟 EmployeeStatuses.AllowedStatuses 一致的防護。
+        /// </summary>
+        public static readonly IReadOnlySet<string> AllowedStatuses =
+            new HashSet<string>(StringComparer.OrdinalIgnoreCase) { Active, Suspended, Inactive };
     }
 }

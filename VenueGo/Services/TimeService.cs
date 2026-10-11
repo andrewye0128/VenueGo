@@ -9,9 +9,10 @@ namespace VenueGo.Services
     /// ⚠️ 必須註冊為 Singleton——它要「記住」偏移量。
     ///    註冊成 Scoped 的話每個請求都是新物件，什麼都記不住。
     /// </summary>
+    // timeMachine 給預設值 null：單元測試不傳也能建立，DI 有註冊時會自動帶入
     public sealed class TimeService(IHttpClientFactory httpClientFactory,
-            ILogger<TimeService> logger,
-            IConfiguration configuration, TimeProvider timeProvider) : ITimeService
+            ILogger<TimeService> logger, IConfiguration configuration, 
+            TimeProvider timeProvider, ITimeMachine? timeMachine = null) : ITimeService
     {
         /// <summary>給 AddHttpClient 用的名字，Program.cs 要用同一個字串。</summary>
         public const string HttpClientName = "TimeApi";
@@ -70,6 +71,7 @@ namespace VenueGo.Services
         private readonly IHttpClientFactory _httpClientFactory = httpClientFactory;
         private readonly ILogger<TimeService> _logger = logger;
         private readonly TimeProvider _timeProvider = timeProvider;
+        private readonly ITimeMachine? _timeMachine = timeMachine;
 
         // 網址寫進設定檔，之後要修正不必改程式碼重新編譯
         private readonly string _url = configuration["TimeApi:Url"] ?? DefaultUrl;
@@ -105,7 +107,17 @@ namespace VenueGo.Services
             }
         }
 
-        public DateTime Now => TruncateToSecond(_timeProvider.GetLocalNow().DateTime + Offset);
+        /// <summary>
+        /// 網站時間 = 系統時鐘 + 校時偏移量 + 時光機偏移量。
+        /// <para>
+        /// 校時（SyncAsync）比的是「系統時鐘」和外部 API，不包含時光機，
+        /// 所以時光旅行中照樣可以校時，兩個偏移量互不干擾。
+        /// </para>
+        /// </summary>
+        public DateTime Now => TruncateToSecond(_timeProvider.GetLocalNow().DateTime + Offset + TravelOffset);
+
+        /// <summary>時光機的偏移量；沒有時光機（例如單元測試）就是 0。</summary>
+        private TimeSpan TravelOffset => _timeMachine?.TravelOffset ?? TimeSpan.Zero;
 
         public DateTime Today => Now.Date;
 

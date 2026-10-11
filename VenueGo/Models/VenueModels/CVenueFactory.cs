@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using VenueGo.Data;
+using VenueGo.Dtos.VenueDtos;
 using VenueGo.Models.Entities;
 using VenueGo.ViewModels.VenueViewModels;
 
@@ -47,15 +48,14 @@ namespace VenueGo.Models.VenueModels
         }
 
 
-        //場地依運動類型分組,再依分組做換頁 >> 專供 VenueIndex 頁面使用
-        //分頁的單位是「運動類型分組」,不是「場地」
-        //例如 pageSize = 3,代表一頁顯示 3 種運動類型,每種底下的場地都會整組顯示,不會被拆到下一頁
-        public VenueIndexViewModel QueryGroupedBySportType(int page, int pageSize)
+        //建立依運動類型分組、排序好的完整分組清單 >> QueryGroupedBySportType()、GetPageBySportTypeId() 共用
+        //只列出底下有存在場地的運動類型,依 SportTypeId 排序
+        private List<VenueGroupViewModel> BuildSportTypeGroups()
         {
-            //先撈出所有場地,沿用既有方法,不重複寫一次查詢邏輯
+            //先撈出所有場地
             List<CVenueWrap> allVenues = QueryAll();
 
-            //撈運動類型清單,用來對照 SportTypeId 對應的名稱
+            //撈運動類型清單 >> 對照 SportTypeId 對應的名稱
             List<SelectListItem> sportTypes = GetSportTypes();
 
             //把場地依 SportTypeId 分組,一種運動類型一組
@@ -89,9 +89,17 @@ namespace VenueGo.Models.VenueModels
                 allGroups.Add(group);
             }
 
-            //依 SportTypeId 排序,固定分組的順序
-            //如果沒有排序,換頁時分組的先後順序可能會不穩定,同一組今天在第1頁、明天卻跑到第2頁
+            //依 SportTypeId 排序先後,固定分組的順序
             allGroups.Sort((groupA, groupB) => groupA.SportTypeId.CompareTo(groupB.SportTypeId));
+
+            return allGroups;
+        }
+
+        //場地依運動類型分組,再依分組做換頁 >> 專供 VenueIndex 頁面使用
+        public VenueIndexViewModel QueryGroupedBySportType(int page, int pageSize)
+        {
+            //建立依運動類型分組、排序好的完整分組清單
+            List<VenueGroupViewModel> allGroups = BuildSportTypeGroups();
 
             //頁碼防呆:小於1就修正回第1頁
             if (page < 1)
@@ -125,6 +133,30 @@ namespace VenueGo.Models.VenueModels
             vm.Groups = groupsForThisPage;
 
             return vm;
+        }
+
+        //查出運動類型在場地列表中的第幾頁 >> 新增、編輯場地後回到該場地所在的頁面
+        //分組清單跟 VenueIndex 使用同一份(BuildSportTypeGroups),算出的頁數才會跟列表一致
+        //sportTypeId:要找的運動類型;pageSize:每頁顯示幾組運動類型
+        public int GetPageBySportTypeId(int sportTypeId, int pageSize)
+        {
+            //取得依運動類型分組、排序好的完整分組清單
+            List<VenueGroupViewModel> allGroups = BuildSportTypeGroups();
+
+            //從第一組開始找,找到該運動類型時,i 就是它在清單中的位置(從0開始)
+            //用 for 而不用 foreach:需要索引 i 才知道是第幾組
+            for (int i = 0; i < allGroups.Count; i++)
+            {
+                if (allGroups[i].SportTypeId == sportTypeId)
+                {
+                    //位置除以每頁組數(整數除法會捨去小數),再加1換算成頁數
+                    //例如位置4、每頁3組 >> 4 / 3 = 1 >> 第2頁
+                    return i / pageSize + 1;
+                }
+            }
+
+            //找不到(運動類型不存在或底下沒有存在的場地) >> 回到第1頁
+            return 1;
         }
 
 
@@ -219,6 +251,23 @@ namespace VenueGo.Models.VenueModels
         }
 
 
+        //檢查場地名稱是否重複(新增、編輯共用)
+        //excludeId:編輯時排除自己,新增時傳入null
+        public bool IsVenueNameDuplicate(string venueName, int? excludeId)
+        {
+            //進資料庫撈出場地
+            //未被軟刪除、名稱相同、排除自己(編輯時) >> 只要有一筆符合條件就算重複
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var data = from v in db.Venues
+                           where (v.VenueName == venueName) && (v.IsActive == true) && (excludeId == null || v.VenueId != excludeId)
+                           select v;
+                return data.Any();
+            }
+        }
+
+
+
         //場地刪除(軟刪除)
         //userId / now 由 Controller 傳入(登入者 UserId、ITimeService 校時後的時間)
         public void Delete(int id, int userId, DateTime now)
@@ -243,6 +292,32 @@ namespace VenueGo.Models.VenueModels
         }
 
 
-        
+        /*組合DTO*/
+        //前台首頁的"場館介紹"資料DTO >> GET /api/venues
+        public List<VenueCardDto> QueryVenueCards()
+        {
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var datas = from v in db.Venues
+                            //1. 每個場地找出它所屬的運動類型(兩邊的 SportTypeId 相同)
+                            join s in db.SportTypes on v.SportTypeId equals s.SportTypeId
+                            //2. 場地、運動類型都要是未刪除
+                            where v.IsActive == true && s.IsActive == true
+                            //3. 依運動類型排序,同一運動再依場地 Id 排序
+                            orderby v.SportTypeId, v.VenueId
+                            //4. 只取前台需要的欄位,轉成 VenueCardDto
+                            select new VenueCardDto
+                            {
+                                VenueId = v.VenueId,
+                                VenueName = v.VenueName,
+                                SportTypeId = v.SportTypeId,
+                                SportTypeName = s.SportName,
+                                PhotoPath = v.PhotoPath
+                            };
+
+                //5. 執行查詢,轉成 List 回傳
+                return datas.ToList();
+            }
+        }
     }
 }

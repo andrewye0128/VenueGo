@@ -95,9 +95,10 @@ namespace VenueGo.Helpers
 
         private static async Task<List<string>> _dbUserRolesList(dbVenueContext db, int userId)
         {
+            // [Role.Status] 只計入「啟用中」的角色，規則與 EmployeeAuthorizeFilter 一致
             return await db.UserRoles
                 .Where(ur => ur.UserId == userId)
-                .Join(db.Roles,
+                .Join(db.Roles.Where(r => r.Status),
                       ur => ur.RoleId,
                       r => r.RoleId,
                       (ur, r) => r.RoleName)

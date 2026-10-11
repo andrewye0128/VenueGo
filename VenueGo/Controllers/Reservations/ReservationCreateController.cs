@@ -76,6 +76,7 @@ namespace VenueGo.Controllers.Reservations
         /// 步驟 1：顯示會員清單。
         /// </summary>
         /// <param name="criteria">搜尋條件，由查詢字串繫結。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         [HttpGet("SelectMember")]
         public async Task<IActionResult> SelectMember(
             [FromQuery] MemberSearchCriteria criteria, CancellationToken cancellationToken)
@@ -98,6 +99,7 @@ namespace VenueGo.Controllers.Reservations
         /// </summary>
         /// <param name="userId">選擇的會員 Id。</param>
         /// <param name="criteria">目前的搜尋條件，驗證失敗時要能重繪同一頁清單。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         [HttpPost("SelectMember")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SelectMember(
@@ -166,6 +168,7 @@ namespace VenueGo.Controllers.Reservations
         /// 步驟 2：顯示場地清單。
         /// </summary>
         /// <param name="criteria">搜尋條件，由查詢字串繫結。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         [HttpGet("SelectVenue")]
         public async Task<IActionResult> SelectVenue(
             [FromQuery] VenueSearchCriteria criteria, CancellationToken cancellationToken)
@@ -188,6 +191,7 @@ namespace VenueGo.Controllers.Reservations
         /// </summary>
         /// <param name="venueId">選擇的場地 Id。</param>
         /// <param name="criteria">目前的搜尋條件，驗證失敗時要能重繪同一頁清單。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         [HttpPost("SelectVenue")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SelectVenue(
@@ -271,6 +275,7 @@ namespace VenueGo.Controllers.Reservations
         /// </summary>
         /// <param name="year">要顯示的年。未指定時以已選日期或今天所在的月份為準。</param>
         /// <param name="month">要顯示的月。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         [HttpGet("SelectDate")]
         public async Task<IActionResult> SelectDate(
             int? year, int? month, CancellationToken cancellationToken)
@@ -295,6 +300,7 @@ namespace VenueGo.Controllers.Reservations
         /// 步驟 3：確認選擇的日期並前往步驟 4。
         /// </summary>
         /// <param name="date">選擇的日期。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         [HttpPost("SelectDate")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SelectDate(
@@ -377,6 +383,7 @@ namespace VenueGo.Controllers.Reservations
         /// <param name="year">要顯示的年，null 表示自動決定。</param>
         /// <param name="month">要顯示的月，null 表示自動決定。</param>
         /// <param name="selectedDate">已選的日期，用於保持選取狀態。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         private async Task<SelectDateViewModel> BuildSelectDateViewModel(
             int? year, int? month, DateOnly? selectedDate, CancellationToken cancellationToken)
         {
@@ -454,6 +461,7 @@ namespace VenueGo.Controllers.Reservations
         /// 所選時段的起始時間，來自畫面上一組同名的 checkbox。
         /// 格式為 HH:mm，由 ASP.NET Core 自動繫結為 TimeOnly（需 .NET 7 以上）。
         /// </param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         [HttpPost("SelectSlots")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> SelectSlots(
@@ -509,6 +517,7 @@ namespace VenueGo.Controllers.Reservations
         /// 組裝步驟 4 的 ViewModel。
         /// </summary>
         /// <param name="selectedSlotTimes">要顯示為已選的時段。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
         private async Task<SelectSlotsViewModel> BuildSelectSlotsViewModel(
             IReadOnlyList<TimeOnly> selectedSlotTimes, CancellationToken cancellationToken)
         {

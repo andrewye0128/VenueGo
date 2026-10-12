@@ -108,6 +108,7 @@ namespace VenueGo.Models.VenueModels
                 //稽核欄位:記錄最後修改時間與修改者
                 SportTypeDb.UpdatedAt = now;
                 SportTypeDb.UpdatedBy = userId;
+                SportTypeDb.IconName = Wrap.IconName;
             }
 
             db.SaveChanges();

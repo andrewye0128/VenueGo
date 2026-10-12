@@ -33,6 +33,9 @@ namespace VenueGo.Extensions
             services.AddScoped<IReservationQueryService, ReservationQueryService>();
             services.AddScoped<IReservationCommandService, ReservationCommandService>();
 
+            // 前台場地預約頁：查某天各場地的時段、每天剩幾格
+            services.AddScoped<IBookingAvailabilityService, BookingAvailabilityService>();
+
             return services;
         }
     }

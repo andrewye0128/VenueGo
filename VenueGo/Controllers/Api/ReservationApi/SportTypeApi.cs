@@ -16,7 +16,7 @@
     /// <summary>
     /// 運動類型 API：前台的運動類型下拉選單、預約頁的場地分組使用。
     /// <para>
-    /// 【為何直接查資料庫，不放 Service】只有一個很簡單的查詢（啟用中、依編號排序），
+    /// 【為何直接查資料庫，不放 Service】只有一個很簡單的查詢（啟用中、有價格、依編號排序），
     /// 拆到 Service 的好處不大。之後邏輯變複雜（例如要加照片、排序規則），再搬到 Service。
     /// </para>
     /// </summary>
@@ -35,7 +35,7 @@
 
         /// <summary>開放中的運動類型</summary>
         /// <remarks>
-        /// 只回傳啟用中的運動，依 sportTypeId 排序。
+        /// 只回傳啟用中、而且有啟用中價格規則的運動，依 sportTypeId 排序。
         /// iconName 是圖示的短名稱（例如 basketball），資料庫沒有設定時是 null。
         /// </remarks>
         /// <param name="cancellationToken">使用者離開頁面時取消查詢</param>
@@ -45,7 +45,9 @@
         public async Task<IActionResult> GetAll(CancellationToken cancellationToken)
         {
             var data = await _db.SportTypes.AsNoTracking()
-                .Where(s => s.IsActive)
+                // 沒有啟用中的價格 → 這個運動目前不能預約，不出現在下拉選單
+                .Where(s => s.IsActive
+                            && _db.SportTypePriceRules.Any(r => r.SportTypeId == s.SportTypeId && r.IsActive))
                 .OrderBy(s => s.SportTypeId)
                 .Select(s => new SportTypeOptionDto
                 {

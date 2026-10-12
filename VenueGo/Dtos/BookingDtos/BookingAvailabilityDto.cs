@@ -11,7 +11,7 @@
         /// <summary>查詢的日期，JSON 會是 "2026-10-14"。</summary>
         public DateOnly Date { get; init; }
 
-        /// <summary>可預約的場地（場地與運動都是啟用中）。前端依 SportTypeId 分組顯示。</summary>
+        /// <summary>預約頁的場地（場地與運動都是啟用中，含暫停開放的場地，見 IsBookable）。前端依 SportTypeId 分組顯示。</summary>
         public IReadOnlyList<VenueAvailabilityDto> Venues { get; init; } = [];
     }
 
@@ -32,6 +32,12 @@
 
         /// <summary>這天的每一格（含不能選的）。公休日是空陣列。</summary>
         public IReadOnlyList<SlotDto> Slots { get; init; } = [];
+
+        /// <summary>
+        /// 這個場地目前是否開放預約。false 時前端顯示「暫停開放預約」、卡片不能點。
+        /// <para>目前的判斷：運動類型有啟用中的價格規則（SportTypePriceRules.IsActive）。</para>
+        /// </summary>
+        public bool IsBookable { get; init; }
     }
 
     /// <summary>一個時段（一格一小時）。</summary>
@@ -52,5 +58,6 @@
 
         /// <summary>是否為尖峰時段。</summary>
         public bool IsPeak { get; init; }
+
     }
 }

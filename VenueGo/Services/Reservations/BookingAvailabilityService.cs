@@ -61,20 +61,22 @@ namespace VenueGo.Services.Reservations
             var venues = await GetBookableVenuesAsync(sportTypeId, cancellationToken);
 
             // 第 2～5 次查詢：這些場地這天的時段（一次查完，不是一個場地查一次）
+            // 暫停開放的場地也要查：卡片還是要顯示，下面的 slotsByVenue[...] 才不會找不到 key
             var slotsByVenue = await _timeSlots.GetDaySlotsForVenuesAsync(
-                venues.Select(v => v.VenueId).ToList(), date, cancellationToken);
+                venues.Select(v => v.Venue.VenueId).ToList(), date, cancellationToken);   //v.VenueId → v.Venue.VenueId
 
             return new BookingAvailabilityDto
             {
                 Date = date,
                 Venues = venues.Select(v => new VenueAvailabilityDto
                 {
-                    VenueId = v.VenueId,
-                    SportTypeId = v.SportTypeId,
-                    VenueName = v.VenueName,
-                    Capacity = v.Capacity,
-                    PhotoPath = v.PhotoPath,
-                    Slots = slotsByVenue[v.VenueId]
+                    VenueId = v.Venue.VenueId,             
+                    SportTypeId = v.Venue.SportTypeId,     
+                    VenueName = v.Venue.VenueName,         
+                    Capacity = v.Venue.Capacity,           
+                    PhotoPath = v.Venue.PhotoPath,         
+                    IsBookable = v.HasPrice,               
+                    Slots = slotsByVenue[v.Venue.VenueId]
                         .Select(s => new SlotDto
                         {
                             // 用 FormValue（"18:00"），不要用 SlotTime（TimeOnly 會變成 "18:00:00"）
@@ -102,8 +104,9 @@ namespace VenueGo.Services.Reservations
             var venues = await GetBookableVenuesAsync(sportTypeId, cancellationToken);
 
             // 第 2～4 次查詢：這些場地這段日期每天的統計
+            // 暫停開放的場地不算進日期列的剩餘格數，跟卡片的顯示一致
             var byVenue = await _timeSlots.GetRangeAvailabilityForVenuesAsync(
-                venues.Select(v => v.VenueId).ToList(),
+                venues.Where(v => v.HasPrice).Select(v => v.Venue.VenueId).ToList(),
                 fromDate, toDate, fromTime, toTime, cancellationToken);
 
             // 每一天：所有場地的「剩幾格」加總。沒有場地時每天都是 0，日期列才不會缺天
@@ -119,16 +122,23 @@ namespace VenueGo.Services.Reservations
         }
 
 
+        /// <summary>預約頁的場地，加上這個場地目前有沒有啟用中的價格規則。</summary>
+        private sealed record BookingVenue(Venue Venue, bool HasPrice);
+
         /// <summary>
-        /// 可預約的場地：場地啟用，而且它的運動也啟用。依運動、場地名稱排序。
+        /// 預約頁要顯示的場地：場地啟用，而且它的運動也啟用。依運動、場地名稱排序。
+        /// 沒有價格的場地也會回傳（HasPrice = false），前端顯示「暫停開放預約」。
         /// </summary>
-        private Task<List<Venue>> GetBookableVenuesAsync(int? sportTypeId, CancellationToken cancellationToken)
+        private Task<List<BookingVenue>> GetBookableVenuesAsync(int? sportTypeId, CancellationToken cancellationToken)
             => (from v in _db.Venues.AsNoTracking()
                 join s in _db.SportTypes on v.SportTypeId equals s.SportTypeId
                 where v.IsActive && s.IsActive
                       && (sportTypeId == null || v.SportTypeId == sportTypeId)
                 orderby v.SportTypeId, v.VenueName
-                select v)
+                select new BookingVenue(
+                    v,
+                    // 條件跟 TimeSlotService.GetPriceRulesAsync 一致；Any 會變成 SQL 的 EXISTS，不會多查一次
+                    _db.SportTypePriceRules.Any(r => r.SportTypeId == v.SportTypeId && r.IsActive)))
                .ToListAsync(cancellationToken);
     }
 }

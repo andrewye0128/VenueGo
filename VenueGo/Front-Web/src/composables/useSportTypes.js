@@ -3,7 +3,7 @@
 //
 //  用法：
 //    const { sportTypes, loading, error, findSportType } = useSportTypes();
-//    // sportTypes：[{ sportTypeId, sportName, iconName, icon }]，icon 是完整的圖示名稱
+//    // sportTypes：[{ sportTypeId, sportName, icon }]，icon 是完整的圖示名稱
 //
 //  為什麼不在每個元件各自呼叫 API：
 //    同一頁可能有好幾個地方要用運動類型（例如預約頁的下拉選單和場地卡片），
@@ -26,8 +26,13 @@ async function fetchSportTypes() {
   error.value = "";
   try {
     const data = await getSportTypes();
-    // 先把 IconName 換成完整的圖示名稱，元件直接用 icon 就好
-    sportTypes.value = data.map((sport) => ({ ...sport, icon: getSportIcon(sport.iconName) }));
+    // 後端回傳 { id, name, icon }，在這裡轉成前端統一用的欄位名稱：
+    // sportTypeId 跟網址參數、預約 API 的命名一致，元件都用這個名稱，只要在這裡轉一次
+    sportTypes.value = data.map((sport) => ({
+      sportTypeId: sport.id,
+      sportName: sport.name,
+      icon: getSportIcon(sport.icon),
+    }));
   } catch (err) {
     error.value = err.message || "無法載入運動類型";
   } finally {

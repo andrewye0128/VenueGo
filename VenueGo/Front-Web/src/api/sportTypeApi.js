@@ -1,14 +1,15 @@
-// 運動類型 API
+// 運動類型 API（後端：Controllers/Api/VenuesApi/SportTypeApiController.cs）
 import http from "./http";
 
 /**
  * 取得開放中的運動類型：[GET] /api/sport-types
- * 不需要登入。只回傳啟用中的運動，依 sportTypeId 排序
- * @returns {Promise<{ sportTypeId: number, sportName: string, iconName: string | null }[]>}
- *   iconName 是圖示短名稱（例如 basketball），由 constants/sportTypes.js 轉成完整圖示名稱
+ * 只回傳啟用中、而且至少有一個啟用中場地的運動，依 id 排序
+ * @returns {Promise<{ id: number, name: string, icon: string }[]>}
+ *   icon 是完整的圖示名稱（例如 i-mdi-basketball）；資料庫沒設定時，後端回傳預設圖示，不會是 null
+ *   元件請用 composables/useSportTypes.js，它會轉成 { sportTypeId, sportName, icon }
  */
 export async function getSportTypes() {
-  // http.js 已經把 ApiResult 的 data 取出來
+  // http.js 已經把 ApiResult 的 data 取出來了
   const { data } = await http.get("/sport-types");
   return data;
 }

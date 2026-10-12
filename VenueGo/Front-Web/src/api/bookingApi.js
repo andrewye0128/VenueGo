@@ -1,55 +1,45 @@
-// 場地預約 API
-// ⚠️ 後端 API 還沒做，目前用假資料（mocks/bookingAvailability.js）模擬
-//    串接時只要把兩個函式的內容換成呼叫後端，頁面和元件都不用改
-//    （網址是暫定的，要等後端 API 規格確定；改成呼叫 http 後，註解要照組內格式寫成「[方法] 網址」）
-import { buildSlots, mockVenues } from "@/mocks/bookingAvailability";
-import { SLOT_AVAILABILITY } from "@/constants/statuses";
-import { isInPeriod } from "@/constants/booking";
-import { delay } from "@/utils/delay";
-
-const venuesOf = (sportTypeId) =>
-  sportTypeId == null ? mockVenues : mockVenues.filter((v) => v.sportTypeId === sportTypeId);
+// 場地預約 API（前台預約頁用，都不需要登入）
+import http from "./http";
+import { DEFAULT_TIME_PERIOD } from "@/constants/booking";
 
 /**
- * 某天各場地的時段（預計串接 /api/booking/availability）
+ * 某天各場地的時段：[GET] /api/booking/availability
  * @param {object} params
- * @param {number|null} params.sportTypeId 運動類型；null 表示全部運動
- * @param {string} params.date "2026-10-14"
+ * @param {number|null} params.sportTypeId 運動類型；null 表示全部運動（不送參數）
+ * @param {string} params.date "2026-10-14"，必須在今天～30 天後，否則後端回 400 DateOutOfRange
  * @returns {Promise<{ date: string, venues: object[] }>}
  *   venues：[{ venueId, sportTypeId, venueName, capacity, photoPath, slots: [{ slotTime, availability, unitPrice, isPeak }] }]
- *   前端再依 sportTypeId 分組顯示
+ *   slotTime 是 "18:00"；capacity、photoPath、unitPrice 可能是 null；公休日時 slots 是空陣列
  */
 export async function getAvailability({ sportTypeId = null, date }) {
-  await delay(300); // 模擬網路等待
-  const now = new Date();
-  return {
-    date,
-    venues: venuesOf(sportTypeId).map((venue) => ({
-      ...venue,
-      slots: buildSlots(venue, date, now),
-    })),
-  };
+  const params = { date };
+  // 全部運動就不送 sportTypeId：後端看到「沒有這個參數」就回傳所有運動
+  if (sportTypeId != null) params.sportTypeId = sportTypeId;
+
+  const { data } = await http.get("/booking/availability", { params });
+  return data;
 }
 
 /**
- * 一段日期內每天還剩幾格（日期列用，預計串接 /api/booking/availability/summary）
- * 後端已經有 ITimeSlotService 的「日期範圍統計」可以用
+ * 一段日期內每天還剩幾格（日期列用）：[GET] /api/booking/availability/summary
  * @param {object} params
- * @param {number|null} params.sportTypeId 運動類型；null 表示全部運動
- * @param {string[]} params.dates 要統計的日期 ["2026-10-14", ...]
- * @param {string} params.period 時段篩選（constants/booking.js 的 TIME_PERIODS key）
- * @returns {Promise<{ date: string, availableCount: number }[]>}
+ * @param {number|null} params.sportTypeId 運動類型；null 表示全部運動（不送參數）
+ * @param {string[]} params.dates 日期列顯示的日期 ["2026-10-14", ...]（已排序），送出時取第一天和最後一天
+ * @param {string} params.period 時段篩選（constants/booking.js 的 TIME_PERIODS key）；"all" 不送參數
+ * @returns {Promise<{ date: string, availableCount: number }[]>} 範圍內的每一天都會出現
  */
-export async function getAvailabilitySummary({ sportTypeId = null, dates, period = "all" }) {
-  await delay(200); // 模擬網路等待
-  const now = new Date();
-  const venues = venuesOf(sportTypeId);
-  return dates.map((date) => ({
-    date,
-    availableCount: venues
-      .flatMap((venue) => buildSlots(venue, date, now))
-      .filter(
-        (s) => s.availability === SLOT_AVAILABILITY.AVAILABLE && isInPeriod(s.slotTime, period),
-      ).length,
-  }));
+export async function getAvailabilitySummary({
+  sportTypeId = null,
+  dates,
+  period = DEFAULT_TIME_PERIOD,
+}) {
+  if (!dates?.length) return [];
+
+  // 後端要的是範圍（from～to），不是每一天：日期列的日期是連續的，取頭尾就好
+  const params = { from: dates[0], to: dates[dates.length - 1] };
+  if (sportTypeId != null) params.sportTypeId = sportTypeId;
+  if (period !== DEFAULT_TIME_PERIOD) params.period = period;
+
+  const { data } = await http.get("/booking/availability/summary", { params });
+  return data;
 }

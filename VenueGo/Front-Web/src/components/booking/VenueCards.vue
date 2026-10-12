@@ -65,7 +65,8 @@ const brokenPhotos = reactive(new Set());
               <span class="block truncate font-semibold text-neutral-text-primary">
                 {{ venue.venueName }}
               </span>
-              <span class="block text-xs text-neutral-text-secondary">
+              <!-- 資料庫的 Capacity 允許 NULL：沒有設定時不顯示，避免出現「可容納  人」 -->
+              <span v-if="venue.capacity != null" class="block text-xs text-neutral-text-secondary">
                 可容納 {{ venue.capacity }} 人
               </span>
               <span

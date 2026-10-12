@@ -12,6 +12,16 @@
 //   點中間那格       → 不動，回傳提示
 //   不相鄰          → 重新開始，改選這一格（使用者通常是想改時間，不跳錯誤）
 
+import { SLOT_AVAILABILITY } from "@/constants/statuses";
+
+/**
+ * 這一格能不能選：狀態是「可預約」，而且有價格
+ * 後端查不到計價規則時 unitPrice 是 null：選了也算不出金額，所以當成不能選（顯示「價格未設定」）
+ * 時段按鈕、場地卡片的「剩幾格」都用這個函式，兩邊的規則才會一致
+ */
+export const isSelectableSlot = (slot) =>
+  slot.availability === SLOT_AVAILABILITY.AVAILABLE && slot.unitPrice != null;
+
 const toHour = (slotTime) => Number(slotTime.slice(0, 2));
 const toSlotTime = (hour) => `${String(hour).padStart(2, "0")}:00`;
 

@@ -29,10 +29,10 @@ import {
   MEMBER_MAX_ADVANCE_DAYS,
   MEMBER_MIN_ADVANCE_DAYS,
 } from "@/constants/reservationRules";
+import { ErrorCodes } from "@/constants/errorCodes";
 import { ALL_SPORTS } from "@/constants/sportTypes";
-import { SLOT_AVAILABILITY } from "@/constants/statuses";
 import { formatDate } from "@/utils/format";
-import { toggleSlot } from "@/utils/slotSelection";
+import { isSelectableSlot, toggleSlot } from "@/utils/slotSelection";
 
 const route = useRoute();
 const router = useRouter();
@@ -40,7 +40,7 @@ const toast = useToast();
 const { sportTypes, findSportType } = useSportTypes();
 
 // ── 可預約的日期範圍：用網站時間（開發時跟著時光機），前後端對「今天」的認定才一致 ──
-const { now } = useSiteClock();
+const { now, refresh: refreshClock } = useSiteClock();
 const pad = (n) => String(n).padStart(2, "0");
 // 回傳字串：時鐘每秒更新，但同一天的字串一樣，依賴它的計算不會每秒重算
 const todayKey = computed(() => {
@@ -113,13 +113,23 @@ async function loadAvailability() {
   const requestId = ++latestRequestId;
   loading.value = true;
   errorMessage.value = "";
+  const requestedDate = date.value;
   try {
-    const data = await getAvailability({ sportTypeId: sportTypeId.value, date: date.value });
+    const data = await getAvailability({ sportTypeId: sportTypeId.value, date: requestedDate });
     if (requestId !== latestRequestId) return;
     availability.value = data;
     autoSelectVenue();
   } catch (err) {
     if (requestId !== latestRequestId) return;
+
+    // 日期不在可預約範圍：通常是午夜交界，前端的時鐘還沒換日、後端已經是隔天了
+    // 先讓前端時鐘跟後端重新對時；對時後「今天」變了，date 會自動改成新的今天，
+    // 上面 watch([sportTypeId, date]) 會自己重新讀取，這裡就不顯示錯誤
+    if (err.errorCode === ErrorCodes.DateOutOfRange) {
+      await refreshClock();
+      if (date.value !== requestedDate) return;
+    }
+
     errorMessage.value = err.message || "讀取場地時段失敗，請稍後再試";
     availability.value = null;
   } finally {
@@ -168,7 +178,8 @@ watch([visibleDates, sportTypeId, period], () => {
 });
 
 // ── 場地卡片：依運動分組，並依「時段篩選」算出剩幾格、最早幾點 ──
-const isAvailable = (slot) => slot.availability === SLOT_AVAILABILITY.AVAILABLE;
+// 「剩幾格」只算能選的格子（可預約而且有價格），跟時段按鈕用同一條規則
+const isAvailable = isSelectableSlot;
 
 const venueGroups = computed(() => {
   const venues = availability.value?.venues ?? [];

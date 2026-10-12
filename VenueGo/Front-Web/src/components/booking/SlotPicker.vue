@@ -6,7 +6,7 @@
 // UIcon 由 Nuxt UI 自動匯入
 import { SLOT_AVAILABILITY, SLOT_AVAILABILITY_LABEL } from "@/constants/statuses";
 import { formatAmount } from "@/utils/format";
-import { slotEndTime } from "@/utils/slotSelection";
+import { isSelectableSlot, slotEndTime } from "@/utils/slotSelection";
 
 const props = defineProps({
   slots: { type: Array, required: true },
@@ -16,12 +16,19 @@ const props = defineProps({
 const emit = defineEmits(["select"]);
 
 const isSelected = (slot) => props.selectedTimes.includes(slot.slotTime);
-const isAvailable = (slot) => slot.availability === SLOT_AVAILABILITY.AVAILABLE;
+// 能不能選：可預約而且有價格（規則在 utils/slotSelection.js，場地卡片的「剩幾格」也用同一條）
+const isAvailable = isSelectableSlot;
+
+// 不能選的原因：可預約但沒有價格 →「價格未設定」；其他照狀態顯示（已預約、維護中、已過時間）
+const unavailableLabel = (slot) =>
+  slot.availability === SLOT_AVAILABILITY.AVAILABLE
+    ? "價格未設定"
+    : SLOT_AVAILABILITY_LABEL[slot.availability];
 
 // 讀屏軟體唸的內容：「18:00 到 19:00，尖峰，NT$ 600，已選擇」或「12:00 到 13:00，已預約，無法選取」
 function ariaLabel(slot) {
   const time = `${slot.slotTime} 到 ${slotEndTime(slot.slotTime)}`;
-  if (!isAvailable(slot)) return `${time}，${SLOT_AVAILABILITY_LABEL[slot.availability]}，無法選取`;
+  if (!isAvailable(slot)) return `${time}，${unavailableLabel(slot)}，無法選取`;
   return `${time}${slot.isPeak ? "，尖峰" : ""}，${formatAmount(slot.unitPrice)}${isSelected(slot) ? "，已選擇" : ""}`;
 }
 </script>
@@ -72,7 +79,7 @@ function ariaLabel(slot) {
               尖峰
             </span>
           </template>
-          <template v-else>{{ SLOT_AVAILABILITY_LABEL[slot.availability] }}</template>
+          <template v-else>{{ unavailableLabel(slot) }}</template>
         </span>
       </button>
     </li>

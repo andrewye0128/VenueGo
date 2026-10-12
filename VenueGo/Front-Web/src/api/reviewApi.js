@@ -45,6 +45,21 @@ export async function getMyReview(kind, ticket) {
   return data;
 }
 
+// 我的評論 › 待評論（規格 2-9）：[GET] /api/reviews/mine/pending
+// 本人的、還沒評、還沒過期的現場和預約憑證，快到期的排前面。每筆的 kind＋ticket 就是撰寫頁的網址。
+export async function listPendingReviews() {
+  const { data } = await http.get("/reviews/mine/pending");
+  return data;
+}
+
+// 我的評論 › 已評論（規格 2-10）：[GET] /api/reviews/mine/reviewed
+// 本人寫過的評論摘要，新的排前面。完整內容展開時再用 getMyReview 讀。
+// ⚠️ 純讀取，不會記錄「顧客已看過回覆」。
+export async function listReviewedReviews() {
+  const { data } = await http.get("/reviews/mine/reviewed");
+  return data;
+}
+
 // 員工預覽（規格 2-8）：[GET] /api/reviews/preview/{reviewId}
 // 只有後台角色打得開，回傳的形狀跟「我的評論」一樣。
 export async function getReviewPreview(reviewId) {

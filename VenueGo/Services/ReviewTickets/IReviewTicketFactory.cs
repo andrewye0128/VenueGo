@@ -71,4 +71,30 @@
         /// </returns>
         Task<bool> CreateReviewPerBookingAsync(int? orderId);
     }
+
+    /// <summary>
+    /// 給「我的評論」呼叫（10/11）。打開待評論清單時，替會員補建漏掉的憑證。
+    /// <para>
+    /// 報到組、訂單組不用這個介面：他們照舊在報到、離場、付款時呼叫上面兩個介面。
+    /// 補建的條件跟上面兩個介面的建立方法完全一樣（實際上就是逐張呼叫它們），期限從報到／付款時間起算，已過期的不建。
+    /// </para>
+    /// </summary>
+    public interface IReviewTicketBackfill
+    {
+        /// <summary>
+        /// 補建現場評論憑證：找出本人領的票（EntryTicket.ReceivedUserId）裡，已經入場、但同一張訂單還沒有憑證的，
+        /// 逐張交給 <see cref="IVisitReviewTicketFactory.CreateReviewPerVisitAsync"/>。本方法會自行 SaveChanges。
+        /// </summary>
+        /// <param name="userId">目前登入的會員</param>
+        /// <returns>這次新建了幾張。0 是正常情況（通常早就建好了）。</returns>
+        Task<int> BackfillVisitTicketsAsync(int userId);
+
+        /// <summary>
+        /// 補建預約評論憑證：找出本人的訂單裡，已經付款、但還沒有憑證的，
+        /// 逐張交給 <see cref="IBookingReviewTicketFactory.CreateReviewPerBookingAsync"/>。本方法會自行 SaveChanges。
+        /// </summary>
+        /// <param name="userId">目前登入的會員</param>
+        /// <returns>這次新建了幾張。0 是正常情況（通常早就建好了）。</returns>
+        Task<int> BackfillBookingTicketsAsync(int userId);
+    }
 }

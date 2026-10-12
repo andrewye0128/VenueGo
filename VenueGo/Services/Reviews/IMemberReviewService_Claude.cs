@@ -53,6 +53,14 @@ namespace VenueGo.Services.Reviews
         /// </summary>
         Task<MemberReviewResult<MyReviewDto>> GetPreviewAsync(int reviewId);
 
+        // ── 我的評論清單（10/10，規格 2-9、2-10）─────────────────
+
+        /// <summary>待評論：本人的、還沒評過、還沒過期的現場和預約憑證。快到期的排前面。沒登入回空清單。</summary>
+        Task<IReadOnlyList<PendingReviewItemDto>> ListPendingAsync(int? userId);
+
+        /// <summary>已評論：本人寫過的現場和預約評論的摘要。新的排前面。沒登入回空清單。</summary>
+        Task<IReadOnlyList<ReviewedItemDto>> ListReviewedAsync(int? userId);
+
         // ── 寫入（規格 2-5 ～ 2-7）────────────────────────────
 
         /// <summary>記錄已讀館方回覆。只在「有回覆而且還沒記錄過」時寫入；重複呼叫不會蓋掉第一次的時間。</summary>

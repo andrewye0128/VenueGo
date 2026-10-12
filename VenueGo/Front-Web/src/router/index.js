@@ -71,11 +71,17 @@ const router = createRouter({
           name: "tickets",
           component: () => import("../views/member/MyTicketsView.vue"),
         },
-        //個人資料
+        // 個人資料
         {
           path: "profile",
           name: "profile",
           component: () => import("../views/member/MemberProfileView.vue"),
+        },
+        // 我的評論（昱，10/10）：待評論／已評論
+        {
+          path: "reviews",
+          name: "member-reviews",
+          component: () => import("../views/member/MyReviewsView.vue"),
         },
       ],
     },

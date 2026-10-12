@@ -2,6 +2,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 using VenueGo.Data;
+using VenueGo.Dtos;
 using VenueGo.Dtos.ReviewDtos;
 using VenueGo.Dtos.ReviewDtos.MyReviews;
 using VenueGo.Dtos.ReviewDtos.WriteReview;
@@ -108,7 +109,7 @@ namespace VenueGo.Services.Reviews
 
             // 10/9 起一定是會員本人（資格判定已經比對過憑證上的 UserId），匿名照會員自己的選擇
             var review = BuildNewReview(input, input.IsAnonymous, input.IsPublic,
-                                        visitId: r.Ticket!.ReviewPerVisitId, bookingId: null, userId);
+                                        visitId: r.Ticket!.ReviewPerVisitId, bookingId: null, r.Ticket.UserId);
             await SaveNewReviewAsync(review);
             return MemberReviewOutcome.Ok;
         }
@@ -123,7 +124,7 @@ namespace VenueGo.Services.Reviews
 
             // 預約評論一律不公開、不匿名（DTO 上也沒有這兩個欄位）
             var review = BuildNewReview(input, isAnonymous: false, isPublic: false,
-                                        visitId: null, bookingId: r.Ticket!.ReviewPerBookingId, userId);
+                                        visitId: null, bookingId: r.Ticket!.ReviewPerBookingId, r.Ticket.UserId);
             await SaveNewReviewAsync(review);
             return MemberReviewOutcome.Ok;
         }
@@ -177,6 +178,126 @@ namespace VenueGo.Services.Reviews
             // 資料庫的 XOR 約束保證兩個一定剛好有一個，理論上到不了這裡。
             // 真的到了代表資料異常，當成查不到，不要回一個種類不明的畫面。
             return notFound;
+        }
+
+        // ════════════════════════════════════════════════════════
+        //  我的評論清單（10/10，規格 2-9、2-10）
+        //  跨表查詢照評論專區的做法：收集 id → 每張表各查一次 → Dictionary 取值，不要一筆一筆查。
+        // ════════════════════════════════════════════════════════
+
+        /// <inheritdoc/>
+        public async Task<IReadOnlyList<PendingReviewItemDto>> ListPendingAsync(int? userId)
+        {
+            if (userId is not int uid) return [];
+
+            var pending = await _eligibility.ListPendingAsync(uid);
+            DateTime now = _timeService.Now;
+
+            var venueNames = await VenueNamesAsync(pending.Visits.Select(v => v.VenueId));
+            var orderNos = await OrderNosAsync(pending.Bookings.Select(b => b.OrderId));
+
+            var visitItems = pending.Visits.Select(v => (
+                ExpiredAt: v.ExpiredAt,
+                Item: new PendingReviewItemDto(
+                    Kind: ReviewKind.Visit,
+                    Ticket: v.ReviewPerVisitId,
+                    Context: ReviewMapper.VisitContext(venueNames.GetValueOrDefault(v.VenueId), v.RentStartTime),
+                    Deadline: ReviewMapper.ToDeadline(v.ExpiredAt, now))));
+
+            // 預約評論的兩行字跟撰寫頁一樣（訂單編號／付款方式），會員點進去看到的確認區塊才對得上
+            var bookingItems = pending.Bookings.Select(b => (
+                ExpiredAt: b.ExpiredAt,
+                Item: new PendingReviewItemDto(
+                    Kind: ReviewKind.Booking,
+                    Ticket: b.OrderId,
+                    Context: ReviewMapper.BookingContext(b.OrderId, orderNos.GetValueOrDefault(b.OrderId), b.PaymentMethod),
+                    Deadline: ReviewMapper.ToDeadline(b.ExpiredAt, now))));
+
+            // 快到期的排前面：會員最該先處理的是「再不寫就沒機會了」的那幾張
+            return visitItems.Concat(bookingItems)
+                             .OrderBy(x => x.ExpiredAt)
+                             .Select(x => x.Item)
+                             .ToList();
+        }
+
+        /// <inheritdoc/>
+        public async Task<IReadOnlyList<ReviewedItemDto>> ListReviewedAsync(int? userId)
+        {
+            if (userId is not int uid) return [];
+
+            // 「是本人的」看憑證上的 UserId，跟單筆的「查看我的評論」同一個判斷（資格判定也是看憑證）
+            // 只選清單用得到的欄位（不讀館方回覆全文、員工欄位）。
+            // 評論內容要整段讀：先遮蔽再截斷，截斷後才遮蔽的話，切在一半的電話號碼會漏網。
+            var visits = await (from v in _db.ReviewPerVisits
+                                join r in _db.ReviewMains on (int?)v.ReviewPerVisitId equals r.ReviewPerVisitId
+                                where v.UserId == uid
+                                select new
+                                {
+                                    v.ReviewPerVisitId,
+                                    v.VenueId,
+                                    v.RentStartTime,
+                                    Review = new ReviewSummaryRow(r.StarRating, r.ReviewContent, r.CreatedAt, r.IsPublic,
+                                                                  r.SpamMarkedAt, r.RepliedAt, r.ReplyViewedAt)
+                                }).ToListAsync();
+
+            var bookings = await (from b in _db.ReviewPerBookings
+                                  join r in _db.ReviewMains on (int?)b.ReviewPerBookingId equals r.ReviewPerBookingId
+                                  where b.UserId == uid
+                                  select new
+                                  {
+                                      b.OrderId,
+                                      Review = new ReviewSummaryRow(r.StarRating, r.ReviewContent, r.CreatedAt, r.IsPublic,
+                                                                    r.SpamMarkedAt, r.RepliedAt, r.ReplyViewedAt)
+                                  }).ToListAsync();
+
+            var venueNames = await VenueNamesAsync(visits.Select(x => x.VenueId));
+            var orderNos = await OrderNosAsync(bookings.Select(x => x.OrderId));
+
+            var visitItems = visits.Select(x => ToReviewedItem(
+                x.Review, ReviewKind.Visit, x.ReviewPerVisitId,
+                ReviewMapper.VisitContext(venueNames.GetValueOrDefault(x.VenueId), x.RentStartTime)));
+
+            var bookingItems = bookings.Select(x => ToReviewedItem(
+                x.Review, ReviewKind.Booking, x.OrderId,
+                BookingReviewContext(orderNos.GetValueOrDefault(x.OrderId))));
+
+            // 新的排前面。⚠️ 還沒有分頁：一位會員的評論數量有限（每次到場、每筆訂單最多各一則），
+            //    之後真的變多再補 Skip／Take，前端改成「載入更多」。
+            return visitItems.Concat(bookingItems)
+                             .OrderByDescending(i => i.CreatedAt.Value)
+                             .ToList();
+        }
+
+        /// <summary>已評論清單需要的評論欄位（查詢時只選這些）。</summary>
+        private sealed record ReviewSummaryRow(
+            byte StarRating, string? ReviewContent, DateTime CreatedAt, bool IsPublic,
+            DateTime? SpamMarkedAt, DateTime? RepliedAt, DateTime? ReplyViewedAt);
+
+        private static ReviewedItemDto ToReviewedItem(ReviewSummaryRow r, string kind, int ticket, ReviewContextDto context)
+            => new(
+                Kind: kind,
+                Ticket: ticket,
+                Context: context,
+                StarRating: r.StarRating,
+                Excerpt: ReviewMapper.ToExcerpt(r.ReviewContent),
+                CreatedAt: TimeView.From(r.CreatedAt),
+                IsPublic: r.IsPublic,
+                IsSpamMarked: r.SpamMarkedAt != null,
+                HasReply: r.RepliedAt != null,
+                HasUnviewedReply: r.RepliedAt != null && r.ReplyViewedAt == null);
+
+        private async Task<Dictionary<int, string>> VenueNamesAsync(IEnumerable<int> venueIds)
+        {
+            var ids = venueIds.Distinct().ToList();
+            if (ids.Count == 0) return [];
+            return await _db.Venues.Where(v => ids.Contains(v.VenueId)).ToDictionaryAsync(v => v.VenueId, v => v.VenueName);
+        }
+
+        private async Task<Dictionary<int, string>> OrderNosAsync(IEnumerable<int> orderIds)
+        {
+            var ids = orderIds.Distinct().ToList();
+            if (ids.Count == 0) return [];
+            return await _db.Orders.Where(o => ids.Contains(o.OrderId)).ToDictionaryAsync(o => o.OrderId, o => o.OrderNo);
         }
 
         // ════════════════════════════════════════════════════════
@@ -288,12 +409,19 @@ namespace VenueGo.Services.Reviews
         /// </summary>
         private async Task<MyReviewDto> BuildBookingReviewAsync(ReviewMain review, ReviewPerBooking ticket)
             => ReviewMapper.ToMyReview(review, ReviewKind.Booking,
-                                       new ReviewContextDto(await OrderNoAsync(ticket.OrderId), null),
+                                       BookingReviewContext(await OrderNoAsync(ticket.OrderId)),
                                        await ResolveDisplayNameAsync(review));
 
+        /// <summary>
+        /// 已經寫好的預約評論的確認區塊：只有訂單編號（我的評論單筆頁、已評論清單共用）。
+        /// </summary>
+        private static ReviewContextDto BookingReviewContext(string? orderNo) => new(orderNo, null);
+
         /// <summary>由輸入組出要存的評論。visitId 與 bookingId 一定只有一個有值（XOR 約束）。</summary>
+        // 10/11：userId 改收 int，呼叫端傳「憑證上的 UserId」。資格判定已經確認憑證是登入者本人的，兩者相同；
+        //   而且 ReviewMain.UserId 之後改成 NOT NULL（int?→int）時，這裡不用跟著改。
         private ReviewMain BuildNewReview(
-            ReviewCreateInputDto input, bool isAnonymous, bool isPublic, int? visitId, int? bookingId, int? userId)
+            ReviewCreateInputDto input, bool isAnonymous, bool isPublic, int? visitId, int? bookingId, int userId)
             => new()
             {
                 ReviewPerVisitId = visitId,

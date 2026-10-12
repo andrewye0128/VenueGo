@@ -34,5 +34,18 @@ namespace VenueGo.Services.Reviews
         /// <param name="orderId">訂單的 OrderId</param>
         /// <param name="userId">目前登入的會員</param>
         Task<ReviewEligibility<ReviewPerBooking>> CheckBookingAsync(int orderId, int? userId);
+
+        /// <summary>
+        /// 「我的評論」的待評論清單：本人的、還沒評過、還沒過期的現場和預約憑證（10/10）。
+        /// <para>
+        /// 規則跟 CheckVisitAsync／CheckBookingAsync 的「可以評論（Ok）」完全一樣，只是一次查全部。
+        /// </para>
+        /// <para>
+        /// 10/11 起，查詢之前會先補建本人漏掉的現場、預約憑證（IReviewTicketBackfill），所以這個方法可能寫入資料。
+        /// 補建的期限從報到／付款時間起算、已過期的不建，所以不會讓早就過期的到場或訂單突然又能評。
+        /// </para>
+        /// </summary>
+        /// <param name="userId">目前登入的會員</param>
+        Task<PendingReviewTickets> ListPendingAsync(int userId);
     }
 }

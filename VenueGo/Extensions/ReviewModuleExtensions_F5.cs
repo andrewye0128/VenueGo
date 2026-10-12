@@ -18,6 +18,7 @@ namespace VenueGo.Extensions
             services.AddScoped<ReviewTicketFactory>();
             services.AddScoped<IVisitReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
             services.AddScoped<IBookingReviewTicketFactory>(sp => sp.GetRequiredService<ReviewTicketFactory>());
+            services.AddScoped<IReviewTicketBackfill>(sp => sp.GetRequiredService<ReviewTicketFactory>());   // 「我的評論」補建漏掉的憑證（10/11）
 
             // 評論資格判定：撰寫、送出、我的評論共用同一套規則（10/9）
             services.AddScoped<IReviewEligibilityService, ReviewEligibilityService>();

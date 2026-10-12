@@ -1,4 +1,5 @@
-﻿using VenueGo.Dtos;
+﻿using System.Globalization;
+using VenueGo.Dtos;
 using VenueGo.Dtos.ReviewDtos;
 using VenueGo.Dtos.ReviewDtos.MyReviews;
 using VenueGo.Dtos.ReviewDtos.PublicReviews;
@@ -131,6 +132,49 @@ namespace VenueGo.Mappers
                 // 非垃圾 且 是現場評論（預約評論一律不公開）
                 CanToggleVisibility: !isSpam && kind == ReviewKind.Visit,
                 Reply: reply);
+        }
+
+        // ── 我的評論清單（10/10）─────────────────────────────
+
+        /// <summary>剩不到幾天算「快到期」，卡片改用橘色提醒。</summary>
+        public const int ExpiringSoonDays = 3;
+
+        /// <summary>已評論清單上，內容摘要最多幾個字。</summary>
+        public const int ExcerptLength = 40;
+
+        /// <summary>
+        /// 評論期限。剩餘時間一律「往少的說」（13.9 天說 13 天），寧可讓顧客早一點寫，不要讓他以為還有時間。
+        /// now 由呼叫端傳入（ITimeService.Now），這裡不讀時間，方便測試。
+        /// </summary>
+        public static ReviewDeadlineDto ToDeadline(DateTime expiredAt, DateTime now)
+        {
+            TimeSpan left = expiredAt - now;
+
+            string text = left.TotalDays >= 1 ? $"剩 {(int)left.TotalDays} 天"
+                        : left.TotalHours >= 1 ? $"剩 {(int)left.TotalHours} 小時"
+                        : "剩不到 1 小時";
+
+            return new ReviewDeadlineDto(
+                ExpiresAt: TimeView.From(expiredAt),
+                RemainingText: text,
+                ExpiringSoon: left <= TimeSpan.FromDays(ExpiringSoonDays));
+        }
+
+        /// <summary>
+        /// 已評論清單的內容摘要：先遮蔽（跟公開版本一樣），再把換行變成空白、截斷。
+        /// 用「文字元素」計算長度，emoji 這類由兩個 char 組成的字不會被切成亂碼。
+        /// </summary>
+        public static string? ToExcerpt(string? content)
+        {
+            if (string.IsNullOrWhiteSpace(content)) return null;
+
+            string oneLine = string.Join(' ', ReviewTextGuard.MaskForPublic(content)
+                                                .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+            var info = new StringInfo(oneLine);
+            return info.LengthInTextElements <= ExcerptLength
+                ? oneLine
+                : info.SubstringByTextElements(0, ExcerptLength) + "⋯";
         }
 
         /// <summary>

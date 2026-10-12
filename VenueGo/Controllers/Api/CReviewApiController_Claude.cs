@@ -28,7 +28,8 @@ namespace VenueGo.Controllers.Api
     //  ── 10/10 Service 抽取 ────────────────────────────────────────
     //  規則全部搬到 Services/Reviews/：
     //    - IPublicReviewQueryService：評論專區（上架條件、篩選、排序、星等分布）
-    //    - IMemberReviewService：撰寫頁設定、送出、我的評論、已讀、切換公開、表態、員工預覽
+    //    - IMemberReviewService：撰寫頁設定、送出、我的評論、已讀、切換公開、表態、員工預覽，
+    //      以及會員中心「我的評論」的待評論／已評論清單（10/10，規格 2-9、2-10）
     //    - IReviewEligibilityService：能不能評論（10/9 已抽出，上面兩個 Service 會呼叫它）
     //  這支 Controller 只剩 HTTP 的事：路由、[Authorize]、檢查請求本體、
     //  把 Service 的結果翻成狀態碼＋ApiResult（第一區）。不再直接用 DbContext。
@@ -337,6 +338,54 @@ namespace VenueGo.Controllers.Api
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
         public async Task<IActionResult> GetBookingReview(int orderId)
             => ToResponse(await _memberReviews.GetBookingReviewAsync(orderId, _currentUser.UserId));
+
+        // ── 2-9、2-10 我的評論清單（10/10）─────────────────────
+
+        /// <summary>取得待評論清單</summary>
+        /// <remarks>
+        /// 會員中心「我的評論 › 待評論」分頁。**需要會員登入。**
+        ///
+        /// 回傳本人的、還沒評過、還沒過期的現場和預約評論，快到期的排前面。
+        /// 每一筆的 `kind`＋`ticket` 就是撰寫頁的網址：`/reviews/{kind}/{ticket}/write`。
+        ///
+        /// ### 注意
+        /// - 同一筆訂單可能同時出現一張現場、一張預約（兩種評論資格分開計算）。
+        /// - `deadline.remainingText` 一律往少的說（13.9 天顯示「剩 13 天」）；`deadline.expiringSoon` 是剩 3 天以內。
+        /// - 查詢之前會先補建本人漏掉的現場、預約憑證，所以這支 GET **可能寫入資料**。
+        ///   補建的期限從報到／付款時間起算（各 14 天），已經過期的不會建出來。
+        /// </remarks>
+        /// <response code="200">成功（沒有待評論時是空陣列）</response>
+        /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
+        /// <response code="403">登入的不是會員。ErrorCode：`Forbidden`</response>
+        [HttpGet("mine/pending")]
+        [ProducesResponseType<ApiResult<IReadOnlyList<PendingReviewItemDto>>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status403Forbidden)]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
+        public async Task<IActionResult> GetPendingList()
+            => Ok(ApiResult<IReadOnlyList<PendingReviewItemDto>>.Ok(await _memberReviews.ListPendingAsync(_currentUser.UserId)));
+
+        /// <summary>取得已評論清單</summary>
+        /// <remarks>
+        /// 會員中心「我的評論 › 已評論」分頁。**需要會員登入。**
+        ///
+        /// 回傳本人寫過的現場和預約評論的摘要，新的排前面。
+        /// 展開後的完整內容請用「查看我的評論」（`GET /api/reviews/{kind}/{ticket}`）。
+        ///
+        /// ### 注意
+        /// - **純讀取**：不會記錄「顧客已看過回覆」。`hasUnviewedReply` 是 true 的那幾筆，畫面上可以標「新回覆」。
+        /// - `excerpt` 是遮蔽後的內容開頭（最多 40 字）；只給星等的評論是 `null`。
+        /// </remarks>
+        /// <response code="200">成功（還沒寫過評論時是空陣列）</response>
+        /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
+        /// <response code="403">登入的不是會員。ErrorCode：`Forbidden`</response>
+        [HttpGet("mine/reviewed")]
+        [ProducesResponseType<ApiResult<IReadOnlyList<ReviewedItemDto>>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status403Forbidden)]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
+        public async Task<IActionResult> GetReviewedList()
+            => Ok(ApiResult<IReadOnlyList<ReviewedItemDto>>.Ok(await _memberReviews.ListReviewedAsync(_currentUser.UserId)));
 
         // ── 2-8 員工預覽 ─────────────────────────────────────
 

@@ -10,12 +10,13 @@ namespace VenueGo.Services.ReviewTickets
 {
     // 一個實作、兩個門：報到系統看到 IVisitReviewTicketFactory，
     // 訂單／付款系統看到 IBookingReviewTicketFactory，各自只看得到自己該叫的方法。
+    // 10/11 加第三個門：「我的評論」清單看到 IReviewTicketBackfill（補建漏掉的憑證），別組看不到。
     //
     // 文件註解寫在「介面」上，不寫在這裡：呼叫端拿到的是介面，
     // IntelliSense 顯示的也是介面上的註解。<inheritdoc/> 讓這邊直接沿用，
     // 不會出現兩份說明各說各話的情況。
     public sealed class ReviewTicketFactory(dbVenueContext db, ITimeService timeService)
-        : IVisitReviewTicketFactory, IBookingReviewTicketFactory
+        : IVisitReviewTicketFactory, IBookingReviewTicketFactory, IReviewTicketBackfill
     {
         private readonly dbVenueContext _db = db;
         private readonly ITimeService _timeService = timeService;
@@ -28,6 +29,7 @@ namespace VenueGo.Services.ReviewTickets
         //       資料庫有 UQ_ReviewPerVisit_UserId_OrderId 擋著，這裡先查一次，正常情況不會撞到。
         //    3. 要有「預約時段內」的有效入場紀錄。
         //    4. 憑證建立之後永遠屬於當時的會員，之後票券怎麼轉都不改。
+        //    5. 評論期限＝預約時段內「最早一筆」有效入場紀錄的時間＋14 天，不是建立憑證的時間＋14 天；已經過期就不建（10/11）。
         //  （以前用 QRToken 判斷「這張票建過沒」，一張票一張憑證；現在改用「訂單＋會員」。）
 
         /// <inheritdoc/>
@@ -67,25 +69,36 @@ namespace VenueGo.Services.ReviewTickets
             DateTime now = _timeService.Now;
             if (now < rentStart) return false;
 
-            // 原本（10/10 加上「入場紀錄不能晚於現在」）：
-            // // 規則 3：預約時段內有一筆成功的入場紀錄
+            // 原本（10/10 RPV 修正版；10/11 改成取「最早一筆」的時間，期限從那時起算）：
+            // // 規則 3：預約時段內有一筆成功的入場紀錄，而且這筆紀錄已經發生了（不晚於現在）
             // bool checkedInDuringRent = await _db.CheckInLogs.AnyAsync(c =>
             //     c.TicketId == entry.TicketId
             //     && c.Action == (byte)CheckInAction.CheckIn
             //     && c.IsValid
             //     && c.ActionTime >= rentStart
-            //     && c.ActionTime < rentEnd);
+            //     && c.ActionTime < rentEnd
+            //     && c.ActionTime <= now);
             // if (!checkedInDuringRent) return false;
 
-            // 規則 3：預約時段內有一筆成功的入場紀錄，而且這筆紀錄已經發生了（不晚於現在）
-            bool checkedInDuringRent = await _db.CheckInLogs.AnyAsync(c =>
-                c.TicketId == entry.TicketId
-                && c.Action == (byte)CheckInAction.CheckIn
-                && c.IsValid
-                && c.ActionTime >= rentStart
-                && c.ActionTime < rentEnd
-                && c.ActionTime <= now);
-            if (!checkedInDuringRent) return false;
+            // 規則 3：預約時段內有一筆成功的入場紀錄，而且這筆紀錄已經發生了（不晚於現在）。
+            // 10/11：不只問「有沒有」，還取「最早一筆」的時間，規則 5 的期限從這個時間起算。
+            //   MinAsync 要寫成 DateTime?：一筆都沒有時回 null（寫成 DateTime 的話，沒有資料會丟例外）。
+            DateTime? firstCheckInAt = await _db.CheckInLogs
+                .Where(c => c.TicketId == entry.TicketId
+                            && c.Action == (byte)CheckInAction.CheckIn
+                            && c.IsValid
+                            && c.ActionTime >= rentStart
+                            && c.ActionTime < rentEnd
+                            && c.ActionTime <= now)
+                .MinAsync(c => (DateTime?)c.ActionTime);
+            if (firstCheckInAt is not DateTime checkInAt) return false;
+
+            // 規則 5（10/11 新增）：評論期限從「報到時間」起算，不是從「建立憑證的時間」。
+            //   正常流程是報到當下就建立，兩種算法結果一樣。差別在「晚補建」（離場時補、「我的評論」清單補）：
+            //   從建立時間算的話，晚補建的憑證期限會被拉長，早就該過期的到場突然又能評。
+            //   期限已經過了就不建：CHK_ReviewPerVisit_Time_Logic 要求 ExpiredAt > CreatedAt，硬建會撞約束。
+            DateTime expiredAt = checkInAt.AddDays(ReviewPolicy.TicketValidDays);
+            if (expiredAt <= now) return false;
 
             var newVisit = new ReviewPerVisit
             {
@@ -97,8 +110,8 @@ namespace VenueGo.Services.ReviewTickets
                 RentStartTime = rentStart,
                 RentEndTime = rentEnd,
                 ActualEndTime = null,
-                CreatedAt = _timeService.Now,
-                ExpiredAt = _timeService.Now.AddDays(ReviewPolicy.TicketValidDays)
+                CreatedAt = now,                 // 跟上面的判斷用同一個時間
+                ExpiredAt = expiredAt            // 規則 5：報到時間＋14 天
             };
 
             // Add 不是 I/O，不需要 async；AddAsync 只有在用特殊主鍵產生策略時才需要。
@@ -154,7 +167,7 @@ namespace VenueGo.Services.ReviewTickets
             var visitTicket = await FindVisitTicketAsync(entry.OrderId, userId);
             // 補償：入場時沒建立評論憑證（例如票券清單的「快速報到」不會呼叫工廠），就在這裡補建一次。
             // 條件跟 CreateReviewPerVisitAsync 一樣，不符合就照舊回 false。
-            // 補建的 CreatedAt／ExpiredAt 從現在起算，會比入場時建立晚一點。
+            // 10/11：補建的 CreatedAt 是現在；ExpiredAt 從報到時間起算（規則 5），所以期限跟入場時就建立的一樣。
             if (visitTicket == null)
             {
                 if (!await CreateReviewPerVisitAsync(entry.Qrtoken)) return false;
@@ -185,28 +198,100 @@ namespace VenueGo.Services.ReviewTickets
 
             if (await _db.ReviewPerBookings.AnyAsync(b => b.OrderId == orderId)) return false; // 防止重複建立
 
+            // 10/11：取「最早一筆」已付款紀錄，期限從付款時間起算（跟現場憑證的規則 5 同一個道理）。
+            //   付款時間晚於現在的不算（時光機撥回過去時會遇到），跟現場憑證「報到紀錄不能晚於現在」一致。
+            DateTime now = _timeService.Now;
             var book = await (from p in _db.Payments
                               join o in _db.Orders on p.OrderId equals o.OrderId
-                              where o.OrderId == orderId && p.PaidAt != null // 有付款紀錄才建立
+                              where o.OrderId == orderId && p.PaidAt != null && p.PaidAt <= now // 有付款紀錄才建立
+                              orderby p.PaidAt, p.PaymentId
                               select new { p, o }).FirstOrDefaultAsync();
             if (book == null) return false;
+            if (book.p.PaidAt is not DateTime paidAt) return false;   // 查詢已經排除 null，這行是讓編譯器知道它有值
 
             var order = book.o;
             var payment = book.p;
+
+            // 期限已經過了就不建：CHK_ReviewPerBooking_Time_Logic 要求 ExpiredAt > CreatedAt，硬建會撞約束。
+            DateTime expiredAt = paidAt.AddDays(ReviewPolicy.TicketValidDays);
+            if (expiredAt <= now) return false;
 
             var newBooking = new ReviewPerBooking
             {
                 UserId = order.UserId,
                 OrderId = order.OrderId,
                 PaymentMethod = payment.PaymentMethod,
-                CreatedAt = _timeService.Now,
-                ExpiredAt = _timeService.Now.AddDays(ReviewPolicy.TicketValidDays)
+                CreatedAt = now,
+                ExpiredAt = expiredAt            // 付款時間＋14 天
             };
 
             _db.ReviewPerBookings.Add(newBooking);
             await _db.SaveChangesAsync();
 
             return true;
+        }
+
+        // ── 待評論清單的補建（10/11，方案 A）──────────────────────────
+        //
+        //  憑證本來只靠別組在報到、離場、付款時呼叫上面的方法建立；漏呼叫（例如快速報到）就沒有憑證，
+        //  會員在「我的評論」也看不到。所以清單打開時，先替本人補建一次。
+        //  條件全部交給 CreateReviewPerVisitAsync／CreateReviewPerBookingAsync 判斷（含防止重複），
+        //  這裡只負責找出「可能缺憑證」的候選，不重寫規則。
+        //
+        //  候選只找最近 14 天（TicketValidDays）內的：期限從報到／付款時間起算，更早的一定已經過期，
+        //  找出來也建不成，只會讓每次打開清單都白跑一輪查詢。
+
+        /// <inheritdoc/>
+        public async Task<int> BackfillVisitTicketsAsync(int userId)
+        {
+            DateTime now = _timeService.Now;
+
+            // 報到紀錄一定在預約時段內，所以「預約日期早於 14 天前那一天」的票，報到時間＋14 天一定已經過了。
+            // 用日期比較、不用「日期＋時間」：DateOnly 加 TimeOnly 的組合不一定翻得成 SQL。
+            // 這樣會多抓到「14 天前那一天」的票，交給工廠擋掉就好，不會漏掉任何一張。
+            DateOnly earliestBookingDate = DateOnly.FromDateTime(now.AddDays(-ReviewPolicy.TicketValidDays));
+
+            var tokens = await (from t in _db.EntryTickets
+                                join o in _db.Orders on t.OrderId equals o.OrderId
+                                join r in _db.Reservations on o.ReservationId equals r.ReservationId
+                                where t.ReceivedUserId == userId
+                                      && (t.Status == (byte)EntryTicketStatus.Used || t.Status == (byte)EntryTicketStatus.Completed)
+                                      && r.BookingDate >= earliestBookingDate
+                                      && !_db.ReviewPerVisits.Any(v => v.UserId == userId && v.OrderId == t.OrderId)
+                                select t.Qrtoken)
+                               .ToListAsync();
+
+            int created = 0;
+            foreach (string token in tokens)
+            {
+                // 同一位會員在同一張訂單有兩張票時，兩張都會是候選；第一張建好之後，第二張會被規則 2 擋下（回 false）
+                if (await CreateReviewPerVisitAsync(token)) created++;
+            }
+            return created;
+        }
+
+        /// <inheritdoc/>
+        public async Task<int> BackfillBookingTicketsAsync(int userId)
+        {
+            DateTime now = _timeService.Now;
+            DateTime earliestPaidAt = now.AddDays(-ReviewPolicy.TicketValidDays);   // 付款時間＋14 天 > 現在 ⇔ 付款時間 > 現在－14 天
+
+            var orderIds = await _db.Orders
+                .Where(o => o.UserId == userId
+                            && !_db.ReviewPerBookings.Any(b => b.OrderId == o.OrderId)
+                            && _db.Payments.Any(p => p.OrderId == o.OrderId
+                                                     && p.PaidAt != null
+                                                     && p.PaidAt > earliestPaidAt
+                                                     && p.PaidAt <= now))
+                .Select(o => o.OrderId)
+                .ToListAsync();
+
+            int created = 0;
+            foreach (int orderId in orderIds)
+            {
+                if (await CreateReviewPerBookingAsync(orderId)) created++;
+            }
+            return created;
         }
     }
 }

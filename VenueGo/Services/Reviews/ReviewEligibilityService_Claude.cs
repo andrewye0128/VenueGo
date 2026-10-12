@@ -14,11 +14,13 @@ namespace VenueGo.Services.Reviews
     public sealed class ReviewEligibilityService(
         dbVenueContext db,
         ITimeService timeService,
-        IBookingReviewTicketFactory bookingTicketFactory) : IReviewEligibilityService
+        IBookingReviewTicketFactory bookingTicketFactory,
+        IReviewTicketBackfill ticketBackfill) : IReviewEligibilityService
     {
         private readonly dbVenueContext _db = db;
         private readonly ITimeService _timeService = timeService;
         private readonly IBookingReviewTicketFactory _bookingTicketFactory = bookingTicketFactory;
+        private readonly IReviewTicketBackfill _ticketBackfill = ticketBackfill;
 
         /// <inheritdoc/>
         public async Task<ReviewEligibility<ReviewPerVisit>> CheckVisitAsync(int reviewPerVisitId, int? userId)
@@ -33,7 +35,7 @@ namespace VenueGo.Services.Reviews
                 return ReviewEligibility<ReviewPerVisit>.NotFound;
 
             // 現場憑證不做「查不到就補建」：憑證是報到時依票券建立的，沒有憑證 Id 也就無從補建起。
-            // 漏建的補償放在離場時（ReviewTicketFactory.RecordVisitEndTimeAsync）。
+            // 漏建的補償放在兩個地方：離場時（ReviewTicketFactory.RecordVisitEndTimeAsync）和「我的評論」清單（ListPendingAsync，10/11）。
             var existing = await _db.ReviewMains.FirstOrDefaultAsync(r => r.ReviewPerVisitId == ticket.ReviewPerVisitId);
             return Decide(ticket, existing, ticket.ExpiredAt);
         }
@@ -66,6 +68,36 @@ namespace VenueGo.Services.Reviews
 
             var existing = await _db.ReviewMains.FirstOrDefaultAsync(r => r.ReviewPerBookingId == ticket.ReviewPerBookingId);
             return Decide(ticket, existing, ticket.ExpiredAt);
+        }
+
+        /// <inheritdoc/>
+        public async Task<PendingReviewTickets> ListPendingAsync(int userId)
+        {
+            // 10/11 方案 A：先替本人補建漏掉的憑證，下面的查詢才看得到。
+            // 規則（含「期限從報到／付款時間起算、已過期不建」）都在工廠裡，這裡不重寫。
+            // 代價是這支 GET 可能寫入資料；預約評論撰寫頁的「查不到就補建」本來就是這樣，不是新的做法。
+            await _ticketBackfill.BackfillVisitTicketsAsync(userId);
+            await _ticketBackfill.BackfillBookingTicketsAsync(userId);
+
+            DateTime now = _timeService.Now;
+
+            // 「還沒過期」跟 Decide 的規則一致：now >= ExpiredAt 算過期，所以還能評的是 ExpiredAt > now。
+            // 「還沒評過」：ReviewMain 裡沒有指到這張憑證的評論。
+            var visits = await _db.ReviewPerVisits
+                .Where(v => v.UserId == userId
+                            && v.ExpiredAt > now
+                            && !_db.ReviewMains.Any(r => r.ReviewPerVisitId == v.ReviewPerVisitId))
+                .OrderBy(v => v.ExpiredAt)
+                .ToListAsync();
+
+            var bookings = await _db.ReviewPerBookings
+                .Where(b => b.UserId == userId
+                            && b.ExpiredAt > now
+                            && !_db.ReviewMains.Any(r => r.ReviewPerBookingId == b.ReviewPerBookingId))
+                .OrderBy(b => b.ExpiredAt)
+                .ToListAsync();
+
+            return new PendingReviewTickets(visits, bookings);
         }
 
         /// <summary>憑證存在而且是本人的之後：已評過 → 已過期 → 可以評，依序判斷。</summary>

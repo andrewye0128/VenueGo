@@ -33,6 +33,7 @@ import { ErrorCodes } from "@/constants/errorCodes";
 import { mineRoute } from "@/router/reviewRoutes";
 import { kindInfo } from "@/utils/review/reviewKinds";
 import { useDraft } from "@/composables/useDraft";
+import { reviewDraftKey } from "@/utils/review/draftKey";
 import { useMemberStore } from "@/stores/member";
 import StarInput from "@/components/review/StarInput.vue";
 import ConfirmModal from "@/components/ConfirmModal.vue";
@@ -91,8 +92,8 @@ const draft = useDraft({
   form: state,
   // v3（10/9）：key 加上會員 Id。共用電腦時，下一個登入的人不會看到上一個人的草稿；
   // 現場評論的 ticket 也從 QRToken 改成憑證 Id，跟 v2 的草稿對不上，所以換版本號。
-  key: () =>
-    `review-draft:v3:${memberStore.member?.userId ?? "guest"}:${props.kind}:${props.ticket}`,
+  // 原本的在 10/10 格式搬到 utils/review/draftKey.js，「我的評論」清單也要用
+  key: () => reviewDraftKey(memberStore.member?.userId, props.kind, props.ticket),
   // 只存「這一頁允許使用者改」的欄位：例如未登入時匿名是鎖死的，就不存它
   fields: () => {
     const f = setup.value?.form;

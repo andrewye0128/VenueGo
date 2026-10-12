@@ -287,6 +287,20 @@ namespace VenueGo.Controllers
             return View(vm);
         }
 
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> StartOvertimeCheckout(int id)
+        {
+            var result = await _checkInService.QuickOvertimeChargeAsync(id);
+            if (!result.Success)
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = result.Reason;
+                return RedirectToAction("Index", "Dashboard");
+            }
+            return RedirectToAction("OvertimeCheckout", new { id });
+        }
+
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ConfirmOvertimeCheckout(int id, bool isWaived, PaymentMethodOnSite? method, string? remark)

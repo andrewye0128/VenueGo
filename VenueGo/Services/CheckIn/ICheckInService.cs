@@ -23,5 +23,7 @@ namespace VenueGo.Services.CheckIn
 
         // 排程用:幫「超時已封頂但沒人處理」的訂單代建待收紀錄
         Task<int> SettleOvertimeAsync();
+        //排程無出場儀表板處理
+        Task<OvertimePaymentResult> QuickOvertimeChargeAsync(int ticketId);
     }
 }

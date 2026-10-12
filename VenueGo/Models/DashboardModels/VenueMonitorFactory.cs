@@ -2,6 +2,7 @@
 using VenueGo.Data;
 using VenueGo.Models.Enums;
 using VenueGo.Services;
+using VenueGo.Services.CheckIn;
 using VenueGo.ViewModels.DashboardViewModels;
 
 
@@ -60,6 +61,7 @@ namespace VenueGo.Models.DashboardModels
                                        select new OverdueTicketViewModel
                                        {
                                            TicketId = t.TicketId,
+                                           OrderId = t.OrderId,
                                            Qrtoken = t.Qrtoken,
                                            VenueName = v.VenueName,
                                            UserName = u.Name,
@@ -75,9 +77,27 @@ namespace VenueGo.Models.DashboardModels
                 .OrderBy(x => x.EndAt)
                 .ToList();
 
+            var orderIds = overdueList.Select(x => x.OrderId).ToList();
+            var charges = await _db.OvertimeCharges
+                .AsNoTracking()
+                .Where(c => orderIds.Contains(c.OrderId))
+                .ToDictionaryAsync(c => c.OrderId);
+
             foreach (var item in overdueList)
             {
                 item.OverdueDuration = now - item.EndAt;
+
+                // 預估:永遠用「現在」算
+                var fee = OvertimeFee.Calculate(item.EndAt, now);
+                item.IsFree = fee.IsFree;
+                item.EstimatedAmount = fee.ChargeAmount;
+
+                // 凍結:只有這個訂單真的有紀錄才填
+                if (charges.TryGetValue(item.OrderId, out var charge))
+                {
+                    item.ChargeStatus = charge.Status;
+                    item.ChargeAmount = charge.ChargeAmount;
+                }
             }
 
             return overdueList;

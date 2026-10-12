@@ -10,6 +10,8 @@
     /// 服務會抓到過期/共用的 DbContext(captive dependency),所以改注入
     /// IServiceScopeFactory,每次 tick 自己開一個 scope 再去要 ICheckInService。
     /// </summary>
+    /// 
+
     public class TicketSettlementHostedService(
         // ASP.NET Core Host 啟動時框架自己內建注入
         IServiceScopeFactory scopeFactory,
@@ -49,13 +51,15 @@
 
         private async Task SettleSafelyAsync(CancellationToken stoppingToken)
         {
+            int settled = 0;
+            int created = 0;
+            bool hasError = false;
+
             try
             {
                 using var scope = _scopeFactory.CreateScope();
                 var checkInService = scope.ServiceProvider.GetRequiredService<ICheckInService>();
-                var count = await checkInService.SettleAllDueTicketsAsync();
-                var overtimeCount = await checkInService.SettleOvertimeAsync();
-                _logger.LogInformation("本輪代建超時待收 {Count} 筆", overtimeCount);
+                settled = await checkInService.SettleAllDueTicketsAsync();
             }
             catch (OperationCanceledException)
             {
@@ -63,7 +67,37 @@
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "背景票券結算發生未預期的例外");
+                hasError = true;
+                _logger.LogError(ex, "背景票券結算(SettleAllDueTickets)發生未預期的例外");
+            }
+
+            try
+            {
+                using var scope = _scopeFactory.CreateScope();
+                var checkInService = scope.ServiceProvider.GetRequiredService<ICheckInService>();
+                created = await checkInService.SettleOvertimeAsync();
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                hasError = true;
+                _logger.LogError(ex, "背景代建超時待收(SettleOvertime)發生未預期的例外");
+            }
+
+            // 每輪一行摘要:沒事做就用 Debug,避免每 5 分鐘洗版
+            if (settled == 0 && created == 0)
+            {
+                if (!hasError)
+                {
+                    _logger.LogDebug("本輪無需處理");
+                }
+            }
+            else
+            {
+                _logger.LogInformation("本輪結算票券 {Settled} 張、代建超時待收 {Created} 筆", settled, created);
             }
         }
     }

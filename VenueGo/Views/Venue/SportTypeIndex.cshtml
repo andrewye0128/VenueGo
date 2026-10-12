@@ -1,5 +1,6 @@
 @model IEnumerable<VenueGo.Models.VenueModels.CSportTypeWrap>
 @using VenueGo.Helpers
+@using VenueGo.Models.VenueModels
 @using VenueGo.Models.Constants
 @using VenueGo.Data
 @inject dbVenueContext Db
@@ -73,6 +74,7 @@
                 <thead class="table-light">
                     <tr>
                         <th class="ps-4" style="width: 10%;">序</th>
+                        <th class="text-center" style="width: 10%;">@Html.DisplayNameFor(model => model.IconName)</th>
                         <th>@Html.DisplayNameFor(model => model.SportName)</th>
                         <th class="text-center" style="width: 20%;">操作</th>
                     </tr>
@@ -81,7 +83,7 @@
                     @if (!Model.Any())
                     {
                         <tr>
-                            <td colspan="3" class="text-center py-4 text-muted">目前尚無運動類型資料</td>
+                            <td colspan="4" class="text-center py-4 text-muted">目前尚無運動類型資料</td>
                         </tr>
                     }
                     else
@@ -92,6 +94,17 @@
                             count++;
                             <tr>
                                 <td class="ps-4">@count</td>
+                                <td class="text-center">
+                                    @* 尚未設定圖示顯示「—」(前台 API 會改用預設圖示) *@
+                                    @if (string.IsNullOrEmpty(item.IconName))
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                    else
+                                    {
+                                        <i class="@SportTypeIconOptions.ToFontClass(item.IconName) fs-4 text-primary" title="@item.IconName" aria-hidden="true"></i>
+                                    }
+                                </td>
                                 <td>@Html.DisplayFor(model => item.SportName)</td>
                                 <td class="text-center">
                                     @if (canManage)
@@ -115,3 +128,8 @@
         </div>
     </div>
 </div>
+
+@section Styles {
+    @* 圖示欄使用 Material Design Icons 字型(跟前台 Iconify 的 mdi 是同一套圖示);@@ 是 Razor 的 @ 跳脫寫法 *@
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@mdi/font@7.4.47/css/materialdesignicons.min.css" />
+}

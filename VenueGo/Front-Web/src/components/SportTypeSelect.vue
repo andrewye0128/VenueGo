@@ -15,6 +15,7 @@ const props = defineProps({
   // true 時清單最上面多一個「全部運動」（搜尋、篩選用）
   includeAll: { type: Boolean, default: false },
   // 要停用的運動 sportTypeId，例如 [5]；停用的選項會加上「（暫停開放）」
+  // 後端標示暫停開放的運動（isBookable: false）不用寫在這裡，會自動停用
   disabledValues: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
   error: { type: String, default: "" },
@@ -31,7 +32,8 @@ const contentOptions = { bodyLock: false };
 
 const items = computed(() => {
   const sports = sportTypes.value.map((sport) => {
-    const isDisabled = props.disabledValues.includes(sport.sportTypeId);
+    // 兩種停用：後端說這個運動暫停開放（沒有價格），或頁面指定的（disabledValues）
+    const isDisabled = !sport.isBookable || props.disabledValues.includes(sport.sportTypeId);
     return {
       // Design System 3.4：狀態不能只靠顏色，停用時加上文字說明
       label: isDisabled ? `${sport.sportName}（暫停開放）` : sport.sportName,

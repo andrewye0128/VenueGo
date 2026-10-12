@@ -3,7 +3,7 @@
 //
 //  用法：
 //    const { sportTypes, loading, error, findSportType } = useSportTypes();
-//    // sportTypes：[{ sportTypeId, sportName, icon }]，icon 是完整的圖示名稱
+//    // sportTypes：[{ sportTypeId, sportName, icon, isBookable }]，icon 是完整的圖示名稱
 //
 //  為什麼不在每個元件各自呼叫 API：
 //    同一頁可能有好幾個地方要用運動類型（例如預約頁的下拉選單和場地卡片），
@@ -32,6 +32,9 @@ async function fetchSportTypes() {
       sportTypeId: sport.id,
       sportName: sport.name,
       icon: getSportIcon(sport.icon),
+      // 是否開放預約（後端：有啟用中的價格）；false 時下拉選單顯示「（暫停開放）」、不能選
+      // 後端還沒有這個欄位時（undefined）當作可以預約，不會把所有運動都停用
+      isBookable: sport.isBookable ?? true,
     }));
   } catch (err) {
     error.value = err.message || "無法載入運動類型";

@@ -5,7 +5,7 @@
     有 sportTypeId   → 只顯示這種運動，自動選中第一個有空位的場地
     沒有 date、或日期不在可預約範圍 → 今天
   運動、日期放在網址：重新整理、分享網址，畫面都一樣；換運動或日期用 router.replace，不會多出「上一頁」紀錄
-  資料目前是假資料（api/bookingApi.js），串接 API 時這個檔案不用改
+  資料來自 api/bookingApi.js（/api/booking/availability、/summary）
   useToast、UAlert、UButton 由 Nuxt UI 自動匯入
 -->
 <script setup>
@@ -154,7 +154,13 @@ let latestSummaryId = 0;
 
 async function loadSummary() {
   if (visibleDates.value.length === 0) return;
+  // 先加 1 再判斷：讀取中的舊請求晚回來時，編號對不上就會被丟掉，不會把 0 寫回去
   const requestId = ++latestSummaryId;
+  // 暫停開放：剩餘格數一定是 0，顯示出來會變成「已額滿」，誤導客人，所以不讀、不顯示數字
+  if (isSuspended.value) {
+    counts.value = {};
+    return;
+  }
   try {
     const list = await getAvailabilitySummary({
       sportTypeId: sportTypeId.value,
@@ -172,10 +178,7 @@ async function loadSummary() {
 function onRangeChange(dates) {
   visibleDates.value = dates;
 }
-watch([visibleDates, sportTypeId, period], () => {
-  counts.value = {};
-  loadSummary();
-});
+// 什麼時候重新讀取剩餘格數：寫在下面 isSuspended 的後面（watch 要用到它）
 
 // ── 場地卡片：依運動分組，並依「時段篩選」算出剩幾格、最早幾點 ──
 // 「剩幾格」只算能選的格子（可預約而且有價格），跟時段按鈕用同一條規則
@@ -185,9 +188,9 @@ const venueGroups = computed(() => {
   const venues = availability.value?.venues ?? [];
   // 依運動類型清單的順序分組；清單還沒讀到時，至少用場地本身的 sportTypeId 分組
   const order = sportTypes.value.map((s) => s.sportTypeId);
-  const ids = [...new Set(venues.map((v) => v.sportTypeId))].sort(
-    (a, b) => order.indexOf(a) - order.indexOf(b),
-  );
+  // 清單裡沒有的運動（indexOf 是 -1）排到最後，不要排到最前面
+  const rank = (id) => (order.includes(id) ? order.indexOf(id) : Infinity);
+  const ids = [...new Set(venues.map((v) => v.sportTypeId))].sort((a, b) => rank(a) - rank(b));
   return ids.map((id) => {
     const sport = findSportType(id);
     return {
@@ -212,6 +215,22 @@ const allVenues = computed(() => venueGroups.value.flatMap((g) => g.venues));
 const isClosedDay = computed(
   () => allVenues.value.length > 0 && allVenues.value.every((v) => v.slots.length === 0),
 );
+
+// 目前選的運動暫停開放（沒有價格）：舊連結、書籤進來時會發生，因為下拉選單選不到
+// 兩個來源，任一個成立就算：
+//   運動清單的 isBookable（比較早知道，日期列可以一開始就不讀剩餘格數）
+//   這天的場地全部 isBookable: false（運動清單讀取失敗、或後端還沒加欄位時的備用判斷）
+const isSuspended = computed(() => {
+  if (sportTypeId.value === null) return false; // 全部運動：暫停開放的場地卡片自己會顯示
+  if (findSportType(sportTypeId.value)?.isBookable === false) return true;
+  return allVenues.value.length > 0 && allVenues.value.every((v) => !v.isBookable);
+});
+
+// 換日期範圍、運動、時段篩選，或暫停開放的狀態改變：重新讀取日期列的剩餘格數
+watch([visibleDates, sportTypeId, period, isSuspended], () => {
+  counts.value = {};
+  loadSummary();
+});
 
 // ── 選中的場地 ──
 const selectedVenueId = ref(null);
@@ -345,9 +364,19 @@ const nextDay = computed(() => parseDate(date.value).add({ days: 1 }).toString()
         </p>
 
         <template v-else-if="availability">
+          <!-- 這項運動暫停開放（舊連結進來，下拉選單選不到）：比「沒有場地」「公休」優先 -->
+          <div v-if="isSuspended" class="rounded border border-neutral-border bg-neutral-surface">
+            <EmptyState
+              icon="i-mdi-pause-circle-outline"
+              :title="`${findSportType(sportTypeId)?.sportName ?? '這項運動'}目前暫停開放預約`"
+              description="請選擇其他運動類型。"
+              :actions="[{ label: '看全部運動', onClick: () => (sportModel = ALL_SPORTS) }]"
+            />
+          </div>
+
           <!-- 這項運動沒有場地 -->
           <div
-            v-if="allVenues.length === 0"
+            v-else-if="allVenues.length === 0"
             class="rounded border border-neutral-border bg-neutral-surface"
           >
             <EmptyState

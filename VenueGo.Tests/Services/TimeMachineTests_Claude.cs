@@ -4,7 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Time.Testing;
 using NSubstitute;
 using Shouldly;
-using VenueGo.Services;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Tests.Services
 {

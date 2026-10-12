@@ -2,6 +2,7 @@
 using VenueGo.Data;
 using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
+using VenueGo.Services.Time;
 using VenueGo.ViewModels.MemberViewModels;
 
 namespace VenueGo.Services.Members

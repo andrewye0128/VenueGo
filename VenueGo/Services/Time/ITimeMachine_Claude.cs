@@ -1,4 +1,4 @@
-namespace VenueGo.Services
+namespace VenueGo.Services.Time
 {
     /// <summary>
     /// 開發用時光機：讓「網站以為現在是幾點」和真實時間不同，不必再改電腦的時鐘。

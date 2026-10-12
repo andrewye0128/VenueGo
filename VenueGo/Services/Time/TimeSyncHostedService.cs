@@ -1,4 +1,4 @@
-namespace VenueGo.Services
+namespace VenueGo.Services.Time
 {
     /// <summary>
     /// 背景校時服務：開機時校一次，之後每隔 TimeService.SyncInterval 再校一次。

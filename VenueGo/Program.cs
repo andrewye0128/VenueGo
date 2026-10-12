@@ -6,9 +6,9 @@ using System.Text;
 using VenueGo.Data;
 using VenueGo.Extensions;   // 各子系統的服務註冊、API 文件
 using VenueGo.Helpers;
-using VenueGo.Services;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
+using VenueGo.Services.Time;
 var builder = WebApplication.CreateBuilder(args);
 
 // 讀取每個人的本機設定

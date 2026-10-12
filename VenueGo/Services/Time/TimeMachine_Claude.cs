@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 
-namespace VenueGo.Services
+namespace VenueGo.Services.Time
 {
     /// <summary>
     /// <see cref="ITimeMachine"/> 的實作。必須註冊成 Singleton，全站共用同一個偏移量。

@@ -2,7 +2,7 @@
 using System.Net.Http.Json;
 using System.Text.Json;
 
-namespace VenueGo.Services
+namespace VenueGo.Services.Time
 {
     /// <summary>
     /// ITimeService 的實作。

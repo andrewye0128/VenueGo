@@ -8,9 +8,9 @@ using VenueGo.Extensions;
 using VenueGo.Helpers;
 using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;
-using VenueGo.Services;
 using VenueGo.ViewModels.VenueViewModels;
 using VenueGo.Services.Auth;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Controllers
 {

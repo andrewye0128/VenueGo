@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Services
+﻿namespace VenueGo.Services.Time
 {
     /// <summary>
     /// 全系統的時間來源。

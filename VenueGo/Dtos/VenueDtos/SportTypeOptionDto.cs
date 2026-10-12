@@ -12,5 +12,8 @@ namespace VenueGo.Dtos.VenueDtos
 
         //完整 Iconify 名稱,例如"i-mdi-badminton";沒設定時 Factory 會給預設圖示,所以不會是 null
         public string Icon { get; set; } = "";
+
+        //是否開放預約:有啟用中的價格規則才是 true;false 時前台下拉選單顯示「(暫停開放)」、不能選
+        public bool IsBookable { get; set; }
     }
 }

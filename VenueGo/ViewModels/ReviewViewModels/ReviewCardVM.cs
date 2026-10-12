@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.ViewModels.ReviewVM
+namespace VenueGo.ViewModels.ReviewViewModels
 {
     /// <summary>
     /// 公開評論卡片（顧客端評論專區用）

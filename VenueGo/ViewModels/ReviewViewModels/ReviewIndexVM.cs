@@ -1,4 +1,4 @@
-﻿namespace VenueGo.ViewModels.ReviewVM
+﻿namespace VenueGo.ViewModels.ReviewViewModels
 {
     /// <summary>
     /// 顧客端評論專區的時間範圍。值與規劃檔一致，不要改字串。

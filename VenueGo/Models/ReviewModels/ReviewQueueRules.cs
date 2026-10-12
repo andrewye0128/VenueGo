@@ -1,6 +1,6 @@
 ﻿using System.Linq.Expressions;
 using VenueGo.Models.Entities;
-using VenueGo.ViewModels.ReviewVM;
+using VenueGo.ViewModels.ReviewViewModels;
 
 namespace VenueGo.Models.ReviewModels
 {

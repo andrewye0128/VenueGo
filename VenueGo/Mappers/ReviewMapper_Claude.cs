@@ -1,56 +1,99 @@
 ﻿using VenueGo.Dtos;
 using VenueGo.Dtos.ReviewDtos;
+using VenueGo.Dtos.ReviewDtos.MyReviews;
+using VenueGo.Dtos.ReviewDtos.PublicReviews;
 using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services.ReviewScreening;
-using VenueGo.ViewModels.ReviewVM;
 
 namespace VenueGo.Mappers
 {
     // ════════════════════════════════════════════════════════════════
-    //  顧客端評論：資料表／ViewModel → 給前台的 DTO（9/29 從 CReviewApiController 抽出來）
+    //  顧客端評論：資料表 → 給前台的 DTO（9/29 從 CReviewApiController 抽出來）
     //
     //  組員開發注意事項：「給前台的 API 不要直接回傳 Entity，要轉成 Dtos/ 裡的格式，
     //  轉換的程式放在 Mappers/」。
     //
-    //  這裡只做「轉換」，不查資料庫：要用到的名稱（顯示名稱、場地名稱）由 Controller 查好傳進來。
+    //  這裡只做「轉換」，不查資料庫：要用到的名稱（顯示名稱、場地名稱）由 Service 查好傳進來。
     //  好處是這些方法不需要 DbContext，規則一眼就看得完，也可以直接寫測試。
+    //
+    //  10/10：ViewModel 搬到 Dtos/ 之後，原本「借 VM 來算」的規則直接寫在這裡：
+    //    - 確認區塊的兩行字（原本在 ReviewCreateForVisitVM／ReviewCreateForBookingVM 的 ContextPrimary／ContextSecondary）
+    //    - 公開卡片的顯示名稱（原本在 ReviewCardVM.ResolveDisplayName）
+    //    - 平均分數、百分比（原本在 StarDistributionVM）
+    //    規則本身一個字都沒改，只是換了位置。
     // ════════════════════════════════════════════════════════════════
     public static class ReviewMapper
     {
-        /// <summary>
-        /// 現場評論的確認區塊。借用 ReviewCreateForVisitVM 的 ContextPrimary／ContextSecondary，
-        /// 「M/d HH:mm 使用」這個格式只寫在 VM 那一個地方。
-        /// </summary>
+        // ── 確認區塊 ─────────────────────────────────────────
+
+        /// <summary>現場評論的確認區塊：場地名稱／「M/d HH:mm 使用」。</summary>
         public static ReviewContextDto VisitContext(string? venueName, DateTime rentStartTime)
-        {
-            var vm = new ReviewCreateForVisitVM { VenueName = venueName, RentStartTime = rentStartTime };
-            return new(vm.ContextPrimary, vm.ContextSecondary);
-        }
-
-        /// <summary>預約評論的確認區塊。訂單編號、付款方式的顯示規則在 ReviewCreateForBookingVM 裡。</summary>
-        public static ReviewContextDto BookingContext(int orderId, string? orderNo, byte? paymentMethod)
-        {
-            var vm = new ReviewCreateForBookingVM { OrderId = orderId, OrderNo = orderNo, PaymentMethod = paymentMethod };
-            return new(vm.ContextPrimary, vm.ContextSecondary);
-        }
+            => new(venueName, rentStartTime.ToString("M/d HH:mm") + " 使用");
 
         /// <summary>
-        /// 公開卡片。先組成既有的 ReviewCardVM（顯示名稱、IsRatingOnly 的規則都在 VM 裡），再轉成 DTO。
-        /// 轉的時候丟掉 ReviewId——VM 有、API 不給。
+        /// 預約評論撰寫頁的確認區塊：訂單編號／付款方式。
+        /// 沒有訂單編號字串時退回「訂單 #Id」。
         /// </summary>
-        public static PublicReviewCardDto ToPublicCard(ReviewCardVM card) => new(
-            StarRating:    card.StarRating,
-            Content:       card.Content == null ? null : ReviewTextGuard.MaskForPublic(card.Content),   // 公開時一律遮蔽個資、連結、不雅字詞
-            IsRatingOnly:  card.IsRatingOnly,
-            CreatedAt:     TimeView.From(card.CreatedAt),
-            MentionsVenue: card.MentionsVenue,
-            MentionsStaff: card.MentionsStaff,
-            VenueName:     card.VenueName,
-            DisplayName:   card.DisplayName,
-            Reply:         card.RepliedAt is DateTime at
-                               ? new PublicReplyDto(card.ReplyContent ?? "", TimeView.From(at))
+        public static ReviewContextDto BookingContext(int orderId, string? orderNo, byte? paymentMethod)
+            => new(
+                orderNo ?? $"訂單 #{orderId}",
+                // TODO: PaymentMethod 的代碼對照表要跟負責訂單的組員要，
+                //       拿到之後把數字換成「信用卡」這類看得懂的字。
+                paymentMethod == null ? null : $"付款方式代碼 {paymentMethod}");
+
+        // ── 評論專區 ─────────────────────────────────────────
+
+        /// <summary>
+        /// 公開卡片上的顯示名稱。匿名但暱稱意外是 null 時要有替代文字，否則畫面會空白。
+        /// </summary>
+        public static string PublicDisplayName(bool isAnonymous, string? anonymousNickname, string? memberName)
+            => isAnonymous
+                ? (anonymousNickname ?? "匿名使用者")
+                : (memberName ?? "使用者");
+
+        /// <summary>
+        /// 公開卡片。⚠️ 不帶 ReviewId。
+        /// venueName、memberName 由呼叫端一次查好（不要在這裡一則一則查資料庫）。
+        /// </summary>
+        public static PublicReviewCardDto ToPublicCard(ReviewMain r, string? venueName, string? memberName) => new(
+            StarRating:    r.StarRating,
+            Content:       r.ReviewContent == null ? null : ReviewTextGuard.MaskForPublic(r.ReviewContent),   // 公開時一律遮蔽個資、連結、不雅字詞
+            IsRatingOnly:  string.IsNullOrWhiteSpace(r.ReviewContent),
+            CreatedAt:     TimeView.From(r.CreatedAt),
+            MentionsVenue: r.MentionsVenue,
+            MentionsStaff: r.MentionsStaff,
+            VenueName:     venueName,
+            DisplayName:   PublicDisplayName(r.IsAnonymous, r.AnonymousNickname, memberName),
+            Reply:         r.RepliedAt is DateTime at
+                               ? new PublicReplyDto(r.ReplyContent ?? "", TimeView.From(at))
                                : null);
+
+        /// <summary>
+        /// 星等分布 → 平均分數、總則數、五條長條（5 星在最上面）。
+        /// ⚠️ 總數是 0 時平均和百分比都回 0——新場館或篩選後沒有資料，不能除以零。
+        /// </summary>
+        /// <param name="countByStar">幾顆星 → 幾則。沒有出現的星等當成 0。</param>
+        public static RatingSummaryDto ToRatingSummary(IReadOnlyDictionary<byte, int> countByStar)
+        {
+            int CountOf(int star) => countByStar.GetValueOrDefault((byte)star);
+
+            int total = 0, weighted = 0;
+            for (int s = 1; s <= 5; s++)
+            {
+                total += CountOf(s);
+                weighted += CountOf(s) * s;
+            }
+
+            double average = total == 0 ? 0 : (double)weighted / total;
+            var bars = new[] { 5, 4, 3, 2, 1 }
+                .Select(s => new StarBarDto(s, CountOf(s), total == 0 ? 0 : CountOf(s) * 100 / total))
+                .ToList();
+
+            return new RatingSummaryDto(average, total, bars);
+        }
+
+        // ── 我的評論 ─────────────────────────────────────────
 
         /// <summary>「我的評論」（規格 2-4），員工預覽（2-8）也用同一個。</summary>
         public static MyReviewDto ToMyReview(ReviewMain review, string kind, ReviewContextDto context, string displayName)
@@ -85,7 +128,7 @@ namespace VenueGo.Mappers
                 IsPublic: review.IsPublic,
                 IsSpamMarked: isSpam,
                 SpamReasonText: isSpam ? CustomerSpamReason(review.SpamReason) : null,
-                // 同 MyReviewPageVM.CanToggleVisibility：非垃圾 且 是現場評論
+                // 非垃圾 且 是現場評論（預約評論一律不公開）
                 CanToggleVisibility: !isSpam && kind == ReviewKind.Visit,
                 Reply: reply);
         }

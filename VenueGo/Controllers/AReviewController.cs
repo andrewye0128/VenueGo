@@ -8,7 +8,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
 using static VenueGo.Models.ReviewModels.ReviewQueueRules;   // 10/6 新增：規則搬出去之後，呼叫的地方不用改名字
 using VenueGo.Services.Auth;
-using VenueGo.ViewModels.ReviewVM;
+using VenueGo.ViewModels.ReviewViewModels;
 using VenueGo.Services.Time;
 
 namespace VenueGo.Controllers

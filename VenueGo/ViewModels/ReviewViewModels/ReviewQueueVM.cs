@@ -1,7 +1,7 @@
 ﻿using System.Text.RegularExpressions;
 using VenueGo.Models.ReviewModels;
 
-namespace VenueGo.ViewModels.ReviewVM
+namespace VenueGo.ViewModels.ReviewViewModels
 {
     /// <summary>三個清單的名字。查詢字串、連結、比對都用這裡的常數，不要手打字串。</summary>
     public static class QueueTab

@@ -22,6 +22,10 @@ namespace VenueGo.Extensions
             // 評論資格判定：撰寫、送出、我的評論共用同一套規則（10/9）
             services.AddScoped<IReviewEligibilityService, ReviewEligibilityService>();
 
+            // 會員自己的評論、評論專區查詢：10/10 從 CReviewApiController 抽出來
+            services.AddScoped<IMemberReviewService, MemberReviewService>();
+            services.AddScoped<IPublicReviewQueryService, PublicReviewQueryService>();
+
             // 評論預審：AI 設定、呼叫 AI 用的連線（30 秒逾時）、AI 服務、背景分析
             services.Configure<GeminiOptions>(configuration.GetSection(GeminiOptions.SectionName));
             services.AddHttpClient(GeminiScreeningClient.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(30));

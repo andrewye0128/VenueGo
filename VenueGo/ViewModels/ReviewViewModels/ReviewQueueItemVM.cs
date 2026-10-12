@@ -1,4 +1,4 @@
-namespace VenueGo.ViewModels.ReviewVM
+namespace VenueGo.ViewModels.ReviewViewModels
 {
     /// <summary>館方清單裡的一則評論。顯示用，全部 init。</summary>
     public sealed record ReviewQueueItemVM

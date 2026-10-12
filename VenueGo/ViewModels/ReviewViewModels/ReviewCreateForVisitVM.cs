@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.ViewModels.ReviewVM
+namespace VenueGo.ViewModels.ReviewViewModels
 {
     /// <summary>現場評論撰寫頁（CreateForVisit）</summary>
     public sealed class ReviewCreateForVisitVM : ReviewCreateInputVM

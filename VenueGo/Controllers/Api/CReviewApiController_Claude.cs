@@ -1,22 +1,14 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using System.ComponentModel.DataAnnotations;
-using System.Reflection;
-using VenueGo.Data;
 using VenueGo.Dtos;
-using VenueGo.Dtos.ReviewDtos;
+using VenueGo.Dtos.ReviewDtos.MyReviews;
+using VenueGo.Dtos.ReviewDtos.PublicReviews;
+using VenueGo.Dtos.ReviewDtos.WriteReview;
 using VenueGo.Helpers;
-using VenueGo.Mappers;
 using VenueGo.Models.Constants;
-using VenueGo.Models.Entities;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Reviews;
-using VenueGo.Services.ReviewScreening;
-using VenueGo.ViewModels.ReviewVM;
-using VenueGo.Models.ReviewModels;
-using VenueGo.Services.Time;
 
 namespace VenueGo.Controllers.Api
 {
@@ -32,6 +24,15 @@ namespace VenueGo.Controllers.Api
     //       預設的驗證方式是 Cookie（後台員工用），不指定的話前台帶 JWT 也會被當成沒登入。
     //    3. 「能不能評論」的判斷搬到 IReviewEligibilityService（Services/Reviews/）。
     //    4. 舊的 Razor 版 CReviewController 退役，這支是唯一的一份。
+    //
+    //  ── 10/10 Service 抽取 ────────────────────────────────────────
+    //  規則全部搬到 Services/Reviews/：
+    //    - IPublicReviewQueryService：評論專區（上架條件、篩選、排序、星等分布）
+    //    - IMemberReviewService：撰寫頁設定、送出、我的評論、已讀、切換公開、表態、員工預覽
+    //    - IReviewEligibilityService：能不能評論（10/9 已抽出，上面兩個 Service 會呼叫它）
+    //  這支 Controller 只剩 HTTP 的事：路由、[Authorize]、檢查請求本體、
+    //  把 Service 的結果翻成狀態碼＋ApiResult（第一區）。不再直接用 DbContext。
+    //  原本給 API 用的 ViewModel 搬到 Dtos/ReviewDtos/，改成 Dto 結尾。
     //
     //  ── 為什麼叫 CReviewApiController，不沿用 CReviewController ─────────
     //  當初 Razor 版還在，兩個同名的 Controller 在預設路由下會衝突，所以換了名字。
@@ -58,47 +59,34 @@ namespace VenueGo.Controllers.Api
 
     [ApiController]
     [Route("api/reviews")]
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     // 原本：[AutoValidateAntiforgeryToken]   // 所有 POST 都要驗防偽 token（GET 不驗）。token 放在 RequestVerificationToken 標頭，見規格 0-6
-    // 10/10 拿掉：評論 API 改用 JWT 之後，防偽 token 綁的是「未登入者」，送出時對不上（「頁面已經過期」）。
-    //   JWT 放在 Authorization 標頭，瀏覽器不會自動帶，CSRF 不成立，所以不需要防偽 token。
+    // 10/10 拿掉防偽 token 驗證（RPV 驗收時送出評論出現「頁面已經過期」）：
+    //   1. 原因：防偽 token 會綁定「拿 token 當下的登入者」。前台拿 token 的 /api/antiforgery/token 走預設的 Cookie 驗證，
+    //      認不出 JWT，所以拿到的是「未登入者」的 token；送評論時這支用 JWT 認出是會員，兩邊對不上 → 400。
+    //      沙盒已重現：錯誤訊息是「token was meant for a different claims-based user than the current user」。
+    //   2. 為什麼可以拿掉：防偽 token 防的是 CSRF——別的網站利用「瀏覽器會自動帶 Cookie」冒用你的身分送請求。
+    //      這支的端點全部用 JWT（放在 Authorization 標頭，瀏覽器不會自動帶），別的網站拿不到、也送不出來，CSRF 不成立。
+    //      組裡其他 Controllers/Api 底下用 JWT 的 API 也都沒有掛防偽 token。
+    //   3. 員工預覽（preview）是 Cookie 驗證，但它是 GET（只讀），本來就不驗防偽 token。
+    //   ⚠️ 之後如果在這支新增「用 Cookie 驗證的 POST」，那一支要自己掛 [ValidateAntiForgeryToken]。
+    // 10/10 新增：不讓瀏覽器快取這支 API 的任何回應（RPV 驗收時「超過可以評論的時間」卡住的修正）。
+    //   Chrome 會把沒有快取標頭的 410 Gone 當成「永久有效」存起來，之後同一個網址都直接拿快取，不再問伺服器：
+    //   時光機撥回來、開新分頁、重新整理都一樣卡在 410。沙盒用 Chromium 重現過，加上這行之後每次都會重新詢問。
+    //   評論 API 回的都是會員個人的資料，本來就不該被快取（no-store）。
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public sealed class CReviewApiController(
-        dbVenueContext db,
-        ICurrentUserService currentUserService,
-        IReviewEligibilityService eligibility,
-        ITimeService timeService,
-        IReviewScreeningService screening) : ControllerBase
+        IPublicReviewQueryService publicReviews,
+        IMemberReviewService memberReviews,
+        ICurrentUserService currentUserService) : ControllerBase
     {
-        private readonly dbVenueContext _db = db;
+        private readonly IPublicReviewQueryService _publicReviews = publicReviews;
+        private readonly IMemberReviewService _memberReviews = memberReviews;
         private readonly ICurrentUserService _currentUser = currentUserService;
-        private readonly IReviewEligibilityService _eligibility = eligibility;
-        private readonly ITimeService _timeService = timeService;
-        private readonly IReviewScreeningService _screening = screening;
-
-        private const string KindVisit = ReviewKind.Visit;
-        private const string KindBooking = ReviewKind.Booking;
-
-        /// <summary>
-        /// 評論內容的字數上限，直接讀 ReviewCreateInputVM 上的 [StringLength(1000)]。
-        ///
-        /// 為什麼不寫死 1000：這個數字已經寫在 VM 的驗證屬性上了，
-        /// 這裡再寫一次就是兩個地方各記一份，改了一邊忘了另一邊，
-        /// 前端顯示的上限就會跟後端擋的上限對不起來。
-        /// static readonly 只在第一次用到時讀一次，之後不再讀。
-        /// </summary>
-        private static readonly int ContentMaxLength =
-            typeof(ReviewCreateInputVM)
-                .GetProperty(nameof(ReviewCreateInputVM.ReviewContent))!
-                .GetCustomAttribute<StringLengthAttribute>()!
-                .MaximumLength;
 
         // ════════════════════════════════════════════════════════
-        //  第一區：統一的失敗回應（規格 0-3）
+        //  第一區：Service 的結果 → HTTP 回應（規格 0-3）
+        //  每種結果對應哪個狀態碼、哪個 ErrorCode，只寫在這一個 switch 裡。
         // ════════════════════════════════════════════════════════
-
-        private const string MsgNotFound = "查無指定評論";
-        private const string MsgExpired = "超過可以評論的時間囉，下次請早";
-        private const string MsgAlreadyReviewed = "這張憑證已經評論過了";
 
         private ObjectResult Fail(int status, string errorCode, string message, object? data = null)
             => StatusCode(status, new ApiResult<object?>
@@ -109,239 +97,50 @@ namespace VenueGo.Controllers.Api
                 Data = data
             });
 
-        private ObjectResult NotFoundResult() => Fail(404, "NotFound", MsgNotFound);
+        /// <summary>失敗的結果種類 → 狀態碼＋ErrorCode＋訊息。</summary>
+        private ObjectResult FailFor(MemberReviewOutcome outcome) => outcome switch
+        {
+            MemberReviewOutcome.NotFound        => Fail(404, "NotFound", "查無指定評論"),
+            MemberReviewOutcome.Expired         => Fail(410, "Expired", "超過可以評論的時間囉，下次請早"),
+            MemberReviewOutcome.AlreadyReviewed => Fail(409, "AlreadyReviewed", "這張憑證已經評論過了"),
+            MemberReviewOutcome.NoReply         => Fail(409, "NoReply", "館方還沒有回覆，無法表態"),
+            MemberReviewOutcome.AlreadyRated    => Fail(409, "AlreadyRated", "你已經表態過了"),
+            MemberReviewOutcome.SpamMarked      => Fail(409, "SpamMarked", "這則評論已下架，無法切換公開狀態"),
+            // Ok 不是失敗；其他值代表有人新增了結果種類卻忘了處理。
+            // 直接丟例外讓它在開發時就被看到，不要默默回一個不對的狀態碼。
+            _ => throw new InvalidOperationException($"未處理的結果種類：{outcome}")
+        };
+
+        /// <summary>成功 → 200＋ApiResult&lt;T&gt;；失敗 → <see cref="FailFor"/>。</summary>
+        private IActionResult ToResponse<T>(MemberReviewResult<T> result)
+            => result.Outcome == MemberReviewOutcome.Ok
+                ? Ok(ApiResult<T>.Ok(result.Data!))
+                : FailFor(result.Outcome);
+
+        /// <summary>送出評論用：成功只回訊息，沒有 Data。</summary>
+        private IActionResult ToCreatedResponse(MemberReviewOutcome outcome)
+            => outcome == MemberReviewOutcome.Ok
+                ? Ok(ApiResult.Ok("評論已送出"))
+                : FailFor(outcome);
 
         // 9/29：原本的 ValidationFailed()（把 ModelState 整理成規格 0-5）搬到 Helpers/ApiResponses.InvalidModelState，
         //       由 [ApiController] 自動呼叫，全站 API 共用。
 
-        // ════════════════════════════════════════════════════════
-        //  第二區：資格判定
-        //  10/9 起規則在 IReviewEligibilityService（Services/Reviews/），這裡只負責把結果翻成 HTTP 回應。
-        // ════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// 撰寫用：不是 Ok 就回對應的錯誤（規格 0-3）。回傳 null 代表「可以繼續」。
-        /// Razor 版要分兩個多載，是因為「已評過」要轉去的網址參數不同；
-        /// API 版只回錯誤碼、由前端決定去哪，所以一個就夠了。
-        /// </summary>
-        private ObjectResult? RejectIfCannotWrite(ReviewEligibilityState state) => state switch
-        {
-            ReviewEligibilityState.Ok              => null,
-            ReviewEligibilityState.NotFound        => NotFoundResult(),
-            ReviewEligibilityState.Expired         => Fail(410, "Expired", MsgExpired),
-            ReviewEligibilityState.AlreadyReviewed => Fail(409, "AlreadyReviewed", MsgAlreadyReviewed),
-            // 四種狀態都列在上面了。會走到這裡代表有人新增了狀態卻忘了處理，
-            // 直接丟例外讓它在開發時就被看到，不要默默當成「可以評論」放行。
-            _ => throw new InvalidOperationException($"未處理的資格狀態：{state}")
-        };
-
-        // ════════════════════════════════════════════════════════
-        //  第三區：組回應
-        // ════════════════════════════════════════════════════════
-
-        private static ReviewContextDto VisitContext(string? venueName, DateTime rentStartTime)
-            => ReviewMapper.VisitContext(venueName, rentStartTime);
-
-        private async Task<string> ResolveDisplayNameAsync(ReviewMain review)
-        {
-            if (review.IsAnonymous)
-                return review.AnonymousNickname ?? "匿名使用者";
-
-            var user = await _db.Users.FirstOrDefaultAsync(u => u.UserId == review.UserId);
-            return user?.Name ?? "已停用的帳號";
-        }
-
-        /// <summary>顯示名稱要查資料庫，在這裡查好；其餘的轉換在 ReviewMapper.ToMyReview。</summary>
-        private async Task<MyReviewDto> BuildMyReviewAsync(ReviewMain review, string kind, ReviewContextDto context)
-            => ReviewMapper.ToMyReview(review, kind, context, await ResolveDisplayNameAsync(review));
-
-        // ── 評論專區用（照搬 CReviewController）──────────────
-
-        /// <summary>
-        /// 上架條件。唯一一份（Razor 版刪掉之後）。
-        /// 只有現場評論、非垃圾、顧客選了公開，而且「已回覆」或「建立超過緩衝天數」。
-        /// 最後那條是刻意的：館方不作為的預設結果是公開，不能用不回覆壓著負評。
-        /// </summary>
-        private IQueryable<ReviewMain> PublishedReviews(DateTime now)
-        {
-            DateTime cutoff = now.AddDays(-ReviewPolicy.PublicBufferDays);
-
-            return _db.ReviewMains.Where(r =>
-                r.ReviewPerVisitId != null
-                && r.SpamMarkedAt == null
-                && r.IsPublic
-                && (r.RepliedAt != null || r.CreatedAt <= cutoff));
-        }
-
-        /// <summary>類型、時間範圍、有無內容。星等「不」放進來——分布圖要用這個結果算。</summary>
-        private IQueryable<ReviewMain> ApplyCardFilters(
-            IQueryable<ReviewMain> q, int? sportTypeId, string range, bool hasContentOnly, DateTime todayStart)
-        {
-            if (sportTypeId is int st)
-            {
-                var visitIds = _db.ReviewPerVisits
-                                  .Where(v => v.SportTypeId == st)
-                                  .Select(v => v.ReviewPerVisitId);
-                q = q.Where(r => visitIds.Contains(r.ReviewPerVisitId!.Value));
-            }
-
-            int? days = ReviewRange.DaysOf(range);
-            if (days != null)
-            {
-                DateTime from = todayStart.AddDays(-days.Value);
-                q = q.Where(r => r.CreatedAt >= from);
-            }
-
-            if (hasContentOnly)
-                q = q.Where(r => r.ReviewContent != null && r.ReviewContent != "");
-
-            return q;
-        }
-
-        private static IQueryable<ReviewMain> ApplyCardSort(IQueryable<ReviewMain> q, string sort) => sort switch
-        {
-            ReviewSort.Newest  => q.OrderByDescending(r => r.CreatedAt).ThenByDescending(r => r.StarRating),
-            ReviewSort.Highest => q.OrderByDescending(r => r.StarRating).ThenByDescending(r => r.CreatedAt),
-            ReviewSort.Lowest  => q.OrderBy(r => r.StarRating).ThenByDescending(r => r.CreatedAt),
-            _                  => q.OrderByDescending(r => r.CreatedAt)
-        };
-
-        private static string NormalizeRange(string? range) => range switch
-        {
-            ReviewRange.Week  => ReviewRange.Week,
-            ReviewRange.Month => ReviewRange.Month,
-            ReviewRange.Year  => ReviewRange.Year,     // ⚠️ Razor 版漏了這一行，見檔尾「跟 Razor 版不同的地方」
-            ReviewRange.All   => ReviewRange.All,
-            _                 => ReviewRange.Default
-        };
-
-        private static string NormalizeSort(string? sort) => sort switch
-        {
-            ReviewSort.Newest  => ReviewSort.Newest,
-            ReviewSort.Highest => ReviewSort.Highest,
-            ReviewSort.Lowest  => ReviewSort.Lowest,
-            _                  => ReviewSort.Default
-        };
-
-        private static int? NormalizeStar(int? star) => star is >= 1 and <= 5 ? star : null;
-
-        /// <summary>
-        /// 先組成既有的 ReviewCardVM（顯示名稱、IsRatingOnly 這些規則都在 VM 裡），
-        /// 再用 ReviewMapper.ToPublicCard 轉成 API 的形狀（轉的時候丟掉 ReviewId）。
-        /// 跨表查詢照舊：收集 id → 每張表各查一次 → Dictionary 取值。
-        /// </summary>
-        private async Task<List<PublicReviewCardDto>> BuildCardsAsync(List<ReviewMain> reviews)
-        {
-            if (reviews.Count == 0) return new List<PublicReviewCardDto>();
-
-            var visitIds = reviews.Where(r => r.ReviewPerVisitId != null)
-                                  .Select(r => r.ReviewPerVisitId!.Value)
-                                  .Distinct().ToList();
-            var visits = await _db.ReviewPerVisits
-                                  .Where(v => visitIds.Contains(v.ReviewPerVisitId))
-                                  .ToDictionaryAsync(v => v.ReviewPerVisitId);
-
-            var venueIds = visits.Values.Select(v => v.VenueId).Distinct().ToList();
-            var venueNames = await _db.Venues
-                                      .Where(v => venueIds.Contains(v.VenueId))
-                                      .ToDictionaryAsync(v => v.VenueId, v => v.VenueName);
-
-            var userIds = reviews.Where(r => !r.IsAnonymous && r.UserId != null)
-                                 .Select(r => r.UserId!.Value)
-                                 .Distinct().ToList();
-            var userNames = await _db.Users
-                                     .Where(u => userIds.Contains(u.UserId))
-                                     .ToDictionaryAsync(u => u.UserId, u => u.Name);
-
-            return reviews.Select(r =>
-            {
-                ReviewPerVisit? visit = r.ReviewPerVisitId is int vid ? visits.GetValueOrDefault(vid) : null;
-
-                var card = new ReviewCardVM
-                {
-                    ReviewId      = r.ReviewId,
-                    StarRating    = r.StarRating,
-                    Content       = r.ReviewContent,
-                    CreatedAt     = r.CreatedAt,
-                    MentionsVenue = r.MentionsVenue,
-                    MentionsStaff = r.MentionsStaff,
-                    VenueName     = visit != null ? venueNames.GetValueOrDefault(visit.VenueId) : null,
-                    DisplayName   = ReviewCardVM.ResolveDisplayName(
-                                        r.IsAnonymous, r.AnonymousNickname,
-                                        r.UserId is int uid ? userNames.GetValueOrDefault(uid) : null),
-                    ReplyContent  = r.ReplyContent,
-                    RepliedAt     = r.RepliedAt
-                };
-
-                return ReviewMapper.ToPublicCard(card);
-            }).ToList();
-        }
-
-        // ── 寫入用（照搬）─────────────────────────────────────
-
-        /// <summary>由輸入組出要存的評論。visitId 與 bookingId 一定只有一個有值（XOR 約束）。</summary>
-        private ReviewMain BuildNewReview(ReviewCreateInputVM vm, int? visitId, int? bookingId, int? userId)
-        {
-            string? nickname = vm.IsAnonymous ? NicknameGenerator.Generate() : null;
-
-            return new ReviewMain
-            {
-                ReviewPerVisitId = visitId,
-                ReviewPerBookingId = bookingId,
-                UserId = userId,
-                StarRating = vm.StarRating!.Value,               // ModelState 已保證不為 null
-                ReviewContent = string.IsNullOrWhiteSpace(vm.ReviewContent)
-                                  ? null                         // 純空白存 null，否則撞 Content_NotBlank
-                                  : vm.ReviewContent.Trim(),
-                IsAnonymous = vm.IsAnonymous,
-                IsPublic = vm.IsPublic,
-                MentionsVenue = vm.MentionsVenue,
-                MentionsStaff = vm.MentionsStaff,
-                AnonymousNickname = nickname,
-                CreatedAt = _timeService.Now
-            };
-        }
-
-        /// <summary>
-        /// 記錄「顧客已看過回覆」。只在「有回覆且尚未記錄」時寫，重複呼叫不會蓋掉第一次的時間。
-        /// 回傳這次之後「是不是已讀」。
-        /// </summary>
-        private async Task<bool> MarkReplyViewedIfNeededAsync(ReviewMain review)
-        {
-            if (review.RepliedAt == null) return false;
-            if (review.ReplyViewedAt != null) return true;
-
-            review.ReplyViewedAt = _timeService.Now;
-            await _db.SaveChangesAsync();
-            return true;
-        }
-
-        private async Task<IActionResult> SetSatisfactionCoreAsync(ReviewMain review, SatisfactionRequest? body)
-        {
-            if (review.RepliedAt == null)
-                return Fail(409, "NoReply", "館方還沒有回覆，無法表態");
-            if (review.ReplySatisfaction != null)
-                return Fail(409, "AlreadyRated", "你已經表態過了");
-
-            review.ReplyViewedAt ??= _timeService.Now;   // 保險：約束要求表態前一定已讀
-            review.ReplySatisfaction = body!.Satisfaction!.Value;
-            await _db.SaveChangesAsync();
-
-            return Ok(ApiResult<SatisfactionResult>.Ok(new SatisfactionResult(review.ReplySatisfaction.Value)));
-        }
-
-        private static bool IsValidSatisfaction(SatisfactionRequest? body)
+        private static bool IsValidSatisfaction(SatisfactionRequestDto? body)
             => body?.Satisfaction is byte s && s <= 2;
 
         private ObjectResult InvalidSatisfaction() => Fail(400, "InvalidSatisfaction", "輸入異常，請重試");
+
+        // 10/10：第二區（資格判定）、第三區（組回應、寫入）的私有方法都搬到 Services/Reviews/，
+        //        區塊編號保留不動，方便對照舊版。
 
         // ════════════════════════════════════════════════════════
         //  第四區：Action
         //  現場評論與預約評論分成兩個 Action，而不是共用一個 {kind}：
         //    1. 兩邊的識別碼意思不同（現場是憑證 Id、預約是訂單 Id），分開寫比較不會搞混。
         //    2. 路由寫 {id:int}／{orderId:int}，不是整數的網址直接 404，不必進 Action 再檢查。
-        //  兩邊共用的邏輯都在上面的私有方法和 IReviewEligibilityService 裡，
-        //  Action 本身只剩「接參數 → 呼叫 → 回應」。
+        //  兩邊共用的邏輯都在 Services/Reviews/ 裡（10/10 起），
+        //  Action 本身只剩「接參數 → 呼叫 Service → 用第一區翻成回應」。
         //
         //  ── 會員限定的端點都掛這一行 ──────────────────────────────
         //  [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
@@ -375,62 +174,7 @@ namespace VenueGo.Controllers.Api
         public async Task<IActionResult> GetPublicReviews(
             int? sportTypeId, string? range, int? star, bool hasContentOnly = false, string? sort = null)
         {
-            string rg = NormalizeRange(range);
-            string so = NormalizeSort(sort);
-            int? st = NormalizeStar(star);
-
-            DateTime now = _timeService.Now;
-            DateTime todayStart = _timeService.Today;
-
-            var sportTabs = new List<SportTabVM> { new(null, "全部") };
-            sportTabs.AddRange(await _db.SportTypes
-                                        .Where(s => s.IsActive)
-                                        .OrderBy(s => s.SportTypeId)
-                                        .Select(s => new SportTabVM(s.SportTypeId, s.SportName))
-                                        .ToListAsync());
-
-            // 星等篩選之前的結果：分布圖與平均分數用這一份算
-            var beforeStar = ApplyCardFilters(PublishedReviews(now), sportTypeId, rg, hasContentOnly, todayStart);
-
-            var counts = await beforeStar
-                .GroupBy(r => r.StarRating)
-                .Select(g => new { Star = g.Key, Count = g.Count() })
-                .ToListAsync();
-
-            int CountOf(int n) => counts.FirstOrDefault(c => c.Star == n)?.Count ?? 0;
-
-            // 沿用 StarDistributionVM：平均、百分比的算法（含「總數為 0」的處理）只寫在那裡
-            var dist = new StarDistributionVM
-            {
-                Star5 = CountOf(5),
-                Star4 = CountOf(4),
-                Star3 = CountOf(3),
-                Star2 = CountOf(2),
-                Star1 = CountOf(1)
-            };
-            var bars = new[] { 5, 4, 3, 2, 1 }
-                .Select(s => new StarBarDto(s, dist.CountOf(s), dist.PercentOf(s)))
-                .ToList();
-
-            var listQuery = beforeStar;
-            if (st is int s)
-                listQuery = listQuery.Where(r => r.StarRating == s);
-
-            // ⚠️ 還沒有分頁。資料量變大之後要補 Skip / Take（規格已經預留 page／totalPages）。
-            var reviews = await ApplyCardSort(listQuery, so).ToListAsync();
-
-            var data = new PublicReviewListDto(
-                Filter: new ReviewFilterDto(sportTypeId, rg, st, hasContentOnly, so),
-                Defaults: new ReviewDefaultsDto(ReviewRange.Default, ReviewSort.Default),
-                Options: new ReviewOptionsDto(
-                    ReviewRange.Options.Select(o => new OptionItem(o.Value, o.Text)).ToList(),
-                    ReviewSort.Options.Select(o => new OptionItem(o.Value, o.Text)).ToList()),
-                SportTabs: sportTabs,
-                Summary: new RatingSummaryDto(dist.Average, dist.Total, bars),
-                Items: await BuildCardsAsync(reviews),
-                Page: 1,
-                TotalPages: 1);
-
+            var data = await _publicReviews.GetPublicReviewsAsync(sportTypeId, range, star, hasContentOnly, sort);
             return Ok(ApiResult<PublicReviewListDto>.Ok(data));
         }
 
@@ -459,27 +203,7 @@ namespace VenueGo.Controllers.Api
         [ProducesResponseType<ApiResult>(StatusCodes.Status410Gone)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
         public async Task<IActionResult> GetVisitForm(int id)
-        {
-            var r = await _eligibility.CheckVisitAsync(id, _currentUser.UserId);
-            var reject = RejectIfCannotWrite(r.State);
-            if (reject != null) return reject;
-
-            var venue = await _db.Venues.FirstOrDefaultAsync(v => v.VenueId == r.Ticket!.VenueId);
-
-            // 10/9 起一定是會員本人：匿名改成自己選（以前沒登入時會鎖定匿名）
-            var data = new WriteFormDto(
-                Kind: KindVisit,
-                Context: VisitContext(venue?.VenueName, r.Ticket!.RentStartTime),
-                Form: new WriteFormOptionsDto(
-                    ShowMentions: true,
-                    ShowAnonymous: true,
-                    CanChooseAnonymous: true,
-                    ShowPublic: true,
-                    Initial: new WriteFormInitialDto(IsAnonymous: false, IsPublic: true),
-                    ContentMaxLength: ContentMaxLength));
-
-            return Ok(ApiResult<WriteFormDto>.Ok(data));
-        }
+            => ToResponse(await _memberReviews.GetVisitFormAsync(id, _currentUser.UserId));
 
         /// <summary>取得預約評論表單</summary>
         /// <remarks>
@@ -506,33 +230,13 @@ namespace VenueGo.Controllers.Api
         [ProducesResponseType<ApiResult>(StatusCodes.Status410Gone)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
         public async Task<IActionResult> GetBookingForm(int orderId)
-        {
-            var r = await _eligibility.CheckBookingAsync(orderId, _currentUser.UserId);
-            var reject = RejectIfCannotWrite(r.State);
-            if (reject != null) return reject;
-
-            var order = await _db.Orders.FirstOrDefaultAsync(o => o.OrderId == r.Ticket!.OrderId);
-
-            // 預約評論不公開、不匿名；提及標籤照目前的 CreateForBooking.cshtml，先不顯示
-            var data = new WriteFormDto(
-                Kind: KindBooking,
-                Context: ReviewMapper.BookingContext(r.Ticket!.OrderId, order?.OrderNo, r.Ticket.PaymentMethod),
-                Form: new WriteFormOptionsDto(
-                    ShowMentions: false,
-                    ShowAnonymous: false,
-                    CanChooseAnonymous: false,
-                    ShowPublic: false,
-                    Initial: new WriteFormInitialDto(IsAnonymous: false, IsPublic: false),
-                    ContentMaxLength: ContentMaxLength));
-
-            return Ok(ApiResult<WriteFormDto>.Ok(data));
-        }
+            => ToResponse(await _memberReviews.GetBookingFormAsync(orderId, _currentUser.UserId));
 
         // ── 2-3 送出評論 ─────────────────────────────────────
 
         /// <summary>送出現場評論</summary>
         /// <remarks>
-        /// **需要會員本人登入**，也需要防偽 token（`RequestVerificationToken` 標頭）。
+        /// **需要會員本人登入。**
         ///
         /// ### 注意
         /// - 資格會在送出時重新判定一次：表單可能在畫面上停了好幾天。
@@ -556,28 +260,18 @@ namespace VenueGo.Controllers.Api
         [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status410Gone)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> CreateVisit(int id, [FromBody] ReviewCreateForVisitVM? vm)
+        public async Task<IActionResult> CreateVisit(int id, [FromBody] ReviewCreateForVisitDto? vm)
         {
-            // ⚠️ 資格要重驗一次：表單可能停在畫面上好幾天，也可能有人繞過畫面直接送請求
-            var r = await _eligibility.CheckVisitAsync(id, _currentUser.UserId);
-            var reject = RejectIfCannotWrite(r.State);
-            if (reject != null) return reject;
-
             // 欄位驗證（星等必填、字數上限⋯）已經由 [ApiController] 在進來之前做完了；這裡只剩「整個本體沒送」
             if (vm == null) return BadRequest(ApiResponses.EmptyBody());
 
-            // 10/9 起一定是會員本人（資格判定已經比對過憑證上的 UserId），匿名照會員自己的選擇
-            var review = BuildNewReview(vm, r.Ticket!.ReviewPerVisitId, null, _currentUser.UserId);
-            _db.ReviewMains.Add(review);
-            await _db.SaveChangesAsync();
-            await _screening.CreateForReviewAsync(review);   // 評論預審：建立預審紀錄（沒設定金鑰時什麼都不做）
-
-            return Ok(ApiResult.Ok("評論已送出"));
+            // 資格會在 Service 裡重驗一次：表單可能停在畫面上好幾天，也可能有人繞過畫面直接送請求
+            return ToCreatedResponse(await _memberReviews.CreateVisitReviewAsync(id, _currentUser.UserId, vm));
         }
 
         /// <summary>送出預約評論</summary>
         /// <remarks>
-        /// **需要會員本人登入**，也需要防偽 token（`RequestVerificationToken` 標頭）。
+        /// **需要會員本人登入。**
         ///
         /// ### 注意
         /// - 預約評論一律不公開、不匿名：前端送來的這兩個值會被忽略。
@@ -602,24 +296,12 @@ namespace VenueGo.Controllers.Api
         [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status410Gone)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> CreateBooking(int orderId, [FromBody] ReviewCreateForBookingVM? vm)
+        public async Task<IActionResult> CreateBooking(int orderId, [FromBody] ReviewCreateForBookingDto? vm)
         {
-            var r = await _eligibility.CheckBookingAsync(orderId, _currentUser.UserId);
-            var reject = RejectIfCannotWrite(r.State);
-            if (reject != null) return reject;
-
-            // 欄位驗證（星等必填、字數上限⋯）已經由 [ApiController] 在進來之前做完了；這裡只剩「整個本體沒送」
             if (vm == null) return BadRequest(ApiResponses.EmptyBody());
-            // 預約評論一律不公開、不匿名，不接受前端送來的值
-            vm.IsPublic = false;
-            vm.IsAnonymous = false;
 
-            var review = BuildNewReview(vm, null, r.Ticket!.ReviewPerBookingId, _currentUser.UserId);
-            _db.ReviewMains.Add(review);
-            await _db.SaveChangesAsync();
-            await _screening.CreateForReviewAsync(review);   // 評論預審：建立預審紀錄（沒設定金鑰時什麼都不做）
-
-            return Ok(ApiResult.Ok("評論已送出"));
+            // 預約評論一律不公開、不匿名：DTO 上沒有這兩個欄位，Service 固定存成 false
+            return ToCreatedResponse(await _memberReviews.CreateBookingReviewAsync(orderId, _currentUser.UserId, vm));
         }
 
         // ── 2-4 我的評論（純讀取，不寫入已讀）─────────────────
@@ -638,16 +320,7 @@ namespace VenueGo.Controllers.Api
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
         public async Task<IActionResult> GetVisitReview(int id)
-        {
-            var r = await _eligibility.CheckVisitAsync(id, _currentUser.UserId);
-            if (r.State != ReviewEligibilityState.AlreadyReviewed) return NotFoundResult();
-
-            var venue = await _db.Venues.FirstOrDefaultAsync(v => v.VenueId == r.Ticket!.VenueId);
-            var data = await BuildMyReviewAsync(r.ExistingReview!, KindVisit,
-                                                VisitContext(venue?.VenueName, r.Ticket!.RentStartTime));
-
-            return Ok(ApiResult<MyReviewDto>.Ok(data));
-        }
+            => ToResponse(await _memberReviews.GetVisitReviewAsync(id, _currentUser.UserId));
 
         /// <summary>查看我的預約評論</summary>
         /// <remarks>
@@ -663,16 +336,7 @@ namespace VenueGo.Controllers.Api
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
         public async Task<IActionResult> GetBookingReview(int orderId)
-        {
-            var r = await _eligibility.CheckBookingAsync(orderId, _currentUser.UserId);
-            if (r.State != ReviewEligibilityState.AlreadyReviewed) return NotFoundResult();
-
-            var order = await _db.Orders.FirstOrDefaultAsync(o => o.OrderId == r.Ticket!.OrderId);
-            var data = await BuildMyReviewAsync(r.ExistingReview!, KindBooking,
-                                                new ReviewContextDto(order?.OrderNo, null));
-
-            return Ok(ApiResult<MyReviewDto>.Ok(data));
-        }
+            => ToResponse(await _memberReviews.GetBookingReviewAsync(orderId, _currentUser.UserId));
 
         // ── 2-8 員工預覽 ─────────────────────────────────────
 
@@ -698,43 +362,13 @@ namespace VenueGo.Controllers.Api
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [Authorize(Roles = RoleNames.BackOffice)]
         public async Task<IActionResult> GetPreview(int reviewId)
-        {
-            var review = await _db.ReviewMains.FirstOrDefaultAsync(r => r.ReviewId == reviewId);
-            if (review == null) return NotFoundResult();
-
-            MyReviewDto data;
-
-            if (review.ReviewPerVisitId is int visitId)
-            {
-                var ticket = await _db.ReviewPerVisits.FirstOrDefaultAsync(v => v.ReviewPerVisitId == visitId);
-                if (ticket == null) return NotFoundResult();
-
-                var venue = await _db.Venues.FirstOrDefaultAsync(v => v.VenueId == ticket.VenueId);
-                data = await BuildMyReviewAsync(review, KindVisit, VisitContext(venue?.VenueName, ticket.RentStartTime));
-            }
-            else if (review.ReviewPerBookingId is int bookingId)
-            {
-                var ticket = await _db.ReviewPerBookings.FirstOrDefaultAsync(b => b.ReviewPerBookingId == bookingId);
-                if (ticket == null) return NotFoundResult();
-
-                var order = await _db.Orders.FirstOrDefaultAsync(o => o.OrderId == ticket.OrderId);
-                data = await BuildMyReviewAsync(review, KindBooking, new ReviewContextDto(order?.OrderNo, null));
-            }
-            else
-            {
-                // 資料庫的 XOR 約束保證兩個一定剛好有一個，理論上到不了這裡。
-                // 真的到了代表資料異常，當成查不到，不要回一個種類不明的畫面。
-                return NotFoundResult();
-            }
-
-            return Ok(ApiResult<MyReviewDto>.Ok(data));
-        }
+            => ToResponse(await _memberReviews.GetPreviewAsync(reviewId));
 
         // ── 2-5 記錄已讀 ─────────────────────────────────────
 
         /// <summary>記錄已讀館方回覆</summary>
         /// <remarks>
-        /// 顧客看到館方回覆之後由前端呼叫，用來統計回覆的已讀率。**需要會員本人登入**，也需要防偽 token。
+        /// 顧客看到館方回覆之後由前端呼叫，用來統計回覆的已讀率。**需要會員本人登入。**
         ///
         /// ### 注意
         /// - 只在「有回覆而且還沒記錄過」時寫入；重複呼叫不會蓋掉第一次的時間。
@@ -744,43 +378,31 @@ namespace VenueGo.Controllers.Api
         /// <response code="200">成功，Data.viewed 表示目前是否已記錄為已讀</response>
         /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         [HttpPost("visit/{id:int}/reply-viewed")]
-        [ProducesResponseType<ApiResult<ReplyViewedResult>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ApiResult<ReplyViewedDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
         public async Task<IActionResult> MarkVisitReplyViewed(int id)
-        {
-            var r = await _eligibility.CheckVisitAsync(id, _currentUser.UserId);
-            if (r.State != ReviewEligibilityState.AlreadyReviewed) return NotFoundResult();
-
-            bool viewed = await MarkReplyViewedIfNeededAsync(r.ExistingReview!);
-            return Ok(ApiResult<ReplyViewedResult>.Ok(new ReplyViewedResult(viewed)));
-        }
+            => ToResponse(await _memberReviews.MarkVisitReplyViewedAsync(id, _currentUser.UserId));
 
         /// <summary>記錄已讀館方回覆</summary>
         /// <remarks>
-        /// 預約評論版本，規則同現場評論。**需要會員本人登入**，也需要防偽 token。
+        /// 預約評論版本，規則同現場評論。**需要會員本人登入。**
         /// </remarks>
         /// <param name="orderId" example="9002">訂單 Id</param>
         /// <response code="200">成功，Data.viewed 表示目前是否已記錄為已讀</response>
         /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         [HttpPost("booking/{orderId:int}/reply-viewed")]
-        [ProducesResponseType<ApiResult<ReplyViewedResult>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ApiResult<ReplyViewedDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
         public async Task<IActionResult> MarkBookingReplyViewed(int orderId)
-        {
-            var r = await _eligibility.CheckBookingAsync(orderId, _currentUser.UserId);
-            if (r.State != ReviewEligibilityState.AlreadyReviewed) return NotFoundResult();
-
-            bool viewed = await MarkReplyViewedIfNeededAsync(r.ExistingReview!);
-            return Ok(ApiResult<ReplyViewedResult>.Ok(new ReplyViewedResult(viewed)));
-        }
+            => ToResponse(await _memberReviews.MarkBookingReplyViewedAsync(orderId, _currentUser.UserId));
 
         // ── 2-6 切換公開（只有現場評論）───────────────────────
 
         /// <summary>切換評論公開</summary>
         /// <remarks>
-        /// 顧客把自己的現場評論改成公開或不公開。只有現場評論有這支（預約評論一律不公開）。**需要會員本人登入**，也需要防偽 token。
+        /// 顧客把自己的現場評論改成公開或不公開。只有現場評論有這支（預約評論一律不公開）。**需要會員本人登入。**
         ///
         /// 被館方標為垃圾的評論強制不公開，不能切換。
         /// </remarks>
@@ -791,37 +413,26 @@ namespace VenueGo.Controllers.Api
         /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         /// <response code="409">評論已被下架，不能切換。ErrorCode：`SpamMarked`</response>
         [HttpPost("visit/{id:int}/visibility")]
-        [ProducesResponseType<ApiResult<VisibilityResult>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ApiResult<VisibilityResultDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> SetVisibility(int id, [FromBody] VisibilityRequest? body)
+        public async Task<IActionResult> SetVisibility(int id, [FromBody] VisibilityRequestDto? body)
         {
             if (body?.IsPublic is not bool isPublic)
                 return Fail(400, "ValidationFailed", "請指定要公開或不公開",
                             new { errors = new Dictionary<string, string[]> { ["isPublic"] = new[] { "請指定要公開或不公開" } } });
 
-            var r = await _eligibility.CheckVisitAsync(id, _currentUser.UserId);
-            if (r.State != ReviewEligibilityState.AlreadyReviewed) return NotFoundResult();
-
-            var review = r.ExistingReview!;
-
-            // 被標記垃圾的評論強制不公開。Razor 版是安靜地轉回頁面；API 版明確回錯誤碼
-            if (review.SpamMarkedAt != null)
-                return Fail(409, "SpamMarked", "這則評論已下架，無法切換公開狀態");
-
-            review.IsPublic = isPublic;
-            await _db.SaveChangesAsync();
-
-            return Ok(ApiResult<VisibilityResult>.Ok(new VisibilityResult(review.IsPublic)));
+            // 被標記垃圾的評論強制不公開。Razor 版是安靜地轉回頁面；API 版明確回錯誤碼（SpamMarked）
+            return ToResponse(await _memberReviews.SetVisitVisibilityAsync(id, _currentUser.UserId, isPublic));
         }
 
         // ── 2-7 對回覆表態 ───────────────────────────────────
 
         /// <summary>對館方回覆表態</summary>
         /// <remarks>
-        /// 顧客對館方回覆表示滿不滿意。每則評論只能表態一次。**需要會員本人登入**，也需要防偽 token。
+        /// 顧客對館方回覆表示滿不滿意。每則評論只能表態一次。**需要會員本人登入。**
         ///
         /// `satisfaction`：`0` 不滿意、`1` 普通、`2` 滿意。
         /// </remarks>
@@ -832,24 +443,20 @@ namespace VenueGo.Controllers.Api
         /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         /// <response code="409">館方還沒回覆（`NoReply`），或已經表態過（`AlreadyRated`）</response>
         [HttpPost("visit/{id:int}/satisfaction")]
-        [ProducesResponseType<ApiResult<SatisfactionResult>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ApiResult<SatisfactionResultDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> SetVisitSatisfaction(int id, [FromBody] SatisfactionRequest? body)
+        public async Task<IActionResult> SetVisitSatisfaction(int id, [FromBody] SatisfactionRequestDto? body)
         {
             if (!IsValidSatisfaction(body)) return InvalidSatisfaction();
-
-            var r = await _eligibility.CheckVisitAsync(id, _currentUser.UserId);
-            if (r.State != ReviewEligibilityState.AlreadyReviewed) return NotFoundResult();
-
-            return await SetSatisfactionCoreAsync(r.ExistingReview!, body);
+            return ToResponse(await _memberReviews.SetVisitSatisfactionAsync(id, _currentUser.UserId, body!.Satisfaction!.Value));
         }
 
         /// <summary>對館方回覆表態</summary>
         /// <remarks>
-        /// 預約評論版本，規則同現場評論。**需要會員本人登入**，也需要防偽 token。
+        /// 預約評論版本，規則同現場評論。**需要會員本人登入。**
         /// </remarks>
         /// <param name="orderId" example="9002">訂單 Id</param>
         /// <param name="body">`{ "satisfaction": 2 }`</param>
@@ -858,19 +465,15 @@ namespace VenueGo.Controllers.Api
         /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         /// <response code="409">館方還沒回覆（`NoReply`），或已經表態過（`AlreadyRated`）</response>
         [HttpPost("booking/{orderId:int}/satisfaction")]
-        [ProducesResponseType<ApiResult<SatisfactionResult>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ApiResult<SatisfactionResultDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> SetBookingSatisfaction(int orderId, [FromBody] SatisfactionRequest? body)
+        public async Task<IActionResult> SetBookingSatisfaction(int orderId, [FromBody] SatisfactionRequestDto? body)
         {
             if (!IsValidSatisfaction(body)) return InvalidSatisfaction();
-
-            var r = await _eligibility.CheckBookingAsync(orderId, _currentUser.UserId);
-            if (r.State != ReviewEligibilityState.AlreadyReviewed) return NotFoundResult();
-
-            return await SetSatisfactionCoreAsync(r.ExistingReview!, body);
+            return ToResponse(await _memberReviews.SetBookingSatisfactionAsync(orderId, _currentUser.UserId, body!.Satisfaction!.Value));
         }
     }
 
@@ -888,5 +491,7 @@ namespace VenueGo.Controllers.Api
     //  3. 失敗不再「轉址 + TempData」，改回狀態碼 + ApiResult（規格 0-3）。
     //
     //  4. 欄位驗證失敗先於資格判定（因為 [ApiController]），見檔頭說明。
+    //     10/10 起「整個本體沒送」也一樣先回 400，再判定資格（以前是先判定資格）。
+    //     兩者都是「請求本身有問題」，放在同一個順序比較一致。
     // ════════════════════════════════════════════════════════════════
 }

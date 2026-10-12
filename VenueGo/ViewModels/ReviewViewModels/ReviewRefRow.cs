@@ -1,4 +1,4 @@
-namespace VenueGo.ViewModels.ReviewVM
+namespace VenueGo.ViewModels.ReviewViewModels
 {
     /// <summary>
     /// 館方清單一則評論的「周邊名稱」，對應檢視表 dbo.v_ReviewFullInfo 的一列。

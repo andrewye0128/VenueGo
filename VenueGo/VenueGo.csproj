@@ -48,7 +48,12 @@
     <Compile Remove="Services\FakeCurrentUser.cs" />
     <Compile Remove="Services\HttpContextCurrentUser.cs" />
     <Compile Remove="Services\ICurrentUser.cs" />
-    <Compile Remove="ViewModels\ReviewVM\MyReviewPageVM.cs" />
+    <Compile Remove="ViewModels\ReviewViewModels\MyReviewPageVM.cs" />
+    <Compile Remove="ViewModels\ReviewViewModels\ReviewCardVM.cs" />
+    <Compile Remove="ViewModels\ReviewViewModels\ReviewCreateForBookingVM.cs" />
+    <Compile Remove="ViewModels\ReviewViewModels\ReviewCreateForVisitVM.cs" />
+    <Compile Remove="ViewModels\ReviewViewModels\ReviewCreateInputVM.cs" />
+    <Compile Remove="ViewModels\ReviewViewModels\ReviewIndexVM.cs" />
   </ItemGroup>
 
   <ItemGroup>

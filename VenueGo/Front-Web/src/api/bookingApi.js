@@ -8,8 +8,9 @@ import { DEFAULT_TIME_PERIOD } from "@/constants/booking";
  * @param {number|null} params.sportTypeId 運動類型；null 表示全部運動（不送參數）
  * @param {string} params.date "2026-10-14"，必須在今天～30 天後，否則後端回 400 DateOutOfRange
  * @returns {Promise<{ date: string, venues: object[] }>}
- *   venues：[{ venueId, sportTypeId, venueName, capacity, photoPath, slots: [{ slotTime, availability, unitPrice, isPeak }] }]
+ *   venues：[{ venueId, sportTypeId, venueName, capacity, photoPath, isBookable, slots: [{ slotTime, availability, unitPrice, isPeak }] }]
  *   slotTime 是 "18:00"；capacity、photoPath、unitPrice 可能是 null；公休日時 slots 是空陣列
+ *   isBookable 是 false：場地暫停開放預約（目前是運動沒有啟用中的價格），日期列的剩餘格數也不會算它
  */
 export async function getAvailability({ sportTypeId = null, date }) {
   const params = { date };

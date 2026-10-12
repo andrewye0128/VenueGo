@@ -3,7 +3,8 @@
 // 點一張卡片 → 頁面在下方顯示這個場地的時段
 //
 // v-model：選中的 venueId（沒選是 null）
-// groups：[{ sportTypeId, sportName, icon, venues: [{ venueId, venueName, capacity, photoPath, availableCount, earliest }] }]
+// groups：[{ sportTypeId, sportName, icon, venues: [{ venueId, venueName, capacity, photoPath, isBookable, availableCount, earliest }] }]
+//   isBookable 是 false：暫停開放預約（例如運動沒有啟用中的價格），卡片變灰、不能點
 //   availableCount、earliest 由頁面依目前的「時段篩選」算好傳進來
 // showHeadings：只有一種運動時不用顯示運動標題
 // UIcon 由 Nuxt UI 自動匯入
@@ -34,14 +35,18 @@ const brokenPhotos = reactive(new Set());
       <!-- 手機一排 1 張、平板 2 張、寬的時候 3 張 -->
       <ul class="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
         <li v-for="venue in group.venues" :key="venue.venueId">
+          <!-- 暫停開放（isBookable: false）：卡片變灰、不能點 -->
           <button
             type="button"
+            :disabled="!venue.isBookable"
             :aria-pressed="model === venue.venueId"
-            class="flex w-full cursor-pointer items-center gap-3 rounded border p-2 text-start transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
+            class="flex w-full items-center gap-3 rounded border p-2 text-start transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
             :class="
-              model === venue.venueId
-                ? 'border-brand-primary bg-brand-primary/8 ring-1 ring-brand-primary'
-                : 'border-neutral-border bg-neutral-surface hover:border-brand-primary'
+              !venue.isBookable
+                ? 'cursor-not-allowed border-neutral-border bg-neutral-surface opacity-60'
+                : model === venue.venueId
+                  ? 'cursor-pointer border-brand-primary bg-brand-primary/8 ring-1 ring-brand-primary'
+                  : 'cursor-pointer border-neutral-border bg-neutral-surface hover:border-brand-primary'
             "
             @click="model = venue.venueId"
           >
@@ -69,7 +74,12 @@ const brokenPhotos = reactive(new Set());
               <span v-if="venue.capacity != null" class="block text-xs text-neutral-text-secondary">
                 可容納 {{ venue.capacity }} 人
               </span>
+              <!-- 暫停開放用灰色，不用紅色：跟「已額滿」區分，不是被訂光，是現在不接受預約 -->
+              <span v-if="!venue.isBookable" class="mt-1 block text-sm text-neutral-text-secondary">
+                暫停開放預約
+              </span>
               <span
+                v-else
                 class="mt-1 block text-sm"
                 :class="venue.availableCount > 0 ? 'text-brand-primary' : 'text-semantic-error'"
               >

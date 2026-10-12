@@ -197,9 +197,10 @@ const venueGroups = computed(() => {
       venues: venues
         .filter((v) => v.sportTypeId === id)
         .map((v) => {
-          const open = v.slots.filter(
-            (s) => isAvailable(s) && isInPeriod(s.slotTime, period.value),
-          );
+          // 暫停開放的場地（isBookable: false）一格都不算，卡片顯示「暫停開放預約」
+          const open = v.isBookable
+            ? v.slots.filter((s) => isAvailable(s) && isInPeriod(s.slotTime, period.value))
+            : [];
           return { ...v, availableCount: open.length, earliest: open[0]?.slotTime ?? null };
         }),
     };
@@ -214,8 +215,10 @@ const isClosedDay = computed(
 
 // ── 選中的場地 ──
 const selectedVenueId = ref(null);
+// 只認開放預約的場地：原本選的場地重新讀取後變成暫停開放，就當作沒選，
+// 下面的 autoSelectVenue 會改選別的場地，不會顯示一整排不能選的時段
 const selectedVenue = computed(() =>
-  allVenues.value.find((v) => v.venueId === selectedVenueId.value),
+  allVenues.value.find((v) => v.venueId === selectedVenueId.value && v.isBookable),
 );
 
 // 讀完資料後決定選哪個場地：

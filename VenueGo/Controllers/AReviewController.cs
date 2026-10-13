@@ -543,7 +543,8 @@ namespace VenueGo.Controllers
             DateTime todayStart = _timeService.Today;
             DateTime now = _timeService.Now;
 
-            var bySource = ApplyVenue(ApplySource(_db.ReviewMains, s), sport, venue);
+            // 10/12：時間在未來的評論（時光機撥回來之後）不列出來。員工一點開就會寫入早於建立時間的已讀時間，撞 CHK_ReviewMain_HandleTime_Logic
+            var bySource = ApplyVenue(ApplySource(_db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(now)), s), sport, venue);
 
             // 分頁上的數字：套用來源、時間、搜尋，但不套用 tab
             //（因為它們本來就是「各個 tab 各有幾則」）。
@@ -642,7 +643,8 @@ namespace VenueGo.Controllers
             var deny = RejectIfNotEmployee();
             if (deny != null) return deny;
 
-            var review = _db.ReviewMains.FirstOrDefault(r => r.ReviewId == id);
+            // 10/12：時間在未來的評論當成找不到（回 404），不讓它寫入時間錯亂的資料
+            var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
             if (review != null && review.ReadAt != null)
                 return Ok(ApiResult<bool>.Ok(false));
 
@@ -664,7 +666,8 @@ namespace VenueGo.Controllers
             var deny = RejectIfNotEmployee();
             if (deny != null) return deny;
 
-            var review = _db.ReviewMains.FirstOrDefault(r => r.ReviewId == id);
+            // 10/12：時間在未來的評論當成找不到（回 404），不讓它寫入時間錯亂的資料
+            var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
             var reject = RejectIfCannot(review, CanHandle);
             if (reject != null) return reject;
 
@@ -688,7 +691,8 @@ namespace VenueGo.Controllers
             if (content.Length > ReviewPolicy.ReplyMaxLength)
                 return BadRequest(ApiResult.Fail($"回覆不可超過 {ReviewPolicy.ReplyMaxLength} 字", "TooLong"));
 
-            var review = _db.ReviewMains.FirstOrDefault(r => r.ReviewId == id);
+            // 10/12：時間在未來的評論當成找不到（回 404），不讓它寫入時間錯亂的資料
+            var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
             var reject = RejectIfCannot(review, CanHandle);
             if (reject != null) return reject;
 
@@ -706,7 +710,8 @@ namespace VenueGo.Controllers
             if (reason == null || reason >= ReviewPolicy.SpamReasons.Length)
                 return BadRequest(ApiResult.Fail("請選擇標記理由", "InvalidReason"));
 
-            var review = _db.ReviewMains.FirstOrDefault(r => r.ReviewId == id);
+            // 10/12：時間在未來的評論當成找不到（回 404），不讓它寫入時間錯亂的資料
+            var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
             var reject = RejectIfCannot(review, CanHandle);
             if (reject != null) return reject;
 

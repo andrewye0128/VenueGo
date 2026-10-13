@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Models.Entities;
+using VenueGo.Models.ReviewModels;
 using VenueGo.Services.ReviewTickets;
 using VenueGo.Services.Time;
 
@@ -29,7 +30,9 @@ namespace VenueGo.Services.Reviews
                 return ReviewEligibility<ReviewPerVisit>.NotFound;
 
             // 「是本人的」直接寫進查詢條件：不是本人就跟查不到一樣
+            // 10/12：建立時間晚於網站時間的憑證（時光機撥回來之後）也當成查不到
             var ticket = await _db.ReviewPerVisits
+                                  .Where(ReviewTimeline.VisitTicketIssuedBy(_timeService.Now))
                                   .FirstOrDefaultAsync(v => v.ReviewPerVisitId == reviewPerVisitId && v.UserId == uid);
             if (ticket == null)
                 return ReviewEligibility<ReviewPerVisit>.NotFound;
@@ -46,7 +49,10 @@ namespace VenueGo.Services.Reviews
             if (orderId <= 0 || userId is not int uid)
                 return ReviewEligibility<ReviewPerBooking>.NotFound;
 
-            var ticket = await _db.ReviewPerBookings.FirstOrDefaultAsync(b => b.OrderId == orderId);
+            // 10/12：建立時間晚於網站時間的憑證當成查不到。這種憑證存在時，下面的補建會被工廠的防重複擋下來，結果一樣是查無
+            var ticket = await _db.ReviewPerBookings
+                                  .Where(ReviewTimeline.BookingTicketIssuedBy(_timeService.Now))
+                                  .FirstOrDefaultAsync(b => b.OrderId == orderId);
             if (ticket == null)
             {
                 // 補償前先確認訂單是本人的，不讓人用別人的訂單 Id 觸發補建
@@ -83,7 +89,9 @@ namespace VenueGo.Services.Reviews
 
             // 「還沒過期」跟 Decide 的規則一致：now >= ExpiredAt 算過期，所以還能評的是 ExpiredAt > now。
             // 「還沒評過」：ReviewMain 裡沒有指到這張憑證的評論。
+            // 10/12：建立時間晚於網站時間的憑證不列出來（ReviewTimeline）
             var visits = await _db.ReviewPerVisits
+                .Where(ReviewTimeline.VisitTicketIssuedBy(now))
                 .Where(v => v.UserId == userId
                             && v.ExpiredAt > now
                             && !_db.ReviewMains.Any(r => r.ReviewPerVisitId == v.ReviewPerVisitId))
@@ -91,6 +99,7 @@ namespace VenueGo.Services.Reviews
                 .ToListAsync();
 
             var bookings = await _db.ReviewPerBookings
+                .Where(ReviewTimeline.BookingTicketIssuedBy(now))
                 .Where(b => b.UserId == userId
                             && b.ExpiredAt > now
                             && !_db.ReviewMains.Any(r => r.ReviewPerBookingId == b.ReviewPerBookingId))
@@ -100,10 +109,16 @@ namespace VenueGo.Services.Reviews
             return new PendingReviewTickets(visits, bookings);
         }
 
-        /// <summary>憑證存在而且是本人的之後：已評過 → 已過期 → 可以評，依序判斷。</summary>
+        /// <summary>憑證存在而且是本人的之後：評論在未來 → 已評過 → 已過期 → 可以評，依序判斷。</summary>
         private ReviewEligibility<TTicket> Decide<TTicket>(TTicket ticket, ReviewMain? existing, DateTime expiredAt)
             where TTicket : class
         {
+            // 10/12：評論的時間在未來（時光機撥回來之後）→ 當成查不到。
+            //   不能回「可以評」：資料庫已經有一則了，再寫一則會撞唯一約束。
+            //   也不能回「已評過」：前台會轉去單筆頁，單筆頁又查不到這則（被 ReviewTimeline 過濾掉）。
+            if (existing != null && !ReviewTimeline.HasHappened(existing, _timeService.Now))
+                return ReviewEligibility<TTicket>.NotFound;
+
             if (existing != null)
                 return new(ReviewEligibilityState.AlreadyReviewed, ticket, existing);
 

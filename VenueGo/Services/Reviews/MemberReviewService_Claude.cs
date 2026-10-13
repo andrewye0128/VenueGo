@@ -9,6 +9,8 @@ using VenueGo.Dtos.ReviewDtos.WriteReview;
 using VenueGo.Helpers;
 using VenueGo.Mappers;
 using VenueGo.Models.Entities;
+using VenueGo.Models.Enums;
+using VenueGo.Models.ReviewModels;
 using VenueGo.Services.ReviewScreening;
 using VenueGo.Services.Time;
 
@@ -80,11 +82,12 @@ namespace VenueGo.Services.Reviews
 
             var ticket = r.Ticket!;
             string? orderNo = await OrderNoAsync(ticket.OrderId);
+            var channels = await PaymentChannelsAsync([ticket.OrderId]);   // 10/12：付款方式改從 Payments.PaymentChannel 取
 
             // 預約評論不公開、不匿名；提及標籤照當初的 CreateForBooking.cshtml，先不顯示
             return MemberReviewResult<WriteFormDto>.Ok(new WriteFormDto(
                 Kind: ReviewKind.Booking,
-                Context: ReviewMapper.BookingContext(ticket.OrderId, orderNo, ticket.PaymentMethod),
+                Context: ReviewMapper.BookingContext(ticket.OrderId, orderNo, ChannelOf(channels, ticket.OrderId)),
                 Form: new WriteFormOptionsDto(
                     ShowMentions: false,
                     ShowAnonymous: false,
@@ -158,7 +161,10 @@ namespace VenueGo.Services.Reviews
         {
             var notFound = MemberReviewResult<MyReviewDto>.Fail(MemberReviewOutcome.NotFound);
 
-            var review = await _db.ReviewMains.FirstOrDefaultAsync(r => r.ReviewId == reviewId);
+            // 10/12：時間在未來的評論（時光機撥回來之後）當成查不到，員工預覽也一樣
+            var review = await _db.ReviewMains
+                                  .Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now))
+                                  .FirstOrDefaultAsync(r => r.ReviewId == reviewId);
             if (review == null) return notFound;
 
             if (review.ReviewPerVisitId is int visitId)
@@ -195,6 +201,7 @@ namespace VenueGo.Services.Reviews
 
             var venueNames = await VenueNamesAsync(pending.Visits.Select(v => v.VenueId));
             var orderNos = await OrderNosAsync(pending.Bookings.Select(b => b.OrderId));
+            var channels = await PaymentChannelsAsync(pending.Bookings.Select(b => b.OrderId));   // 10/12
 
             var visitItems = pending.Visits.Select(v => (
                 ExpiredAt: v.ExpiredAt,
@@ -210,7 +217,7 @@ namespace VenueGo.Services.Reviews
                 Item: new PendingReviewItemDto(
                     Kind: ReviewKind.Booking,
                     Ticket: b.OrderId,
-                    Context: ReviewMapper.BookingContext(b.OrderId, orderNos.GetValueOrDefault(b.OrderId), b.PaymentMethod),
+                    Context: ReviewMapper.BookingContext(b.OrderId, orderNos.GetValueOrDefault(b.OrderId), ChannelOf(channels, b.OrderId)),
                     Deadline: ReviewMapper.ToDeadline(b.ExpiredAt, now))));
 
             // 快到期的排前面：會員最該先處理的是「再不寫就沒機會了」的那幾張
@@ -228,8 +235,12 @@ namespace VenueGo.Services.Reviews
             // 「是本人的」看憑證上的 UserId，跟單筆的「查看我的評論」同一個判斷（資格判定也是看憑證）
             // 只選清單用得到的欄位（不讀館方回覆全文、員工欄位）。
             // 評論內容要整段讀：先遮蔽再截斷，截斷後才遮蔽的話，切在一半的電話號碼會漏網。
-            var visits = await (from v in _db.ReviewPerVisits
-                                join r in _db.ReviewMains on (int?)v.ReviewPerVisitId equals r.ReviewPerVisitId
+            // 10/12：時間在未來的評論、憑證都不列出來（ReviewTimeline）
+            DateTime now = _timeService.Now;
+            var happenedReviews = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(now));
+
+            var visits = await (from v in _db.ReviewPerVisits.Where(ReviewTimeline.VisitTicketIssuedBy(now))
+                                join r in happenedReviews on (int?)v.ReviewPerVisitId equals r.ReviewPerVisitId
                                 where v.UserId == uid
                                 select new
                                 {
@@ -240,8 +251,8 @@ namespace VenueGo.Services.Reviews
                                                                   r.SpamMarkedAt, r.RepliedAt, r.ReplyViewedAt)
                                 }).ToListAsync();
 
-            var bookings = await (from b in _db.ReviewPerBookings
-                                  join r in _db.ReviewMains on (int?)b.ReviewPerBookingId equals r.ReviewPerBookingId
+            var bookings = await (from b in _db.ReviewPerBookings.Where(ReviewTimeline.BookingTicketIssuedBy(now))
+                                  join r in happenedReviews on (int?)b.ReviewPerBookingId equals r.ReviewPerBookingId
                                   where b.UserId == uid
                                   select new
                                   {
@@ -285,6 +296,32 @@ namespace VenueGo.Services.Reviews
                 IsSpamMarked: r.SpamMarkedAt != null,
                 HasReply: r.RepliedAt != null,
                 HasUnviewedReply: r.RepliedAt != null && r.ReplyViewedAt == null);
+
+        /// <summary>
+        /// 每筆訂單「用什麼付的」（10/12）：取最早一筆已付款紀錄的 PaymentChannel，跟憑證的期限用同一筆付款。
+        /// 一筆訂單的付款紀錄很少，所以整批讀回來再分組，不在 SQL 裡寫「每組取第一筆」。
+        /// </summary>
+        private async Task<Dictionary<int, PaymentChannel>> PaymentChannelsAsync(IEnumerable<int> orderIds)
+        {
+            var ids = orderIds.Distinct().ToList();
+            if (ids.Count == 0) return [];
+
+            var rows = await _db.Payments
+                                .Where(p => ids.Contains(p.OrderId) && p.PaidAt != null)
+                                .Select(p => new { p.OrderId, p.PaidAt, p.PaymentId, p.PaymentChannel })
+                                .ToListAsync();
+
+            return rows.GroupBy(p => p.OrderId)
+                       .ToDictionary(g => g.Key,
+                                     g => (PaymentChannel)g.OrderBy(p => p.PaidAt).ThenBy(p => p.PaymentId).First().PaymentChannel);
+        }
+
+        /// <summary>
+        /// 從上面的對照表取值。查不到要回 null：直接用 GetValueOrDefault 的話，
+        /// 查不到會回列舉的預設值 0（現場櫃台），畫面就會顯示一個錯的付款方式。
+        /// </summary>
+        private static PaymentChannel? ChannelOf(Dictionary<int, PaymentChannel> channels, int orderId)
+            => channels.TryGetValue(orderId, out var channel) ? channel : null;
 
         private async Task<Dictionary<int, string>> VenueNamesAsync(IEnumerable<int> venueIds)
         {

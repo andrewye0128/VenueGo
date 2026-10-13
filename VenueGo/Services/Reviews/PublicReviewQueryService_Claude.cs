@@ -76,7 +76,8 @@ namespace VenueGo.Services.Reviews
         {
             DateTime cutoff = now.AddDays(-ReviewPolicy.PublicBufferDays);
 
-            return _db.ReviewMains.Where(r =>
+            // 10/12：時間在未來的評論（時光機撥回來之後）不上架。也擋住「近 7 天」這類範圍只篩下限、沒篩上限的問題
+            return _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(now)).Where(r =>
                 r.ReviewPerVisitId != null
                 && r.SpamMarkedAt == null
                 && r.IsPublic

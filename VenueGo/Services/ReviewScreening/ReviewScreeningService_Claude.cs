@@ -122,7 +122,10 @@ namespace VenueGo.Services.ReviewScreening
             DateTime now = _timeService.Now;
 
             // 待分析的，加上「失敗、而且到了重試時間」的；先來先處理
+            // 10/12：預審紀錄的建立時間就是評論送出的時間。晚於網站時間的（時光機撥回來之後）先不分析，等時間到了再說，
+            //   免得寫出「分析時間早於評論建立時間」的資料
             var due = await _db.ReviewScreenings
+                .Where(s => s.CreatedAt <= now)
                 .Where(s => s.AiStatus == ScreeningCodes.AiPending
                          || (s.AiStatus == ScreeningCodes.AiFailed && s.NextAttemptAt != null && s.NextAttemptAt <= now))
                 .OrderBy(s => s.CreatedAt)

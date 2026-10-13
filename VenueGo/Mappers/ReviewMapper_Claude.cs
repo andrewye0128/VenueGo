@@ -4,6 +4,7 @@ using VenueGo.Dtos.ReviewDtos;
 using VenueGo.Dtos.ReviewDtos.MyReviews;
 using VenueGo.Dtos.ReviewDtos.PublicReviews;
 using VenueGo.Models.Entities;
+using VenueGo.Models.Enums;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services.ReviewScreening;
 
@@ -36,12 +37,14 @@ namespace VenueGo.Mappers
         /// 預約評論撰寫頁的確認區塊：訂單編號／付款方式。
         /// 沒有訂單編號字串時退回「訂單 #Id」。
         /// </summary>
-        public static ReviewContextDto BookingContext(int orderId, string? orderNo, byte? paymentMethod)
+        
+        // 10/12：「用什麼付的」存在 Payments.PaymentChannel（現場櫃台／信用卡／LINE Pay），
+        //   PaymentMethod 只是由它推導出來的大分類（現場／線上）。顯示文字用列舉上的 [Display(Name)]。
+        //   查不到付款紀錄時是 null，第二行就不顯示。
+        public static ReviewContextDto BookingContext(int orderId, string? orderNo, PaymentChannel? paymentChannel)
             => new(
                 orderNo ?? $"訂單 #{orderId}",
-                // TODO: PaymentMethod 的代碼對照表要跟負責訂單的組員要，
-                //       拿到之後把數字換成「信用卡」這類看得懂的字。
-                paymentMethod == null ? null : $"付款方式代碼 {paymentMethod}");
+                paymentChannel?.GetDisplayName());
 
         // ── 評論專區 ─────────────────────────────────────────
 

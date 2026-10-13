@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.Models.Enums
+namespace VenueGo.Enums
 {
     /// <summary>
     /// 單一時段的可用狀態。

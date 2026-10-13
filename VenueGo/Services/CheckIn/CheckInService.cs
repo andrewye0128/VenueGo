@@ -1,8 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System.Net.Sockets;
 using VenueGo.Data;
+using VenueGo.Enums;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 using VenueGo.Services.ReviewTickets;
 using static VenueGo.Services.CheckIn.ICheckInService;
 

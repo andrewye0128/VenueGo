@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Models.Constants
+﻿namespace VenueGo.Constants
 {
     /// <summary>
     /// 使用者狀態（Users.Status）的允許值。

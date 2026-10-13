@@ -8,7 +8,6 @@ using VenueGo.Dtos;
 using VenueGo.Dtos.ReviewDtos;
 using VenueGo.Helpers;
 using VenueGo.Mappers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
@@ -16,6 +15,7 @@ using VenueGo.Services.ReviewTickets;
 using VenueGo.Services.ReviewScreening;
 using VenueGo.ViewModels.ReviewVM;
 using VenueGo.Models.ReviewModels;
+using VenueGo.Constants;
 
 namespace VenueGo.Controllers.Api
 {

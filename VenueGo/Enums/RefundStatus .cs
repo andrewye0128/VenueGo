@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.Models.Enums
+namespace VenueGo.Enums
 {
     /// <summary>
     /// 退款狀態（Refunds.RefundStatus）。

@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 
 namespace VenueGo.Models.CheckinModels
 {

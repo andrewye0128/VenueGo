@@ -1,8 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using VenueGo.Models.Constants;
-using VenueGo.Models.Enums;
+using VenueGo.Constants;
+using VenueGo.Enums;
 
 namespace VenueGo.ViewModels.ReservationViewModels
 {

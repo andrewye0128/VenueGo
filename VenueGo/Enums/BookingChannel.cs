@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.Models.Enums
+namespace VenueGo.Enums
 {
     /// <summary>
     /// 下單管道——這筆預約是誰在操作的時候建立的。

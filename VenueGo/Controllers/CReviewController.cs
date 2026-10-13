@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
@@ -11,6 +10,7 @@ using VenueGo.Services.ReviewTickets;
 using VenueGo.Services.ReviewScreening;
 using VenueGo.ViewModels.ReviewVM;
 using VenueGo.Models.ReviewModels;
+using VenueGo.Constants;
 
 namespace VenueGo.Controllers
 {

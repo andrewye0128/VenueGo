@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using VenueGo.Models.Constants;
+using VenueGo.Constants;
 using VenueGo.ViewModels.Shared;
 
 namespace VenueGo.ViewModels.ReservationViewModels

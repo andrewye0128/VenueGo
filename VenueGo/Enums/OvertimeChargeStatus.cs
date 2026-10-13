@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.Models.Enums
+namespace VenueGo.Enums
 {
     // 超時費用狀態（OvertimeCharge.Status）
     public enum OvertimeChargeStatus : byte

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using VenueGo.Data;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 using VenueGo.Models.Options;
 using VenueGo.Models.ReservationModels;
 

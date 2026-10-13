@@ -18,6 +18,7 @@ namespace VenueGo.ViewModels.CheckinViewModels
         public string TimeText { get; set; } = string.Empty;
         public string StatusText { get; set; } = string.Empty;
 
+        public bool ShowEmailInput { get; set; }
         public List<SelectListItem> ReasonOptions { get; set; } = new List<SelectListItem>();
 
         //建立「取消票券」視窗的資料
@@ -58,6 +59,20 @@ namespace VenueGo.ViewModels.CheckinViewModels
             vm.ConfirmButtonClass = "btn-warning";
             vm.WarningText = "補發後舊 QRcode 立即失效。";
             vm.ReasonOptions = tab.ReissueReasonOptions;
+            return vm;
+        }
+
+        public static TicketManualModalViewModel ForTransfer(TicketManualTabViewModel tab)
+        {
+            TicketManualModalViewModel vm = CreateFromTicket(tab);
+            vm.ModalId = "transferTicketModal";
+            vm.ActionName = "ManualTransfer";
+            vm.Title = "轉讓票券";
+            vm.ConfirmButtonText = "確認轉讓";
+            vm.ConfirmButtonClass = "btn-primary";
+            vm.WarningText = "轉讓後持有人立即變更，原持有人的 QRcode 失效。";
+            vm.ReasonOptions = tab.TransferReasonOptions;
+            vm.ShowEmailInput = true;
             return vm;
         }
 

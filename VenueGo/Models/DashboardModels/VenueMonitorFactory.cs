@@ -1,6 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Models.Enums;
+using VenueGo.Services;
+using VenueGo.Services.CheckIn;
 using VenueGo.ViewModels.DashboardViewModels;
 
 
@@ -9,10 +11,12 @@ namespace VenueGo.Models.DashboardModels
     public class VenueMonitorFactory
     {
         private readonly dbVenueContext _db;
+        private readonly ITimeService _time;
 
-        public VenueMonitorFactory(dbVenueContext db)
+        public VenueMonitorFactory(dbVenueContext db, ITimeService time)
         {
             _db = db;
+            _time = time;
         }
 
         public async Task<List<VenueOccupancyViewModel>> GetVenueOccupancyAsync()
@@ -57,20 +61,46 @@ namespace VenueGo.Models.DashboardModels
                                        select new OverdueTicketViewModel
                                        {
                                            TicketId = t.TicketId,
+                                           OrderId = t.OrderId,
                                            Qrtoken = t.Qrtoken,
                                            VenueName = v.VenueName,
                                            UserName = u.Name,
                                            BookingDate = r.BookingDate,
                                            StartTime = r.StartTime,
-                                           EndTime = r.EndTime
+                                           EndTime = r.EndTime,
                                        }).ToListAsync();
 
             // DateOnly+TimeOnly 組合比較放在 C# 端做(EF Core 翻譯不穩定,跟排程那邊踩過的坑一樣)
-            var now = DateTime.Now;
-            return insideDetails
+            var now = _time.Now;
+            var overdueList = insideDetails
                 .Where(x => x.EndAt < now)
                 .OrderBy(x => x.EndAt)
                 .ToList();
+
+            var orderIds = overdueList.Select(x => x.OrderId).ToList();
+            var charges = await _db.OvertimeCharges
+                .AsNoTracking()
+                .Where(c => orderIds.Contains(c.OrderId))
+                .ToDictionaryAsync(c => c.OrderId);
+
+            foreach (var item in overdueList)
+            {
+                item.OverdueDuration = now - item.EndAt;
+
+                // 預估:永遠用「現在」算
+                var fee = OvertimeFee.Calculate(item.EndAt, now);
+                item.IsFree = fee.IsFree;
+                item.EstimatedAmount = fee.ChargeAmount;
+
+                // 凍結:只有這個訂單真的有紀錄才填
+                if (charges.TryGetValue(item.OrderId, out var charge))
+                {
+                    item.ChargeStatus = charge.Status;
+                    item.ChargeAmount = charge.ChargeAmount;
+                }
+            }
+
+            return overdueList;
         }
 
         // 共用:目前在場的票(最後一筆有效紀錄是入場)

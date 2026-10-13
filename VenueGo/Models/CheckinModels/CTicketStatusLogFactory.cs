@@ -101,6 +101,13 @@ namespace VenueGo.Models.CheckinModels
                 reasons.Add(TicketManualLogReasonType.SystemError);
                 reasons.Add(TicketManualLogReasonType.Other);
             }
+            else if (action == TicketManualLogAction.Transfer)
+            {
+                //轉讓
+                reasons.Add(TicketManualLogReasonType.CustomerRequest);
+                reasons.Add(TicketManualLogReasonType.SystemError);
+                reasons.Add(TicketManualLogReasonType.Other);
+            }
 
             return reasons;
         }

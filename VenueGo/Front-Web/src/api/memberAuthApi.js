@@ -16,3 +16,11 @@ export async function getCurrentMember() {
 
   return data;
 }
+
+/**
+ * 會員註冊：POST /api/member/auth/register
+ */
+export async function registerMember(payload) {
+  const { data } = await http.post("/member/auth/register", payload);
+  return data;
+}

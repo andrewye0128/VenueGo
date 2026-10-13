@@ -31,6 +31,11 @@ const router = createRouter({
       component: () => import("../views/LoginView.vue"),
     },
     {
+      path: "/register",
+      name: "register",
+      component: () => import("../views/RegisterView.vue"),
+    },
+    {
       // SportTypeSelect 元件使用說明頁
       path: "/demo/select",
       name: "demo-select",
@@ -59,6 +64,11 @@ const router = createRouter({
       name: "member",
       component: () => import("../layouts/member/MemberLayout.vue"),
       children: [
+        // 進入會員中心時，預設顯示個人資料
+        {
+          path: "member-home",
+          redirect: { name: "profile" },
+        },
         // 我的預約
         {
           path: "reservations",
@@ -111,10 +121,10 @@ const router = createRouter({
 //   const token = localStorage.getItem("token");
 //   const memberStore = useMemberStore();
 
-//   if (to.path.startsWith("/member")) {
-//     if (!token) {
-//       return { name: "login" };
-//     }
+  if (to.path === "/member" || to.path.startsWith("/member/")) {
+    if (!token) {
+      return { name: "login" };
+    }
 
 //     if (!memberStore.member) {
 //       try {

@@ -78,6 +78,21 @@ namespace VenueGo.Helpers
             Data = new { errors }
         };
 
+        /// <summary>
+        /// Service 層驗證失敗（ServiceResult.Errors：Key 是 C# 屬性名，空字串代表不屬於任何欄位）
+        /// 轉成跟「自動模型驗證失敗」一樣的 ApiResult 形狀：欄位名轉小寫開頭、放在 data.errors，
+        /// 前台 http.js 的 error.fieldErrors 才拿得到，頁面可以放回對應的欄位底下。
+        /// 用法：return BadRequest(ApiResponses.ValidationFailed(result.Errors));
+        /// </summary>
+        public static ApiResult<object> ValidationFailed(IEnumerable<(string Key, string Message)> errors)
+        {
+            var grouped = errors
+                .GroupBy(e => ToCamelPath(e.Key))
+                .ToDictionary(g => g.Key, g => g.Select(e => e.Message).ToArray());
+
+            return grouped.Count == 0 ? EmptyBody() : ValidationFailed(grouped);
+        }
+
         /// <summary>不屬於任何欄位的錯誤用這個 key（前台顯示在表單最上方）。</summary>
         public const string NoField = "_";
 

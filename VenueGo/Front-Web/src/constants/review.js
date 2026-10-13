@@ -8,12 +8,14 @@ export const REVIEW_KINDS = Object.freeze({
   visit: {
     label: "現場評論", // 10/10：「我的評論」清單的卡片標題
     icon: "i-lucide-map-pin",
+    tileClass: "bg-brand-primary/10 text-brand-primary", // 10/12：「我的評論」每列左邊圖示方塊的顏色
     subtitle: "這次到場使用的感想",
     placeholder: "",
   },
   booking: {
     label: "預約評論",
     icon: "i-lucide-receipt",
+    tileClass: "bg-brand-action/10 text-brand-action",
     subtitle: "這次預約流程的感想",
     placeholder: "訂位流程、付款方式、通知是否清楚，都可以暢所欲言",
   },
@@ -40,4 +42,11 @@ export const MY_REVIEW_BADGES = Object.freeze({
   public: { label: "公開中", color: "success", icon: "i-lucide-globe" },
   private: { label: "不公開", color: "neutral", icon: "i-lucide-lock" },
   spam: { label: "已下架", color: "error", icon: "i-lucide-octagon-alert" },
+});
+
+// 「我的評論」每列左邊圖示方塊的狀態色（10/12）。狀態比種類優先：已下架、快到期時改用這裡的顏色。
+// 種類的顏色寫在上面 REVIEW_KINDS 的 tileClass。class 要寫完整字串，Tailwind 才掃描得到。
+export const TILE_TONES = Object.freeze({
+  error: "bg-semantic-error/10 text-semantic-error",
+  warning: "bg-semantic-warning/10 text-semantic-warning",
 });

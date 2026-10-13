@@ -14,6 +14,12 @@
 
     載入、記錄已讀、公開切換、表態的邏輯和說明都沒改，搬過來而已（原本的說明見 MyReviewView.vue 檔頭）。
     外框（標題、預覽提示、返回按鈕）留在使用的頁面：單筆頁和清單需要的不一樣。
+
+    ── 10/12：compact 模式＋館方回覆改成留言串樣式 ──────────────────
+    compact（「我的評論」清單展開時用）：清單那一列已經有星等、日期、場地時段、回覆狀態，
+    展開區不再重複這些，只放完整內容、館方回覆、表態與公開切換；「館方回覆了你的評論」提示也改成回覆旁的「新」標籤。
+    館方回覆（兩種模式都一樣）：改成 Reddit／TikTok 那種「頭像＋對話泡泡」的留言串，
+    一眼看得出「這是館方回給你的」，而不是同一張卡片裡的另一段文字。
 -->
 <script setup>
 import { ref, computed, onMounted } from "vue";
@@ -34,6 +40,8 @@ const props = defineProps({
   kind: { type: String, default: null },
   ticket: { type: String, default: null },
   previewId: { type: String, default: null },
+  // 10/12：「我的評論」清單展開時用，不重複清單那一列已經顯示的資訊
+  compact: { type: Boolean, default: false },
 });
 
 // 讓外層（單筆頁、「我的評論」清單）知道狀態變了，清單上的標籤才能跟著更新，不必整份重讀
@@ -177,8 +185,9 @@ async function rate(value) {
           <p>目前不會顯示在公開評論區，也無法切換公開狀態。如有疑問，歡迎洽詢服務櫃台。</p>
         </template>
       </UAlert>
+      <!-- compact 時不顯示：清單那一列已經有「館方新回覆」標籤，回覆旁邊也有「新」 -->
       <UAlert
-        v-else-if="showNewReplyBanner"
+        v-else-if="showNewReplyBanner && !compact"
         color="primary"
         variant="subtle"
         icon="i-lucide-message-circle-more"
@@ -187,9 +196,17 @@ async function rate(value) {
       />
 
       <!-- ── 評論卡片 ── -->
-      <article class="overflow-hidden rounded-lg border border-neutral-border bg-neutral-surface">
-        <div class="p-4 md:p-6">
-          <div class="mb-2 flex flex-wrap items-start justify-between gap-2">
+      <!-- compact 時不包卡片：外面的清單列已經是框了 -->
+      <article
+        :class="
+          compact
+            ? ''
+            : 'overflow-hidden rounded-lg border border-neutral-border bg-neutral-surface'
+        "
+      >
+        <div :class="compact ? 'pt-1' : 'p-4 md:p-6'">
+          <!-- 星等、名稱、日期：compact 時清單那一列已經有了 -->
+          <div v-if="!compact" class="mb-2 flex flex-wrap items-start justify-between gap-2">
             <div class="flex flex-wrap items-center gap-2">
               <StarView :rating="vm.starRating" size-class="text-xl" />
               <span class="font-semibold text-neutral-text-primary">{{ vm.displayName }}</span>
@@ -227,6 +244,22 @@ async function rate(value) {
             <div v-else class="mb-2"></div>
           </template>
 
+          <!-- compact：清單那一列沒有顯示名稱，這裡補一行「其他人看到的名字」 -->
+          <p
+            v-if="compact"
+            class="mb-2 flex flex-wrap items-center gap-2 text-sm text-neutral-text-secondary"
+          >
+            <span>顯示名稱：{{ vm.displayName }}</span>
+            <UBadge
+              v-if="vm.isAnonymous"
+              color="neutral"
+              variant="outline"
+              size="sm"
+              icon="i-mdi-incognito"
+              label="匿名"
+            />
+          </p>
+
           <div v-if="vm.mentionsVenue || vm.mentionsStaff" class="mb-3 flex flex-wrap gap-1">
             <UBadge
               v-if="vm.mentionsVenue"
@@ -246,7 +279,7 @@ async function rate(value) {
 
           <!-- 系統補的資訊：現場評論是場地與時段，預約評論是訂單編號 -->
           <div
-            v-if="vm.context.primary"
+            v-if="vm.context.primary && !compact"
             class="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-neutral-border pt-2 text-sm text-neutral-text-secondary"
           >
             <span class="inline-flex items-center gap-1">
@@ -258,27 +291,45 @@ async function rate(value) {
           </div>
         </div>
 
-        <!-- ── 館方回覆 ── -->
+        <!-- 尚未回覆：只在單筆頁顯示；compact 時清單那一列已經寫了「尚未回覆」 -->
         <div
-          v-if="vm.reply"
-          class="border-t border-l-4 border-t-neutral-border border-l-brand-primary bg-brand-background p-4 md:p-6"
+          v-if="!vm.reply && !vm.isSpamMarked && !compact"
+          class="flex items-center gap-1 border-t border-neutral-border px-4 py-3 text-sm text-neutral-text-secondary md:px-6"
         >
-          <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-            <span class="inline-flex items-center gap-1 font-semibold text-neutral-text-primary">
-              <UIcon name="i-lucide-reply" aria-hidden="true" />
+          <UIcon name="i-lucide-hourglass" aria-hidden="true" />
+          館方尚未回覆
+        </div>
+      </article>
+
+      <!-- ── 館方回覆（10/12 改成留言串）：館方頭像＋對話泡泡，接在評論下面 ──
+           原本是卡片裡左邊一條藍線的一段，跟評論內容很難分開。 -->
+      <div v-if="vm.reply" class="mt-3 flex gap-2.5" :class="compact ? '' : 'md:pl-6'">
+        <span
+          class="flex size-8 shrink-0 items-center justify-center rounded-full bg-brand-primary text-sm font-bold text-white"
+          aria-hidden="true"
+        >
+          館
+        </span>
+        <div
+          class="min-w-0 flex-1 rounded-lg rounded-tl-none border border-neutral-border bg-neutral-surface p-3 md:p-4"
+        >
+          <div class="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <span class="inline-flex items-center gap-2 font-semibold text-neutral-text-primary">
               館方回覆
+              <!-- 第一次看到這則回覆時標「新」（compact 時取代上面的提示條） -->
+              <UBadge v-if="showNewReplyBanner" color="primary" size="sm" label="新" />
             </span>
-            <time class="text-sm text-neutral-text-secondary" :datetime="vm.reply.repliedAt.value">
+            <time class="text-xs text-neutral-text-secondary" :datetime="vm.reply.repliedAt.value">
               {{ vm.reply.repliedAt.full }}
             </time>
           </div>
           <p
-            class="mb-3 whitespace-pre-wrap wrap-anywhere text-neutral-text-primary"
+            class="whitespace-pre-wrap wrap-anywhere text-neutral-text-primary"
             v-text="vm.reply.content"
           ></p>
 
           <!-- 未表態：三顆按鈕；已表態：顯示結果 -->
-          <div v-if="vm.reply.canRateSatisfaction" class="border-t border-neutral-border pt-3">
+          <div v-if="vm.reply.canRateSatisfaction" class="mt-3 border-t border-neutral-border pt-3">
             <div class="mb-2 text-sm text-neutral-text-secondary">這則回覆對你有幫助嗎？</div>
             <div class="flex flex-wrap gap-2">
               <UButton
@@ -286,6 +337,7 @@ async function rate(value) {
                 :key="s.value"
                 color="primary"
                 variant="outline"
+                size="sm"
                 :icon="s.icon"
                 :label="s.text"
                 :disabled="savingSatisfaction || isPreview"
@@ -295,20 +347,13 @@ async function rate(value) {
           </div>
           <div
             v-else-if="vm.reply.satisfaction != null"
-            class="flex items-center gap-1 border-t border-neutral-border pt-3 text-sm text-neutral-text-secondary"
+            class="mt-3 flex items-center gap-1 border-t border-neutral-border pt-3 text-sm text-neutral-text-secondary"
           >
             <UIcon :name="satisfactionOf(vm.reply.satisfaction).icon" aria-hidden="true" />
             你覺得這則回覆：{{ satisfactionOf(vm.reply.satisfaction).text }}
           </div>
         </div>
-        <div
-          v-else-if="!vm.isSpamMarked"
-          class="flex items-center gap-1 border-t border-neutral-border px-4 py-3 text-sm text-neutral-text-secondary md:px-6"
-        >
-          <UIcon name="i-lucide-hourglass" aria-hidden="true" />
-          館方尚未回覆
-        </div>
-      </article>
+      </div>
 
       <UAlert
         v-if="actionError"
@@ -328,7 +373,7 @@ async function rate(value) {
         :loading="savingVisibility"
         label="公開這則評論"
         description="關閉後其他顧客就看不到，你隨時可以再打開。"
-        class="mt-4"
+        :class="compact ? 'mt-3' : 'mt-4'"
       />
     </template>
   </div>

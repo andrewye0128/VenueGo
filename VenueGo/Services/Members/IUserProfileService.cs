@@ -1,4 +1,5 @@
-﻿using VenueGo.ViewModels.MemberViewModels;
+﻿using VenueGo.Dtos.MemberDtos;
+using VenueGo.ViewModels.MemberViewModels;
 
 namespace VenueGo.Services.Members
 {
@@ -21,5 +22,19 @@ namespace VenueGo.Services.Members
         /// 驗證失敗時 Key 為 CurrentPassword（舊密碼沒填或錯誤）。
         /// </summary>
         Task<ServiceResult> UpdateProfileAsync(int userId, UserProfileViewModel model);
+
+        /// <summary>
+        /// 前台會員（JWT API）修改自己的姓名、手機、載具，若有填新密碼則一併變更密碼。
+        /// <para>
+        /// 跟上面的 UpdateProfileAsync 是兩條路：那支給後台（員工，Cookie）用、收 ViewModel，
+        /// 而且不處理載具；這支收 <see cref="UpdateMemberProfileRequestDto"/>。
+        /// </para>
+        /// <para>
+        /// 驗證失敗時 Key 為對應的屬性名稱：CarrierNo（格式不對）、NewPassword（長度或組成不符）、
+        /// CurrentPassword（要改密碼卻沒填舊密碼，或舊密碼錯誤）。
+        /// 新密碼欄位留空（null 或 ""）代表不改密碼。
+        /// </para>
+        /// </summary>
+        Task<ServiceResult> UpdateMemberProfileAsync(int userId, UpdateMemberProfileRequestDto request);
     }
 }

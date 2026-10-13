@@ -38,8 +38,11 @@ namespace VenueGo.Models.Options
 
         // ── 前台（會員自助預約，期末使用）────────────────────
 
-        /// <summary>前台會員最快可預約幾天後。</summary>
-        public int MemberMinAdvanceDays { get; set; } = 2;
+        /// <summary>
+        /// 前台會員最快可預約幾天後。0 表示可以預約當天。
+        /// <para>預設值要跟 appsettings.json 一致（2026-10 營運調整為可以訂當天）。</para>
+        /// </summary>
+        public int MemberMinAdvanceDays { get; set; } = 0;
 
         /// <summary>前台會員最多可預約幾天後。</summary>
         public int MemberMaxAdvanceDays { get; set; } = 30;
@@ -116,5 +119,22 @@ namespace VenueGo.Models.Options
         /// <summary>判斷某個日期是否在後台允許的預約範圍內。</summary>
         public bool IsWithinAdminRange(DateOnly date, DateOnly today)
             => date >= GetAdminMinDate(today) && date <= GetAdminMaxDate(today);
+
+        /// <summary>前台會員可預約的最早日期。</summary>
+        /// <param name="today">今天（請用 ITimeService 的網站時間，開發時才會跟著時光機）。</param>
+        public DateOnly GetMemberMinDate(DateOnly today) => today.AddDays(MemberMinAdvanceDays);
+
+        /// <summary>前台會員可預約的最晚日期。</summary>
+        /// <param name="today">今天（請用 ITimeService 的網站時間）。</param>
+        public DateOnly GetMemberMaxDate(DateOnly today) => today.AddDays(MemberMaxAdvanceDays);
+
+        /// <summary>
+        /// 判斷某個日期是否在前台會員可預約的範圍內（含頭尾）。
+        /// <para>前台查時段、之後的建立預約都用這個方法，兩邊才會是同一條規則。</para>
+        /// </summary>
+        /// <param name="date">要判斷的日期。</param>
+        /// <param name="today">今天（請用 ITimeService 的網站時間）。</param>
+        public bool IsWithinMemberRange(DateOnly date, DateOnly today)
+            => date >= GetMemberMinDate(today) && date <= GetMemberMaxDate(today);
     }
 }

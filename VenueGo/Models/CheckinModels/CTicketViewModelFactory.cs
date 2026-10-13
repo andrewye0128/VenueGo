@@ -6,6 +6,7 @@ using VenueGo.Helpers;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
 using VenueGo.Models.ReviewModels;
+using VenueGo.Services.Time;
 using VenueGo.Services.ReviewTickets;
 using VenueGo.ViewModels.CheckinViewModels;
 
@@ -18,20 +19,27 @@ namespace VenueGo.Models.CheckinModels
         private CCheckInLogFactory _checkinLogFactory;
         private CTicketStatusLogFactory _StatusLogFactory;
         private IVisitReviewTicketFactory _visitReviewTicketFactory;
+        private COvertimeChargeFactory _overtimeChargeFactory;
+        private readonly ITimeService _time;
 
-        public CTicketViewModelFactory(dbVenueContext db, CCheckInLogFactory checkInLogFactory, CTicketStatusLogFactory statusLogFactory, IVisitReviewTicketFactory visitReviewTicketFactory)
+        public CTicketViewModelFactory(dbVenueContext db, CCheckInLogFactory checkInLogFactory, CTicketStatusLogFactory statusLogFactory, 
+            IVisitReviewTicketFactory visitReviewTicketFactory, COvertimeChargeFactory overtimeChargeFactory, ITimeService time)
         {
             _db = db;
             _checkinLogFactory = checkInLogFactory;
             _StatusLogFactory = statusLogFactory;
             _visitReviewTicketFactory = visitReviewTicketFactory;
+            _overtimeChargeFactory = overtimeChargeFactory;
+            _time = time;
         }
 
-        DateOnly today = DateOnly.FromDateTime(DateTime.Now);
+        public DateOnly GetToday() => DateOnly.FromDateTime(_time.Now);
+
+        //DateOnly today = DateOnly.FromDateTime(DateTime.Now);
 
         public List<EntryTicketListViewModel> SearchTickets(DateOnly date, string? keyword, int? venueId, int? status)
         {
-            return _db.Database.SqlQuery<EntryTicketListViewModel>($@"
+            List<EntryTicketListViewModel> list =  _db.Database.SqlQuery<EntryTicketListViewModel>($@"
                 SELECT TicketId,
                     TicketQRToken     AS Qrtoken,
                     UserName,
@@ -51,6 +59,22 @@ namespace VenueGo.Models.CheckinModels
                     AND  ({status}  IS NULL OR TicketStatusValue = {status})")
                 .OrderBy(x => x.StartTime)
                 .ToList();
+
+            // 臨時測試用之後改檢視表
+            List<int> test = list.Select(t => t.TicketId).ToList();
+
+            var holders = (from t in _db.EntryTickets.AsNoTracking()
+                          join u in _db.Users on t.UserId equals u.UserId
+                          where test.Contains(t.TicketId)
+                          select new { t.TicketId, u.Name })
+                         .ToDictionary(x => x.TicketId, x => x.Name);
+
+            foreach( var item in list )
+            {
+                item.Holder = holders.ContainsKey(item.TicketId) ? holders[item.TicketId] : item.UserName;
+            }
+
+            return list;
         }
 
         public List<SelectListItem> GetVenueOptions()
@@ -92,7 +116,7 @@ namespace VenueGo.Models.CheckinModels
             {
                 TicketId = ticket.TicketId,
                 Action = 1, //先假預設進為1
-                ActionTime = DateTime.Now,
+                ActionTime = _time.Now,
                 IsValid = isVaild,
                 IsManualOverride = true,
                 OperatorId = 1,
@@ -134,7 +158,7 @@ namespace VenueGo.Models.CheckinModels
             {
                 TicketId = ticket.TicketId,
                 Action = 2, //先假預設出場
-                ActionTime = DateTime.Now,
+                ActionTime = _time.Now,
                 IsValid = isValid,
                 IsManualOverride = true,
                 OperatorId = 1,
@@ -158,46 +182,6 @@ namespace VenueGo.Models.CheckinModels
         }
 
         // ----------------------------------- end -----------------------------------
-
-
-        // Detail頁面
-        //public EntryTicketDetailViewModel? GetTicketDetail(int ticketId)
-        //{
-        //    var data = (from t in _db.EntryTickets
-        //                join o in _db.Orders on t.OrderId equals o.OrderId
-        //                join u in _db.Users on o.UserId equals u.UserId
-        //                join r in _db.Reservations on o.ReservationId equals r.ReservationId
-        //                join v in _db.Venues on r.VenueId equals v.VenueId
-        //                where t.TicketId == ticketId
-        //                select new EntryTicketDetailViewModel
-        //                {
-        //                    TicketId = t.TicketId,
-        //                    Qrtoken = t.Qrtoken,
-        //                    UserName = u.Name,
-        //                    Status = t.Status,
-        //                    VenueName = v.VenueName,
-        //                    Location = v.Location,
-        //                    BookingDate = r.BookingDate,
-        //                    StartTime = r.StartTime,
-        //                    EndTime = r.EndTime
-        //                }).FirstOrDefault();
-
-        //    if (data == null) return null;
-
-        //    data.Logs = _db.CheckInLogs
-        //        .Where(l => l.TicketId == ticketId)
-        //        .OrderByDescending(l => l.ActionTime)
-        //        .Select(l => new CheckInLogViewModel
-        //        {
-        //            Action = l.Action,
-        //            ActionTime = l.ActionTime,
-        //            IsManualOverride = l.IsManualOverride,
-        //            IsValid = l.IsValid,
-        //            OperatorId = l.OperatorId
-        //        }).ToList();
-
-        //    return data;
-        //}
 
         public EntryTicketDetailViewModel? GetDetailTab(int ticketId)
         {
@@ -226,14 +210,27 @@ namespace VenueGo.Models.CheckinModels
             vm.CancelReasonOptions = _StatusLogFactory.GetReasonOptions(TicketManualLogAction.Cancel);
             vm.ExpireReasonOptions = _StatusLogFactory.GetReasonOptions(TicketManualLogAction.Expire);
             vm.ReissueReasonOptions = _StatusLogFactory.GetReasonOptions(TicketManualLogAction.Reissue);
+            vm.TransferReasonOptions = _StatusLogFactory.GetReasonOptions(TicketManualLogAction.Transfer);
             return vm;
         }
+
+        public TicketOvertimeTabViewModel? GetOvertimeTab(int ticketId)
+        {
+            TicketOvertimeTabViewModel vm = new TicketOvertimeTabViewModel();
+            if (!FillTicketBase(vm, ticketId)) return null;
+
+            vm.Charge = _overtimeChargeFactory.GetByTicket(ticketId);
+            vm.PaymentOptions = _overtimeChargeFactory.GetPayOption();
+            return vm;
+        }
+
+
 
         private bool FillTicketBase(TicketTabViewModelBase vm, int ticketId)
         {
             var data = (from t in _db.EntryTickets.AsNoTracking()
                         join o in _db.Orders on t.OrderId equals o.OrderId
-                        join u in _db.Users on o.UserId equals u.UserId
+                        join u in _db.Users on t.UserId equals u.UserId
                         join r in _db.Reservations on o.ReservationId equals r.ReservationId
                         join v in _db.Venues on r.VenueId equals v.VenueId
                         where t.TicketId == ticketId
@@ -261,6 +258,7 @@ namespace VenueGo.Models.CheckinModels
             vm.BookingDate = data.BookingDate;
             vm.StartTime = data.StartTime;
             vm.EndTime = data.EndTime;
+            vm.IsPastEndTime = _time.Now > vm.BookingDate.ToDateTime(vm.EndTime);
 
             //有效的進出紀錄(新到舊),只看進場、離場
             List<byte> validActions = _db.CheckInLogs.AsNoTracking()
@@ -285,105 +283,5 @@ namespace VenueGo.Models.CheckinModels
                 .Select(t => t.Qrtoken)
                 .FirstOrDefaultAsync();
         }
-
-        // 使用bool方法表示[這次操作在流程上合不合理], 只有符合異常流程出現時會需要使用的方法
-        //public bool ManualCheckIn(int ticketId, int operatorId)
-        //{
-        //    dbVenueContext db = new dbVenueContext();
-        //    var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
-        //    if (ticket == null) return false;
-
-        //    var lastLog = db.CheckInLogs
-        //    .Where(l => l.TicketId == ticketId &&
-        //    (l.Action == (byte)CheckInAction.CheckIn || l.Action == (byte)CheckInAction.CheckOut))
-        //    .OrderByDescending(l => l.ActionTime)
-        //    .FirstOrDefault();
-
-        //    // 沒有紀錄或上一筆是離場
-        //    bool isValid = lastLog == null || lastLog.Action == (byte)CheckInAction.CheckOut;
-
-        //    if (isValid && ticket.Status == (byte)EntryTicketStatus.Valid)
-        //        ticket.Status = (byte)EntryTicketStatus.Used;
-
-        //    db.CheckInLogs.Add(new CheckInLog
-        //    {
-        //        TicketId = ticketId,
-        //        Action = (byte)CheckInAction.CheckIn,
-        //        ActionTime = DateTime.Now,
-        //        IsValid = isValid,
-        //        IsManualOverride = true,
-        //        OperatorId = operatorId
-        //    });
-        //    db.SaveChanges();
-        //    return isValid;
-        //}
-
-        //public bool ManualCheckOut(int ticketId, int operatorId)
-        //{
-        //    dbVenueContext db = new dbVenueContext();
-        //    var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
-        //    if (ticket == null) return false;
-
-        //    var lastLog = db.CheckInLogs
-        //    .Where(l => l.TicketId == ticketId &&
-        //    (l.Action == (byte)CheckInAction.CheckIn || l.Action == (byte)CheckInAction.CheckOut))
-        //    .OrderByDescending(l => l.ActionTime)
-        //    .FirstOrDefault();
-
-        //    // 上一筆是入場
-        //    bool isValid = lastLog != null && lastLog.Action == (byte)CheckInAction.CheckIn;
-
-        //    db.CheckInLogs.Add(new CheckInLog
-        //    {
-        //        TicketId = ticketId,
-        //        Action = (byte)CheckInAction.CheckOut,
-        //        ActionTime = DateTime.Now,
-        //        IsValid = isValid,
-        //        IsManualOverride = true,
-        //        OperatorId = operatorId
-        //    });
-        //    db.SaveChanges();
-        //    return isValid;
-        //}
-
-        //public bool ManualCancel(int ticketId, int operatorId)
-        //{
-        //    dbVenueContext db = new dbVenueContext();
-        //    var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
-        //    if (ticket == null || ticket.Status == (byte)EntryTicketStatus.Cancelled) return false;
-
-        //    ticket.Status = (byte)EntryTicketStatus.Cancelled;
-        //    db.CheckInLogs.Add(new CheckInLog
-        //    {
-        //        TicketId = ticketId,
-        //        Action = (byte)CheckInAction.ManualCancel,
-        //        ActionTime = DateTime.Now,
-        //        IsValid = true,
-        //        IsManualOverride = true,
-        //        OperatorId = operatorId
-        //    });
-        //    db.SaveChanges();
-        //    return true;
-        //}
-
-        //public bool ManualExpire(int ticketId, int operatorId)
-        //{
-        //    dbVenueContext db = new dbVenueContext();
-        //    var ticket = db.EntryTickets.FirstOrDefault(t => t.TicketId == ticketId);
-        //    if (ticket == null || ticket.Status == (byte)EntryTicketStatus.Expired) return false;
-
-        //    ticket.Status = (byte)EntryTicketStatus.Expired;
-        //    db.CheckInLogs.Add(new CheckInLog
-        //    {
-        //        TicketId = ticketId,
-        //        Action = (byte)CheckInAction.ManualExpire,
-        //        ActionTime = DateTime.Now,
-        //        IsValid = true,
-        //        IsManualOverride = true,
-        //        OperatorId = operatorId
-        //    });
-        //    db.SaveChanges();
-        //    return true;
-        //}
     }
 }

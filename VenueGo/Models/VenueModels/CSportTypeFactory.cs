@@ -108,6 +108,7 @@ namespace VenueGo.Models.VenueModels
                 //稽核欄位:記錄最後修改時間與修改者
                 SportTypeDb.UpdatedAt = now;
                 SportTypeDb.UpdatedBy = userId;
+                SportTypeDb.IconName = Wrap.IconName;
             }
 
             db.SaveChanges();
@@ -127,6 +128,8 @@ namespace VenueGo.Models.VenueModels
             }
         }
 
+
+        /*API使用*/
 
         //前台「場館資訊」頁 >> 開放時間 + 各運動類型的代表照片、注意事項、收費標準
         //給 VenueApiController(GET /api/venues/intro)使用
@@ -260,5 +263,34 @@ namespace VenueGo.Models.VenueModels
 
             return page;
         }
-    }
+
+
+
+        //前台運動類型下拉選單 >> 回傳運動類型清單資料的DTO 給 SportTypeApiController 使用
+        public List<SportTypeOptionDto> QuerySportTypeOptions()
+        {
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var datas = from t in db.SportTypes
+                                //未被軟刪除
+                            where t.IsActive == true &&
+                            // 底下至少有一個未被刪除的場地
+                            (db.Venues.Any(x => x.SportTypeId == t.SportTypeId && x.IsActive == true))
+                            orderby t.SportTypeId
+                            select new SportTypeOptionDto
+                            {
+                                Id = t.SportTypeId,
+                                Name = t.SportName,
+                                Icon = t.IconName ?? SportTypeIconOptions.DefaultIcon, //若icon為null就指定為預設icon
+                                // 有啟用中的價格規則才能預約(跟預約頁 BookingAvailabilityService 的 IsBookable 同一個條件)
+                                IsBookable = db.SportTypePriceRules.Any(r => r.SportTypeId == t.SportTypeId && r.IsActive == true)
+                            };
+
+                return datas.ToList();
+            }
+        }
+
+
+
+}
 }

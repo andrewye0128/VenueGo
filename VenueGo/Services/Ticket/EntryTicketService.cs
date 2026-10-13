@@ -2,16 +2,19 @@
 using VenueGo.Data;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Services.Ticket
 {
     public class EntryTicketService : IEntryTicketService
     {
         private readonly dbVenueContext _db;
+        private readonly ITimeService _time;
 
-        public EntryTicketService(dbVenueContext db)
+        public EntryTicketService(dbVenueContext db, ITimeService time)
         {
             _db = db; //建構子注入: 跟訂單Controller一樣和dbVenueContext建立關聯
+            _time = time;
         }
 
         public async Task<(string Message, int TicketCount)> CreateForOrderAsync(int orderId)
@@ -32,7 +35,7 @@ namespace VenueGo.Services.Ticket
                     OrderId = orderId,
                     Qrtoken = $"TCK-{Guid.NewGuid():N}",
                     Status = (byte)EntryTicketStatus.Valid,
-                    CreatedAt = DateTime.Now,
+                    CreatedAt = _time.Now,
                     UserId = order.UserId
                 });
             }

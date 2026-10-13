@@ -82,10 +82,8 @@
     <Folder Include="Controllers\Api\VenuesApi\" />
     <Folder Include="Models\MemberModels\" />
     <Folder Include="Models\ReservationModels\" />
-    <Folder Include="Models\VenueModels\" />
     <Folder Include="Mappers\" />
     <Folder Include="Models\TimeSlots\" />
-    <Folder Include="Models\VenueModels\" />
     <Folder Include="ViewModels\VenueViewModels\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />

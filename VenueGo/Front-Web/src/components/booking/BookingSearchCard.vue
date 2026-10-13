@@ -1,6 +1,7 @@
 <script setup>
 // 首頁的查詢卡片：上方是「看起來像分頁的連結列」，下方是「場地預約」的查詢表單
-// 按「查詢可預約場地」→ 跳到 /booking?sport=basketball&date=2026-10-05
+// 按「查詢可預約場地」→ 跳到 /booking?sportTypeId=1&date=2026-10-05
+//   選「全部運動」時網址不帶 sportTypeId，預約頁會顯示所有運動的場地
 // UForm、UFormField、UInputDate、UPopover、UCalendar、UButton、UIcon 由 Nuxt UI 自動匯入
 import { reactive, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
@@ -8,6 +9,8 @@ import { z } from "zod";
 import { today, getLocalTimeZone } from "@internationalized/date";
 import SportTypeSelect from "@/components/SportTypeSelect.vue";
 import { mainNavItems } from "@/constants/navigation";
+import { ALL_SPORTS } from "@/constants/sportTypes";
+import { sportTypeOrAllRule } from "@/schemas/rules";
 import { MEMBER_MIN_ADVANCE_DAYS, MEMBER_MAX_ADVANCE_DAYS } from "@/constants/reservationRules";
 
 const router = useRouter();
@@ -34,7 +37,7 @@ const pad = (n) => String(n).padStart(2, "0");
 const formatDate = (date) => `${date.year}/${pad(date.month)}/${pad(date.day)}`;
 
 const schema = z.object({
-  sport: z.string().min(1, "請選擇運動類型"),
+  sport: sportTypeOrAllRule,
   date: z.custom((value) => value && value.compare(minDate) >= 0 && value.compare(maxDate) <= 0, {
     error: `請選擇 ${formatDate(minDate)} ～ ${formatDate(maxDate)} 之間的日期`,
   }),
@@ -50,12 +53,13 @@ const state = reactive({
 const calendarOpen = ref(false);
 
 function onSubmit(event) {
+  const { sport, date } = event.data;
   router.push({
     name: "booking",
     query: {
-      // 暫時用運動代碼；之後 SportTypeSelect 改成接 API 時，改成 sportTypeId
-      sport: event.data.sport,
-      date: event.data.date.toString(),
+      // 選「全部運動」就不帶 sportTypeId（undefined 的參數 Vue Router 不會放進網址）
+      sportTypeId: sport === ALL_SPORTS ? undefined : sport,
+      date: date.toString(),
     },
   });
 }

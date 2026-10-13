@@ -113,24 +113,24 @@ const router = createRouter({
   },
 });
 // 路由守衛：未登入或 Token 無效時，禁止進入會員中心。
-router.beforeEach(async (to) => {
-  const token = localStorage.getItem("token");
-  const memberStore = useMemberStore();
+// router.beforeEach(async (to) => {
+//   const token = localStorage.getItem("token");
+//   const memberStore = useMemberStore();
 
-  if (to.path.startsWith("/member")) {
-    if (!token) {
-      return { name: "login" };
-    }
+//   if (to.path.startsWith("/member")) {
+//     if (!token) {
+//       return { name: "login" };
+//     }
 
-    if (!memberStore.member) {
-      try {
-        await memberStore.fetchCurrentMember();
-      } catch (error) {
-        memberStore.logout();
-        return { name: "login" };
-      }
-    }
-  }
-});
+//     if (!memberStore.member) {
+//       try {
+//         await memberStore.fetchCurrentMember();
+//       } catch (error) {
+//         memberStore.logout();
+//         return { name: "login" };
+//       }
+//     }
+//   }
+// });
 
 export default router;

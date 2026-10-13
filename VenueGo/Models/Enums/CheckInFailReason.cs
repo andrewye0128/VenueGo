@@ -21,5 +21,9 @@ namespace VenueGo.Models.Enums
 
         [Display(Name = "票券已使用完畢")]
         AlreadyCompleted = 6,
+
+        [Display(Name = "超時需先確認費用")]
+        ConfirmOvertimeCharge = 7
+
     }
 }

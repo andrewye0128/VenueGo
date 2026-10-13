@@ -33,7 +33,11 @@ namespace VenueGo.Helpers
         /// </param>
         public static string Of(DateTime time, DateTime? now = null)
         {
+
+#pragma warning disable RS0030 // 理由：TimeService.Now 不該為 Null，不會用到 DateTime.Now
             DateTime baseline = now ?? TimeService?.Now ?? DateTime.Now; // 套用TimeService
+#pragma warning restore RS0030
+
             TimeSpan span = baseline - time;
 
             // 未來時間：機器時鐘沒對準、或資料有問題。

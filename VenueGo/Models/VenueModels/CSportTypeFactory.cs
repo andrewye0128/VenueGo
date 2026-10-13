@@ -113,17 +113,23 @@ namespace VenueGo.Models.VenueModels
             db.SaveChanges();
         }
 
+        //判斷運動類型名稱是否重複
+        public bool IsSportNameDuplicate(string sportName, int? excludeId)
+        {
+            using (dbVenueContext db = new dbVenueContext())
+            {
+
+                //查詢運動類型資料並比對
+                var data = from s in db.SportTypes
+                           where (s.IsActive == true) && (s.SportName == sportName) && (s.SportTypeId != excludeId || excludeId == null)
+                           select s;
+                return data.Any();
+            }
+        }
+
 
         //前台「場館資訊」頁 >> 開放時間 + 各運動類型的代表照片、注意事項、收費標準
-        //給 VenueApiController(GET /api/venues/intro)使用,只讀取資料,不修改
-        //
-        //邏輯步驟:
-        //  步驟1 開放時間:查營業時間,排成週一~週日 7 筆(查不到的那天當成公休)
-        //  步驟2 運動類型:只列出存在的運動類型(IsActive = true),而且底下至少有一個存在的場地
-        //  步驟3 價格規則:重用 CSportTypePriceRuleFactory.QueryAll(),尖峰摘要等規則不重寫
-        //  步驟4 組合:每個運動類型配上自己的價格規則;沒有價格規則或價格規則停用 >> Price = null
-        //
-        //整個方法共查 5 次DB(營業時間 1 次、運動類型 1 次、價格規則 QueryAll() 內部 3 次),都不在迴圈裡查
+        //給 VenueApiController(GET /api/venues/intro)使用
         public SportTypeIntroPageDto QueryIntroPage()
         {
             SportTypeIntroPageDto page = new SportTypeIntroPageDto();
@@ -178,7 +184,7 @@ namespace VenueGo.Models.VenueModels
 
             /***** 步驟2 運動類型 *****/
 
-            //只列出存在的運動類型,而且底下至少有一個存在的場地(沒有場地的運動類型不顯示,2026-10-01 HungYu 決定)
+            //只列出存在的運動類型,而且底下至少有一個存在的場地
             //Venues.IsActive、SportTypes.IsActive 都是軟刪除用的系統欄位:false = 已刪除,當作不存在
             //Any() 在資料庫裡直接判斷有沒有場地,不用把場地全部撈出來
             List<SportType> sportTypes;

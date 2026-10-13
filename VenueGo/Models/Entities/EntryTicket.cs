@@ -16,4 +16,6 @@ public partial class EntryTicket
     public DateTime CreatedAt { get; set; }
 
     public int? UserId { get; set; }
+
+    public int? ReceivedUserId { get; set; }
 }

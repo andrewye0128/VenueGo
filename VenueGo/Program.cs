@@ -32,19 +32,6 @@ builder.Services.AddDbContext<dbVenueContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection")
     ));
 
-// ==========================================
-// 1. [新增] 註冊 Cookie 身份認證服務
-// ==========================================
-//builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-//    .AddCookie(options =>
-//    {
-//        options.LoginPath = "/Account/Login";              // 未登入時自動導向的頁面
-//        options.AccessDeniedPath = "/Account/Login";       // 權限不足時導向的頁面
-//        options.ExpireTimeSpan = TimeSpan.FromHours(8);    // Cookie 預設有效時間
-//        options.Cookie.HttpOnly = true;                    // 防範 XSS 存取 Cookie
-//        options.Cookie.SecurePolicy = CookieSecurePolicy.Always; // 限定 HTTPS 傳輸
-//    });
-
 builder.Services.AddAuthentication(options =>
 {
     // 預設仍然使用 Cookie
@@ -65,6 +52,8 @@ builder.Services.AddAuthentication(options =>
     options.ExpireTimeSpan = TimeSpan.FromHours(8);
     options.Cookie.HttpOnly = true;
     options.Cookie.SecurePolicy = CookieSecurePolicy.Always;
+    options.Events.OnRedirectToLogin = ApiResponses.RedirectToLogin;
+    options.Events.OnRedirectToAccessDenied = ApiResponses.RedirectToAccessDenied;
 })
 .AddJwtBearer(options =>
 {
@@ -94,6 +83,7 @@ builder.Services.AddAuthentication(options =>
         ClockSkew = TimeSpan.Zero
     };
 });
+
 //builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
 //    .AddCookie(options =>
 //    {
@@ -142,6 +132,7 @@ builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 C
 // 全站共用的時間來源，本地時區固定為台北
 builder.Services.AddSingleton<TimeProvider, TaipeiTimeProvider>();
 
+
 // 註冊關於目前登入者的服務：介面 → 實作
 builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUserService>();
 
@@ -157,6 +148,7 @@ builder.Services.AddHttpClient();   // 保留：組員可能有人用無名的 C
 // 自動校時（TimeAgo 等全站共用）
 builder.Services.AddHttpClient(TimeService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(5));
 builder.Services.AddSingleton<ITimeService, TimeService>();
+builder.Services.AddSingleton<ITimeMachine, TimeMachine>();   // 開發用時光機
 builder.Services.AddHostedService<TimeSyncHostedService>();
 
 // ── 各子系統的服務（Extensions/*ModuleExtensions）────────────────

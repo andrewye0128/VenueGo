@@ -35,13 +35,17 @@ namespace VenueGo.Services.Reservations
         /// </summary>
         /// <param name="reservationId">預約 Id。</param>
         /// <param name="operatorUserId">操作人員的 Users.UserId，寫入稽核紀錄。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的資料庫操作。</param>
         Task<ReservationCommandResult> MarkAsPaidAsync(
             int reservationId, int operatorUserId, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// 取消預約（會員因素退訂）。計入會員退訂率，已收款者依規則可扣手續費。
         /// </summary>
+        /// <param name="reservationId">預約 Id。</param>
         /// <param name="reason">取消原因，必填，寫入 Reservations.CancelReason。</param>
+        /// <param name="operatorUserId">操作人員的 Users.UserId，寫入稽核紀錄。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的資料庫操作。</param>
         Task<ReservationCommandResult> CancelAsync(
             int reservationId, string reason, int operatorUserId,
             CancellationToken cancellationToken = default);
@@ -51,7 +55,10 @@ namespace VenueGo.Services.Reservations
         /// 與取消的差別在於作廢不計入任何營運統計，
         /// 且已誤收的款項一律全額退還，不可扣款。
         /// </summary>
+        /// <param name="reservationId">預約 Id。</param>
         /// <param name="reason">作廢原因，必填。</param>
+        /// <param name="operatorUserId">操作人員的 Users.UserId，寫入稽核紀錄。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的資料庫操作。</param>
         Task<ReservationCommandResult> VoidAsync(
             int reservationId, string reason, int operatorUserId,
             CancellationToken cancellationToken = default);

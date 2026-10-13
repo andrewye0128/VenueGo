@@ -1,0 +1,186 @@
+@*
+    時光機面板：/DevTools/Time（TimeMachineController 回傳這一頁）
+    通常是從提示條的「調整」或右下角的 ⏰ 用小視窗打開；直接在網址列打開也可以。
+    畫面行為在 wwwroot/js/time-machine-panel.js，和伺服器溝通、確認視窗在 wwwroot/js/time-machine.js。
+*@
+@model VenueGo.Controllers.TimeMachinePanelVM
+@using System.Text.Json
+@using VenueGo.Controllers
+@{
+    Layout = null;
+    var state = Model.State;
+    string? prefill = Model.Prefill?.ToString("yyyy-MM-ddTHH:mm:ss");
+}
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>⏰ 時光機 - VenueGo 開發工具</title>
+    <style>
+        :root {
+            --bg: #f6f7f9; --card: #fff; --ink: #1f2937; --muted: #6b7280; --line: #e5e7eb;
+            --amber-50: #fffbeb; --amber-100: #fef3c7; --amber-300: #f2c94c; --amber-700: #b45309; --amber-800: #92400e;
+            --danger: #b42318; --ok: #1a7f37;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; background: var(--bg); color: var(--ink);
+            font: 14px/1.55 system-ui, -apple-system, "Segoe UI", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+        }
+        main { max-width: 460px; margin: 0 auto; padding: 16px; }
+        header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        h1 { margin: 0; font-size: 18px; }
+        .tag { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; background: var(--card); }
+        h2 { margin: 0 0 10px; font-size: 13px; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+        .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; margin-bottom: 12px; }
+
+        .now { border-color: var(--line); }
+        .now.traveling { background: var(--amber-50); border-color: var(--amber-300); }
+        .now-label { font-size: 13px; color: var(--muted); }
+        .now-time { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .01em; margin: 2px 0 4px; }
+        .now-sub { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+        .now-sub strong { color: var(--amber-800); font-weight: 600; }
+
+        .shift { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+        .shift + .shift { margin-top: 6px; }
+        button {
+            appearance: none; font: inherit; border-radius: 8px; padding: 7px 10px; cursor: pointer; line-height: 1.4;
+            border: 1px solid var(--line); background: var(--card); color: var(--ink);
+        }
+        button:hover:not(:disabled) { background: #f9fafb; }
+        button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--amber-700); outline-offset: 2px; }
+        button:disabled { opacity: .55; cursor: not-allowed; }
+        .shift button { font-variant-numeric: tabular-nums; font-weight: 600; }
+        .shift .back { color: #374151; }
+        .shift .fwd { color: var(--amber-800); border-color: #f5d27a; background: var(--amber-50); }
+        .shift .fwd:hover:not(:disabled) { background: var(--amber-100); }
+
+        .fields { display: flex; align-items: flex-end; gap: 4px; flex-wrap: nowrap; }
+        .field { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .field label { font-size: 12px; color: var(--muted); }
+        .sep { padding-bottom: 8px; color: var(--muted); font-weight: 600; }
+        .gap { width: 10px; }
+        select, .fields input {
+            font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; text-align: center;
+            height: 38px; border: 1px solid #d1d5db; border-radius: 8px; background: #fff; color: var(--ink);
+        }
+        select { width: 76px; padding: 0 4px; }
+        .fields input { width: 42px; padding: 0; }
+        .fields input[aria-invalid="true"] { border-color: var(--danger); background: #fef3f2; }
+        .hint { min-height: 20px; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+        .hint.error { color: var(--danger); }
+        .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 10px; }
+        .link { border: 0; background: none; padding: 0; color: var(--amber-700); font-weight: 600; text-decoration: underline; }
+        .link:hover:not(:disabled) { background: none; color: var(--amber-800); }
+        .primary { background: var(--amber-700); border-color: var(--amber-700); color: #fff; font-weight: 700; padding: 8px 18px; }
+        .primary:hover:not(:disabled) { background: var(--amber-800); border-color: var(--amber-800); }
+        .reset { width: 100%; font-weight: 600; color: var(--amber-800); border-color: var(--amber-300); }
+
+        .status { min-height: 22px; margin: 4px 2px 10px; font-size: 13px; }
+        .status.ok { color: var(--ok); }
+        .status.error { color: var(--danger); }
+        .note { font-size: 12px; color: var(--muted); margin: 4px 2px 0; }
+        .note li + li { margin-top: 2px; }
+        .note ul { margin: 0; padding-left: 18px; }
+
+        /* 手機直接打開面板時：日期一行、時間一行 */
+        @@media (max-width: 400px) {
+            .fields { flex-wrap: wrap; row-gap: 8px; }
+            .gap { flex-basis: 100%; height: 0; }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <header>
+            <h1>⏰ 時光機</h1>
+            <span class="tag">開發環境限定</span>
+        </header>
+
+        <section class="card now" id="tmNow" aria-live="off">
+            <div class="now-label">網站時間</div>
+            <div class="now-time" id="tmSiteNow">—</div>
+            <div class="now-sub" id="tmRealNow">—</div>
+        </section>
+
+        <p class="status" id="tmStatus" role="status"></p>
+
+        <section class="card" aria-labelledby="tmShiftTitle">
+            <h2 id="tmShiftTitle">快速調整</h2>
+            <div class="shift">
+                <button type="button" class="back" data-shift="-10080">− 7 天</button>
+                <button type="button" class="back" data-shift="-1440">− 1 天</button>
+                <button type="button" class="back" data-shift="-60">− 1 小時</button>
+            </div>
+            <div class="shift">
+                <button type="button" class="fwd" data-shift="60">＋ 1 小時</button>
+                <button type="button" class="fwd" data-shift="1440">＋ 1 天</button>
+                <button type="button" class="fwd" data-shift="10080">＋ 7 天</button>
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="tmJumpTitle">
+            <h2 id="tmJumpTitle">跳到指定時間（台北時間）</h2>
+            <form id="tmJumpForm" novalidate autocomplete="off">
+                <div class="fields">
+                    <div class="field">
+                        <select id="tmYear" aria-label="年">
+                            @foreach (var year in state.Years)
+                            {
+                                <option value="@year">@year</option>
+                            }
+                        </select>
+                        <label for="tmYear">年</label>
+                    </div>
+                    <span class="sep" aria-hidden="true">/</span>
+                    <div class="field">
+                        <input id="tmMonth" data-part="month" data-min="1" data-max="12" inputmode="numeric" maxlength="2" />
+                        <label for="tmMonth">月</label>
+                    </div>
+                    <span class="sep" aria-hidden="true">/</span>
+                    <div class="field">
+                        <input id="tmDay" data-part="day" data-min="1" data-max="31" inputmode="numeric" maxlength="2" />
+                        <label for="tmDay">日</label>
+                    </div>
+                    <span class="gap"></span>
+                    <div class="field">
+                        <input id="tmHour" data-part="hour" data-min="0" data-max="23" inputmode="numeric" maxlength="2" />
+                        <label for="tmHour">時</label>
+                    </div>
+                    <span class="sep" aria-hidden="true">:</span>
+                    <div class="field">
+                        <input id="tmMinute" data-part="minute" data-min="0" data-max="59" inputmode="numeric" maxlength="2" />
+                        <label for="tmMinute">分</label>
+                    </div>
+                    <span class="sep" aria-hidden="true">:</span>
+                    <div class="field">
+                        <input id="tmSecond" data-part="second" data-min="0" data-max="59" inputmode="numeric" maxlength="2" />
+                        <label for="tmSecond">秒</label>
+                    </div>
+                </div>
+                <p class="hint" id="tmHint">還沒動過的話，會跟著網站時間一起走。可以用 ↑↓ 鍵調整。</p>
+                <div class="row">
+                    <button type="button" class="link" id="tmRefill">↺ 填入目前網站時間</button>
+                    <button type="submit" class="primary" id="tmGo">出發</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="card" id="tmResetCard" hidden>
+            <button type="button" class="reset" id="tmReset">回到現在…</button>
+        </section>
+
+        <div class="note">
+            <ul>
+                <li>只影響用 ITimeService.Now 的程式；直接寫 DateTime.Now 的地方、資料庫的預設時間、瀏覽器的時鐘都不受影響。</li>
+                <li>調整後，開著的後台和前台頁面會馬上更新提示條；頁面上已經算好的內容要重新整理。</li>
+                <li>網站重新啟動會保持目前的狀態。</li>
+            </ul>
+        </div>
+    </main>
+
+    <script src="@state.ScriptUrl" data-mode="panel" data-state="@JsonSerializer.Serialize(state, TimeMachineState.Json)"></script>
+    <script src="@Model.PanelScriptUrl" data-prefill="@prefill"></script>
+</body>
+</html>

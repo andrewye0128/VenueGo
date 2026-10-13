@@ -13,6 +13,8 @@ export const ErrorCodes = Object.freeze({
   AccountInactive: "AccountInactive", // 帳號已註銷 / 狀態異常
   NotLoggedIn: "NotLoggedIn", // 沒登入（/api 開頭的網址，後端 ApiResponses.RedirectToLogin 回的）
   Forbidden: "Forbidden", // 登入了但身分不對，例如員工帳號打會員專用的 API
+  // ── 會員個人資料（MemberProfileApiController）──
+  UpdateProfileFailed: "UpdateProfileFailed", // 更新個人資料時伺服器發生錯誤
 
   // ── 評論（昱）──
   Expired: "Expired", // 超過可以評論的時間

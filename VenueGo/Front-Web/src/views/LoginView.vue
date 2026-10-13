@@ -1,11 +1,14 @@
 <script setup>
 import { reactive, ref } from "vue";
 import { z } from "zod";
-import { useRouter } from "vue-router";
+import { useRouter, useRoute } from "vue-router";
 import { useMemberStore } from "@/stores/member";
 
 const router = useRouter();
+const route = useRoute();
 const memberStore = useMemberStore();
+// 密碼顯示／隱藏
+const showPassword = ref(false);
 
 // 登入表單驗證規則
 const schema = z.object({
@@ -22,13 +25,18 @@ const state = reactive({
 // 登入錯誤訊息
 const loginError = ref("");
 
+//會員註冊成功後，在登入頁看到「註冊成功，請登入
+const successMessage = ref(
+  route.query.registered === "1" ? "註冊成功，請使用您的 Email 與密碼登入。" : "",
+);
+
 // 登入
 async function onSubmit() {
   loginError.value = "";
 
   try {
     await memberStore.login(state.email, state.password);
-    console.log(memberStore.member);
+    //console.log(memberStore.member);
     await router.push({ name: "member" });
   } catch (error) {
     loginError.value = error.message;
@@ -60,10 +68,26 @@ async function onSubmit() {
           <UFormField label="密碼" name="password" required>
             <UInput
               v-model="state.password"
-              type="password"
+              :type="showPassword ? 'text' : 'password'"
               placeholder="請輸入密碼"
+              autocomplete="current-password"
               class="w-full"
-            />
+            >
+              <!-- 眼睛按鈕 -->
+              <template #trailing>
+                <UButton
+                  type="button"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  :icon="showPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  :aria-label="showPassword ? '隱藏密碼' : '顯示密碼'"
+                  :aria-pressed="showPassword"
+                  class="cursor-pointer"
+                  @click="showPassword = !showPassword"
+                />
+              </template>
+            </UInput>
           </UFormField>
 
           <!-- 登入錯誤 -->
@@ -73,7 +97,13 @@ async function onSubmit() {
           >
             {{ loginError }}
           </div>
-
+          <!-- 註冊成功 -->
+          <div
+            v-if="successMessage"
+            class="rounded-md border border-semantic-success px-3 py-2 text-sm"
+          >
+            {{ successMessage }}
+          </div>
           <!-- 登入按鈕 -->
           <!--<UButton type="submit" color="primary" size="lg" block :loading="loading"> 登入 </UButton>-->
           <UButton type="submit" color="primary" size="lg" block :loading="memberStore.loading">

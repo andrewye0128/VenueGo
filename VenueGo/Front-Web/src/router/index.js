@@ -31,6 +31,11 @@ const router = createRouter({
       component: () => import("../views/LoginView.vue"),
     },
     {
+      path: "/register",
+      name: "register",
+      component: () => import("../views/RegisterView.vue"),
+    },
+    {
       // SportTypeSelect 元件使用說明頁
       path: "/demo/select",
       name: "demo-select",
@@ -61,7 +66,7 @@ const router = createRouter({
       children: [
         // 進入會員中心時，預設顯示個人資料
         {
-          path: "",
+          path: "member-home",
           redirect: { name: "profile" },
         },
         // 我的預約

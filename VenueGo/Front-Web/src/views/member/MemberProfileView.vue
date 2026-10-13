@@ -8,8 +8,22 @@ const memberStore = useMemberStore();
 const isEditing = ref(false);
 const saving = ref(false);
 
-const errorMessage = ref("");
 const successMessage = ref("");
+const errorMessage = ref(""); // 用於 API 失敗或未歸類的全域錯誤
+
+// 各欄位的獨立錯誤訊息物件
+const fieldErrors = ref({
+  name: "",
+  phone: "",
+  carrierNo: "",
+  currentPassword: "",
+  newPassword: "",
+  confirmNewPassword: "",
+});
+
+const showCurrentPassword = ref(false);
+const showNewPassword = ref(false);
+const showConfirmPassword = ref(false);
 
 const form = ref({
   name: "",
@@ -17,16 +31,23 @@ const form = ref({
   phone: "",
   birth: "",
   carrierNo: "",
-
-  // 修改密碼
   currentPassword: "",
   newPassword: "",
   confirmNewPassword: "",
 });
 
-function startEditing() {
+// 清空所有錯誤
+function clearErrors() {
   errorMessage.value = "";
   successMessage.value = "";
+  Object.keys(fieldErrors.value).forEach((key) => {
+    fieldErrors.value[key] = "";
+  });
+}
+
+// 開始編輯
+function startEditing() {
+  clearErrors();
 
   form.value = {
     name: memberStore.member?.name ?? "",
@@ -34,79 +55,170 @@ function startEditing() {
     phone: memberStore.member?.phone ?? "",
     birth: memberStore.member?.birth ?? "",
     carrierNo: memberStore.member?.carrierNo ?? "",
-
-    // 修改密碼時一律清空
     currentPassword: "",
     newPassword: "",
     confirmNewPassword: "",
   };
 
+  showCurrentPassword.value = false;
+  showNewPassword.value = false;
+  showConfirmPassword.value = false;
+
   isEditing.value = true;
 }
 
+// 取消編輯
 function cancelEditing() {
   isEditing.value = false;
-  errorMessage.value = "";
-  successMessage.value = "";
+  clearErrors();
 }
 
+// 儲存個人資料
 async function saveProfile() {
-  errorMessage.value = "";
-  successMessage.value = "";
+  clearErrors();
 
+  const name = form.value.name.trim();
   const phone = form.value.phone.trim();
-  const carrierNo = form.value.carrierNo.trim();
-  // 前端基本驗證
-  // 姓名
-  if (!form.value.name.trim()) {
-    errorMessage.value = "請輸入姓名";
-    return;
+  const carrierNo = form.value.carrierNo.trim().toUpperCase();
+
+  const currentPassword = form.value.currentPassword;
+  const newPassword = form.value.newPassword;
+  const confirmNewPassword = form.value.confirmNewPassword;
+
+  let isValid = true;
+
+  // 姓名驗證
+  if (!name) {
+    fieldErrors.value.name = "請輸入姓名";
+    isValid = false;
+  } else if (name.length > 50) {
+    fieldErrors.value.name = "姓名長度不能超過 50 個字";
+    isValid = false;
   }
 
-  // 手機號碼
+  // 台灣手機號碼：09 開頭，共 10 碼
   if (!phone) {
-    errorMessage.value = "請輸入手機號碼";
-    return;
+    fieldErrors.value.phone = "請輸入手機號碼";
+    isValid = false;
+  } else if (!/^09\d{8}$/.test(phone)) {
+    fieldErrors.value.phone = "手機號碼格式不正確，請輸入 09 開頭的 10 碼手機號碼";
+    isValid = false;
   }
 
-  if (!/^09\d{8}$/.test(phone)) {
-    errorMessage.value = "手機號碼格式不正確，請輸入 09 開頭的 10 碼手機號碼";
-    return;
-  }
-
-  // 載具：有填才驗證，沒填可以儲存
+  // 載具可以留空，有填寫才驗證
   if (carrierNo && !/^\/[A-Z0-9.+-]{7}$/.test(carrierNo)) {
-    errorMessage.value = "載具格式不正確，例如 /AB12.+-";
-    return;
+    fieldErrors.value.carrierNo = "載具格式不正確，請輸入斜線開頭及 7 碼英數字或 +、-、. 字元";
+    isValid = false;
   }
+
+  // 任一密碼欄位有填寫，就視為要修改密碼
+  const wantsToChangePassword =
+    currentPassword !== "" || newPassword !== "" || confirmNewPassword !== "";
+
+  if (wantsToChangePassword) {
+    if (!currentPassword) {
+      fieldErrors.value.currentPassword = "請輸入目前密碼";
+      isValid = false;
+    }
+
+    if (!newPassword) {
+      fieldErrors.value.newPassword = "請輸入新密碼";
+      isValid = false;
+    } else {
+      if (newPassword.length < 8 || newPassword.length > 100) {
+        fieldErrors.value.newPassword = "新密碼長度需介於 8 至 100 個字元";
+        isValid = false;
+      } else if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(newPassword)) {
+        fieldErrors.value.newPassword = "新密碼必須包含大寫英文字母、小寫英文字母與數字";
+        isValid = false;
+      }
+    }
+
+    if (!confirmNewPassword) {
+      fieldErrors.value.confirmNewPassword = "請再次輸入新密碼";
+      isValid = false;
+    } else if (newPassword !== confirmNewPassword) {
+      fieldErrors.value.confirmNewPassword = "兩次輸入的新密碼不一致";
+      isValid = false;
+    }
+  }
+
+  if (!isValid) return;
+
   saving.value = true;
 
   try {
     await updateMemberProfile({
-      name: form.value.name.trim(),
-
-      // Email 目前不可編輯，
-      // 但後端 UserProfileViewModel.Email 為 Required，
-      // 所以仍然把原本的 Email 傳回去。
-      email: form.value.email.trim(),
-
-      phone: form.value.phone.trim(),
-
-      // 生日目前不可編輯，而且後端更新 API 沒有處理 Birth，
-      // 因此不送 birth。
-
-      carrierNo: form.value.carrierNo.trim(),
+      name,
+      phone,
+      carrierNo: carrierNo || null,
+      currentPassword: currentPassword || null,
+      newPassword: newPassword || null,
     });
 
-    // 更新成功後重新取得會員資料
     await memberStore.fetchCurrentMember();
 
     isEditing.value = false;
     successMessage.value = "個人資料更新成功";
   } catch (error) {
-    console.error("更新個人資料失敗：", error);
+    // console.error("更新個人資料失敗：", error);
 
-    errorMessage.value = error?.response?.data?.message || error?.message || "更新個人資料失敗";
+    // const data = error?.response?.data;
+    // const errors = data?.errors;
+
+    // const firstValidationMessage = errors
+    //   ? Object.values(errors)
+    //       .flat()
+    //       .find((message) => typeof message === "string" && message)
+    //   : null;
+
+    // errorMessage.value =
+    //   firstValidationMessage ||
+    //   data?.message ||
+    //   data?.title ||
+    //   error?.message ||
+    //   "更新個人資料失敗，請稍後再試。";
+
+    const data = error?.response?.data;
+    const errors = data?.data?.errors ?? data?.errors;
+
+    // 後端欄位名稱 → 前端 fieldErrors 欄位名稱
+    const fieldNameMap = {
+      name: "name",
+      phone: "phone",
+      carrierno: "carrierNo",
+      currentpassword: "currentPassword",
+      newpassword: "newPassword",
+      confirmnewpassword: "confirmNewPassword",
+    };
+
+    let firstUnknownMessage = "";
+
+    if (errors && typeof errors === "object") {
+      for (const [key, value] of Object.entries(errors)) {
+        const messages = Array.isArray(value) ? value : [value];
+
+        const message = messages.find((item) => typeof item === "string" && item);
+
+        if (!message) continue;
+
+        // 支援 Name、name，以及 request.Name 這類欄位名稱
+        const propertyName = key.split(".").pop().toLowerCase();
+        const fieldName = fieldNameMap[propertyName];
+
+        if (fieldName) {
+          fieldErrors.value[fieldName] = message;
+        } else if (!firstUnknownMessage) {
+          firstUnknownMessage = message;
+        }
+      }
+    }
+
+    errorMessage.value =
+      firstUnknownMessage ||
+      (!errors || Object.keys(errors).length === 0
+        ? data?.message || data?.title || error?.message || "更新個人資料失敗，請稍後再試。"
+        : "");
   } finally {
     saving.value = false;
   }
@@ -114,194 +226,296 @@ async function saveProfile() {
 </script>
 
 <template>
-  <section>
-    <!-- 標題 -->
-    <div class="mb-5 flex items-center justify-between">
+  <section class="mx-auto w-full max-w-5xl space-y-6 pb-8">
+    <!-- 頁面標題 -->
+    <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
-        <h1 class="text-xl font-bold text-gray-900">個人資料</h1>
-
-        <p class="mt-1 text-sm text-gray-500">查看與管理您的會員資料</p>
+        <h1 class="text-2xl font-bold text-neutral-text-primary">個人資料</h1>
+        <p class="mt-2 text-sm text-neutral-text-secondary">管理您的會員資訊與帳號安全設定</p>
       </div>
 
-      <!-- 非編輯狀態 -->
-      <button
-        v-if="!isEditing"
-        type="button"
-        class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        @click="startEditing"
-      >
-        編輯資料
-      </button>
+      <div class="flex items-center gap-2">
+        <template v-if="isEditing">
+          <UButton
+            type="button"
+            color="neutral"
+            variant="outline"
+            :disabled="saving"
+            class="cursor-pointer"
+            @click="cancelEditing"
+          >
+            取消
+          </UButton>
 
-      <!-- 編輯狀態 -->
-      <div v-else class="flex gap-2">
-        <!-- 取消 -->
-        <button
-          type="button"
-          class="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="saving"
-          @click="cancelEditing"
-        >
-          取消
-        </button>
+          <UButton
+            type="submit"
+            form="member-profile-form"
+            color="primary"
+            :loading="saving"
+            class="cursor-pointer"
+          >
+            儲存變更
+          </UButton>
+        </template>
 
-        <!-- 儲存 -->
-        <button
-          type="button"
-          class="rounded-md bg-brand-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          :disabled="saving"
-          @click="saveProfile"
-        >
-          {{ saving ? "儲存中..." : "儲存" }}
-        </button>
+        <UButton v-else type="button" color="primary" class="cursor-pointer" @click="startEditing">
+          <UIcon name="i-lucide-pencil" class="mr-1 size-4" />
+          編輯資料
+        </UButton>
       </div>
     </div>
 
     <!-- 成功訊息 -->
-    <div
+    <UAlert
       v-if="successMessage"
-      class="mb-4 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700"
-    >
-      {{ successMessage }}
-    </div>
+      color="success"
+      variant="subtle"
+      title="操作成功"
+      :description="successMessage"
+    />
 
     <!-- 錯誤訊息 -->
-    <div
+    <UAlert
       v-if="errorMessage"
-      class="mb-4 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
-    >
-      {{ errorMessage }}
-    </div>
+      color="error"
+      variant="subtle"
+      title="操作失敗"
+      :description="errorMessage"
+    />
 
-    <!-- 個人資料卡片 -->
-    <div class="border border-gray-200 bg-white">
-      <!-- 卡片標題 -->
-      <div class="border-b border-gray-200 px-6 py-4">
-        <h2 class="text-base font-semibold text-gray-900">個人資料</h2>
-      </div>
+    <UForm id="member-profile-form" :state="form" class="space-y-6" @submit="saveProfile">
+      <!-- 基本資料 -->
+      <UCard>
+        <template #header>
+          <div>
+            <h2 class="font-semibold text-neutral-text-primary">基本資料</h2>
+            <p class="mt-1 text-sm text-neutral-text-secondary">您的姓名與聯絡資訊</p>
+          </div>
+        </template>
 
-      <!-- 資料內容 -->
-      <div class="grid grid-cols-1 gap-x-10 gap-y-6 p-6 md:grid-cols-2">
-        <!-- 姓名 -->
-        <div>
-          <p class="text-sm text-gray-500">姓名</p>
+        <div class="grid grid-cols-1 gap-x-8 gap-y-6 sm:grid-cols-2">
+          <!-- 姓名 -->
+          <UFormField label="姓名" name="name" required :error="fieldErrors.name || undefined">
+            <UInput
+              v-if="isEditing"
+              v-model="form.name"
+              class="w-full"
+              placeholder="請輸入姓名"
+              maxlength="50"
+              autocomplete="name"
+            />
+            <p v-else class="py-2 text-sm font-medium text-neutral-text-primary">
+              {{ memberStore.member?.name || "尚未填寫" }}
+            </p>
+          </UFormField>
 
-          <!-- 編輯模式 -->
-          <input
-            v-if="isEditing"
-            v-model="form.name"
-            type="text"
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-          />
+          <!-- Email -->
+          <UFormField label="Email">
+            <div class="flex min-h-10 items-center gap-2">
+              <p class="break-all text-sm text-neutral-text-primary">
+                {{ memberStore.member?.email || "尚未填寫" }}
+              </p>
+            </div>
+            <p v-if="isEditing" class="mt-1 text-xs text-neutral-text-secondary">
+              Email 為登入帳號，目前無法自行修改。
+            </p>
+          </UFormField>
 
-          <!-- 顯示模式 -->
-          <p v-else class="mt-1 text-sm font-medium text-gray-900">
-            {{ memberStore.member?.name || "-" }}
-          </p>
-        </div>
-
-        <!-- Email -->
-        <div>
-          <p class="text-sm text-gray-500">Email</p>
-
-          <!-- Email 不可編輯 -->
-          <p class="mt-1 text-sm font-medium text-gray-900">
-            {{ memberStore.member?.email || "-" }}
-          </p>
-          <p
-            v-if="isEditing"
-            class="mt-2 inline-block rounded bg-yellow-50 px-2 py-1 text-xs text-yellow-700"
+          <!-- 手機 -->
+          <UFormField
+            label="手機號碼"
+            name="phone"
+            required
+            :error="fieldErrors.phone || undefined"
           >
-            Email 為登入帳號，如需修改請聯絡管理員
-          </p>
-        </div>
-
-        <!-- 手機號碼 -->
-        <div>
-          <p class="text-sm text-gray-500">手機號碼</p>
-
-          <!-- 編輯模式 -->
-          <input
-            v-if="isEditing"
-            v-model="form.phone"
-            type="text"
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-          />
-
-          <!-- 顯示模式 -->
-          <p v-else class="mt-1 text-sm font-medium text-gray-900">
-            {{ memberStore.member?.phone || "-" }}
-          </p>
-        </div>
-
-        <!-- 生日 -->
-        <div>
-          <p class="text-sm text-gray-500">生日</p>
-
-          <!-- 生日不可編輯 -->
-          <p class="mt-1 text-sm font-medium text-gray-900">
-            {{ memberStore.member?.birth || "-" }}
-          </p>
-        </div>
-
-        <!-- 載具 -->
-        <div>
-          <p class="text-sm text-gray-500">載具</p>
-
-          <!-- 編輯模式 -->
-          <input
-            v-if="isEditing"
-            v-model="form.carrierNo"
-            type="text"
-            placeholder="例如 /AB12.+-"
-            class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-          />
-
-          <!-- 顯示模式 -->
-          <p v-else class="mt-1 text-sm font-medium text-gray-900">
-            {{ memberStore.member?.carrierNo || "-" }}
-          </p>
-        </div>
-      </div>
-
-      <div v-if="isEditing" class="mt-6 border border-gray-200 bg-white">
-        <div class="border-b border-gray-200 px-6 py-4">
-          <h2 class="text-base font-semibold text-gray-900">修改密碼</h2>
-          <p class="mt-1 text-sm text-gray-500">如果不需要修改密碼，請留空</p>
-        </div>
-
-        <div class="grid grid-cols-1 gap-x-10 gap-y-6 p-6">
-          <div>
-            <label class="text-sm text-gray-500">目前密碼</label>
-            <input
+            <UInput
               v-if="isEditing"
+              v-model="form.phone"
+              class="w-full"
+              type="tel"
+              inputmode="numeric"
+              maxlength="10"
+              autocomplete="tel"
+              placeholder="例如 0912345678"
+            />
+            <p v-else class="py-2 text-sm font-medium text-neutral-text-primary">
+              {{ memberStore.member?.phone || "尚未填寫" }}
+            </p>
+            <p
+              v-if="isEditing && !fieldErrors.phone"
+              class="mt-1 text-xs text-neutral-text-secondary"
+            >
+              請輸入 09 開頭的 10 碼台灣手機號碼。
+            </p>
+          </UFormField>
+
+          <!-- 生日 -->
+          <UFormField label="生日">
+            <div class="flex min-h-10 items-center gap-2">
+              <p class="text-sm text-neutral-text-primary">
+                {{ memberStore.member?.birth || "尚未填寫" }}
+              </p>
+            </div>
+          </UFormField>
+
+          <!-- 載具 -->
+          <UFormField
+            label="電子發票載具"
+            name="carrierNo"
+            class="sm:col-span-2"
+            :error="fieldErrors.carrierNo || undefined"
+          >
+            <UInput
+              v-if="isEditing"
+              v-model="form.carrierNo"
+              class="w-full sm:max-w-md"
+              placeholder="例如 /AB12345"
+              maxlength="8"
+              autocomplete="off"
+              autocapitalize="characters"
+            />
+            <p
+              v-if="isEditing && !fieldErrors.carrierNo"
+              class="mt-1 text-xs text-neutral-text-secondary"
+            >
+              請輸入斜線開頭，後接 7 碼英數字或 +、-、. 字元。
+            </p>
+            <p v-else-if="!isEditing" class="py-2 text-sm font-medium text-neutral-text-primary">
+              {{ memberStore.member?.carrierNo || "尚未設定載具" }}
+            </p>
+          </UFormField>
+        </div>
+      </UCard>
+
+      <!-- 修改密碼 -->
+      <UCard v-if="isEditing">
+        <template #header>
+          <div>
+            <h2 class="font-semibold text-neutral-text-primary">修改密碼</h2>
+            <p class="mt-1 text-sm text-neutral-text-secondary">
+              若不需要修改密碼，請將以下欄位全部留空。
+            </p>
+          </div>
+        </template>
+
+        <div class="space-y-6">
+          <!-- 舊密碼 -->
+          <UFormField
+            label="舊密碼"
+            name="currentPassword"
+            :error="fieldErrors.currentPassword || undefined"
+          >
+            <UInput
               v-model="form.currentPassword"
-              type="password"
-              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-            />
-          </div>
+              class="w-full"
+              :type="showCurrentPassword ? 'text' : 'password'"
+              autocomplete="current-password"
+              placeholder="請輸入原密碼"
+            >
+              <template #trailing>
+                <UButton
+                  type="button"
+                  color="neutral"
+                  variant="ghost"
+                  size="xs"
+                  :icon="showCurrentPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                  :aria-label="showCurrentPassword ? '隱藏密碼' : '顯示密碼'"
+                  class="cursor-pointer"
+                  @click="showCurrentPassword = !showCurrentPassword"
+                />
+              </template>
+            </UInput>
+          </UFormField>
 
-          <div>
-            <label class="text-sm text-gray-500">新密碼</label>
-            <input
-              v-if="isEditing"
-              v-model="form.newPassword"
-              type="password"
-              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-            />
-          </div>
+          <div class="grid grid-cols-1 gap-6 md:grid-cols-2">
+            <!-- 新密碼 -->
+            <UFormField
+              label="新密碼"
+              name="newPassword"
+              :error="fieldErrors.newPassword || undefined"
+            >
+              <UInput
+                v-model="form.newPassword"
+                class="w-full"
+                :type="showNewPassword ? 'text' : 'password'"
+                autocomplete="new-password"
+                placeholder="請輸入新密碼"
+              >
+                <template #trailing>
+                  <UButton
+                    type="button"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :icon="showNewPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                    :aria-label="showNewPassword ? '隱藏密碼' : '顯示密碼'"
+                    class="cursor-pointer"
+                    @click="showNewPassword = !showNewPassword"
+                  />
+                </template>
+              </UInput>
+              <p v-if="!fieldErrors.newPassword" class="mt-1 text-xs text-neutral-text-secondary">
+                至少 8 個字元，包含大寫、小寫英文字母與數字。
+              </p>
+            </UFormField>
 
-          <div>
-            <label class="text-sm text-gray-500">確認新密碼</label>
-            <input
-              v-if="isEditing"
-              v-model="form.confirmNewPassword"
-              type="password"
-              class="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-gray-500 focus:outline-none"
-            />
+            <!-- 確認新密碼 -->
+            <UFormField
+              label="確認新密碼"
+              name="confirmNewPassword"
+              :error="fieldErrors.confirmNewPassword || undefined"
+            >
+              <UInput
+                v-model="form.confirmNewPassword"
+                class="w-full"
+                :type="showConfirmPassword ? 'text' : 'password'"
+                autocomplete="new-password"
+                placeholder="請再次輸入新密碼"
+              >
+                <template #trailing>
+                  <UButton
+                    type="button"
+                    color="neutral"
+                    variant="ghost"
+                    size="xs"
+                    :icon="showConfirmPassword ? 'i-lucide-eye-off' : 'i-lucide-eye'"
+                    :aria-label="showConfirmPassword ? '隱藏密碼' : '顯示密碼'"
+                    class="cursor-pointer"
+                    @click="showConfirmPassword = !showConfirmPassword"
+                  />
+                </template>
+              </UInput>
+            </UFormField>
           </div>
         </div>
+      </UCard>
+
+      <!-- 底部操作 -->
+      <div
+        v-if="isEditing"
+        class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p class="text-xs text-neutral-text-secondary">
+          修改密碼需要輸入舊密碼；不修改時，密碼欄位全部留空即可。
+        </p>
+
+        <div class="flex justify-end gap-2">
+          <UButton
+            type="button"
+            color="neutral"
+            variant="outline"
+            :disabled="saving"
+            class="cursor-pointer"
+            @click="cancelEditing"
+          >
+            取消
+          </UButton>
+
+          <UButton type="submit" color="primary" :loading="saving" class="cursor-pointer">
+            儲存變更
+          </UButton>
+        </div>
       </div>
-    </div>
+    </UForm>
   </section>
 </template>

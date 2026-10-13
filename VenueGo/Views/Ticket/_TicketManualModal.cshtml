@@ -23,6 +23,16 @@
 
                     <div class="alert alert-warning py-2 px-3 mb-0" role="alert">@Model.WarningText</div>
 
+                    @if (Model.ShowEmailInput)
+                    {
+                        <div>
+                            <label class="form-label fw-medium" for="@(Model.ModalId)Email">
+                                新持有人 Email <span class="text-danger">*</span>
+                            </label>
+                            <input type="email" class="form-control" id="@(Model.ModalId)Email" name="email" required />
+                        </div>
+                    }
+
                     <div>
                         <label class="form-label fw-medium" for="@(Model.ModalId)ReasonType">
                             原因類別 <span class="text-danger">*</span>

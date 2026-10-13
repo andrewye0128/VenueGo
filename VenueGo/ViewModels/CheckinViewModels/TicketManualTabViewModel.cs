@@ -13,11 +13,12 @@ namespace VenueGo.ViewModels.CheckinViewModels
         public List<SelectListItem> CancelReasonOptions { get; set; } = new List<SelectListItem>();
         public List<SelectListItem> ExpireReasonOptions { get; set; } = new List<SelectListItem>();
         public List<SelectListItem> ReissueReasonOptions { get; set; } = new List<SelectListItem>();
+        public List<SelectListItem> TransferReasonOptions { get; set; } = new List<SelectListItem>();
 
         //按鈕要不要能按 >> 只有「有效」且還沒超過預約時間的票券可以操作
         public bool CanCancel => !IsPastEndTime && Status == (byte)EntryTicketStatus.Valid;
         public bool CanExpire => CanCancel;
-
         public bool CanReissue => CanCancel;
+        public bool CanTransfer => CanCancel;
     }
 }

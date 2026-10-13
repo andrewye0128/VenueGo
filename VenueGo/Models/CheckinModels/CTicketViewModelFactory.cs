@@ -39,7 +39,7 @@ namespace VenueGo.Models.CheckinModels
 
         public List<EntryTicketListViewModel> SearchTickets(DateOnly date, string? keyword, int? venueId, int? status)
         {
-            return _db.Database.SqlQuery<EntryTicketListViewModel>($@"
+            List<EntryTicketListViewModel> list =  _db.Database.SqlQuery<EntryTicketListViewModel>($@"
                 SELECT TicketId,
                     TicketQRToken     AS Qrtoken,
                     UserName,
@@ -59,6 +59,22 @@ namespace VenueGo.Models.CheckinModels
                     AND  ({status}  IS NULL OR TicketStatusValue = {status})")
                 .OrderBy(x => x.StartTime)
                 .ToList();
+
+            // 臨時測試用之後改檢視表
+            List<int> test = list.Select(t => t.TicketId).ToList();
+
+            var holders = (from t in _db.EntryTickets.AsNoTracking()
+                          join u in _db.Users on t.UserId equals u.UserId
+                          where test.Contains(t.TicketId)
+                          select new { t.TicketId, u.Name })
+                         .ToDictionary(x => x.TicketId, x => x.Name);
+
+            foreach( var item in list )
+            {
+                item.Holder = holders.ContainsKey(item.TicketId) ? holders[item.TicketId] : item.UserName;
+            }
+
+            return list;
         }
 
         public List<SelectListItem> GetVenueOptions()
@@ -194,6 +210,7 @@ namespace VenueGo.Models.CheckinModels
             vm.CancelReasonOptions = _StatusLogFactory.GetReasonOptions(TicketManualLogAction.Cancel);
             vm.ExpireReasonOptions = _StatusLogFactory.GetReasonOptions(TicketManualLogAction.Expire);
             vm.ReissueReasonOptions = _StatusLogFactory.GetReasonOptions(TicketManualLogAction.Reissue);
+            vm.TransferReasonOptions = _StatusLogFactory.GetReasonOptions(TicketManualLogAction.Transfer);
             return vm;
         }
 
@@ -213,7 +230,7 @@ namespace VenueGo.Models.CheckinModels
         {
             var data = (from t in _db.EntryTickets.AsNoTracking()
                         join o in _db.Orders on t.OrderId equals o.OrderId
-                        join u in _db.Users on o.UserId equals u.UserId
+                        join u in _db.Users on t.UserId equals u.UserId
                         join r in _db.Reservations on o.ReservationId equals r.ReservationId
                         join v in _db.Venues on r.VenueId equals v.VenueId
                         where t.TicketId == ticketId

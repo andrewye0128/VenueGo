@@ -280,6 +280,39 @@ namespace VenueGo.Controllers
             return RedirectToAction("ManualLog", new { id });
         }
 
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> ManualTransfer(int id, string? email, TicketManualLogReasonType? reasonType, string? remark)
+        {
+            var userId = GetCurrentUserId();
+            if(userId is null) return Unauthorized();
+
+            if (string.IsNullOrEmpty(email))
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = "請輸入新持有人 Email";
+                return RedirectToAction("ManualLog", new { id });
+            }
+
+            var error = _ticketStatusLogFactory.ValidateInput(TicketManualLogAction.Transfer, reasonType, remark);
+            if(error != null)
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = error;
+                return RedirectToAction("ManualLog", new { id });
+            }
+
+            var result = await _ticketManualService.TransferAsync(id, userId.Value, email, reasonType!.Value, remark);
+            if (result.Success)
+            {
+                TempData[CDictionary.TK_MSG_操作成功] = "手動轉讓成功";
+            }
+            else
+            {
+                TempData[CDictionary.TK_MSG_操作失敗] = result.Reason;
+            }
+            return RedirectToAction("ManualLog", new { id });
+            
+        }
+
         public async Task<IActionResult> OvertimeCheckout(int id)
         {
             var vm = _ticketFactory.GetOvertimeTab(id);

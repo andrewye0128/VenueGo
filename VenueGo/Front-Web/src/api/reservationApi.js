@@ -3,6 +3,8 @@
 // 後端從 token 知道是哪位會員
 import http from "./http";
 import { ALL } from "@/constants/statuses";
+import { buildMockReservation } from "@/mocks/bookingQuote";
+import { delay } from "@/utils/delay";
 
 /**
  * 取得我的預約（篩選＋分頁）：[GET] /api/reservations
@@ -46,4 +48,29 @@ export async function getMyReservations({
  */
 export async function cancelMyReservation(reservationId, reason = null) {
   throw new Error("取消預約功能尚未開放，請洽櫃檯辦理");
+}
+
+/**
+ * 建立預約：[POST] /api/reservations
+ * 不送金額：金額由後端依時段重新計算（送了也不會採用）
+ * ⚠️ 後端還沒做：先回傳假資料，後端做好後換成：
+ *    const { data } = await http.post("/reservations", request);
+ * @param {object} request
+ * @param {number} request.venueId
+ * @param {string} request.bookingDate "2026-10-20"
+ * @param {string[]} request.slotTimes ["17:00", "18:00"]
+ * @param {number} request.personAmount 使用人數
+ * @param {number} request.paymentMethod constants/payment.js 的 PAYMENT_METHOD
+ * @param {number} request.invoiceType constants/payment.js 的 INVOICE_TYPE
+ * @param {string|null} request.carrierNo 手機條碼載具；紙本發票時是 null
+ * @param {boolean} request.termsAccepted 一定要是 true
+ * @param {string} request.termsVersion 客人同意的條款版本（試算回傳的 termsVersion）
+ * @param {object} mockQuote 假資料才需要：填寫頁的試算結果（真的 API 不用傳）
+ * @returns {Promise<object>} { reservationId, orderNo, venueName, sportName, bookingDate, startTime, endTime,
+ *   personAmount, totalAmount, paymentMethod, paymentDueAt, reservationStatus }
+ *   錯誤：SlotTaken、SlotUnavailable、PaymentMethodNotAllowed、TermsVersionMismatch、ValidationFailed
+ */
+export async function createReservation(request, mockQuote) {
+  await delay(800); // 模擬網路等待：測試「送出中」按鈕不能重複按
+  return buildMockReservation(mockQuote, request);
 }

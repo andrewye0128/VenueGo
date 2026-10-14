@@ -26,6 +26,12 @@ export const ErrorCodes = Object.freeze({
 
   // ── 場地預約（BookingApiController）──
   DateOutOfRange: "DateOutOfRange", // 日期不在會員可預約的範圍內（今天～30 天後）
+  // 試算、建立預約（階段 2；後端還沒做，名稱是 API 規格草稿，後端定案後要再對一次）
+  SlotUnavailable: "SlotUnavailable", // 時段不能訂：被訂走、不連續、超過 4 小時
+  SlotTaken: "SlotTaken", // 送出的那一刻時段剛被別人訂走（409）
+  VenueNotBookable: "VenueNotBookable", // 場地停用，或沒有啟用中的價格
+  PaymentMethodNotAllowed: "PaymentMethodNotAllowed", // 付款方式不符合規則（例如 2 天內選現場付款）
+  TermsVersionMismatch: "TermsVersionMismatch", // 租借條款改版了，要重新同意
 
   // ── 前台 src/api/http.js 產生（不是後端回傳）──
   ValidationFailed: "ValidationFailed", // [ApiController] 自動產生的輸入驗證錯誤

@@ -1,6 +1,8 @@
-// 場地預約 API（前台預約頁用，都不需要登入）
+// 場地預約 API（前台預約頁用；查時段不需要登入，試算需要會員登入）
 import http from "./http";
+import { getSportTypes } from "./sportTypeApi";
 import { DEFAULT_TIME_PERIOD } from "@/constants/booking";
+import { buildMockQuote } from "@/mocks/bookingQuote";
 
 /**
  * 某天各場地的時段：[GET] /api/booking/availability
@@ -43,4 +45,29 @@ export async function getAvailabilitySummary({
 
   const { data } = await http.get("/booking/availability/summary", { params });
   return data;
+}
+
+/**
+ * 試算（填寫資料頁一打開就呼叫）：[GET] /api/booking/quote
+ * 後端重新檢查時段還能不能訂、計算金額、回傳能用的付款方式與期限
+ * ⚠️ 後端還沒做：先用真的時段資料（/api/booking/availability）在前端模擬，後端做好後換成：
+ *    const { data } = await http.get("/booking/quote", { params: { venueId, date, slots: slots.join(",") } });
+ * @param {object} params
+ * @param {number} params.venueId 場地
+ * @param {string} params.date "2026-10-20"
+ * @param {string[]} params.slots 時段 ["17:00", "18:00"]（已排序）
+ * @returns {Promise<object>} { venueId, venueName, sportTypeId, sportName, capacity, bookingDate, startTime, endTime,
+ *   slots: [{ slotTime, unitPrice, isPeak }], totalAmount,
+ *   paymentOptions: [{ paymentMethod, isAvailable, dueAt, unavailableReason }], termsVersion }
+ *   錯誤：DateOutOfRange、SlotUnavailable、VenueNotBookable
+ */
+export async function getBookingQuote({ venueId, date, slots }) {
+  // 兩個請求互不相關，同時送出（前端的 Promise.all 沒問題；後端同一個 DbContext 才不能同時查）
+  const [availability, sportTypes] = await Promise.all([
+    getAvailability({ date }),
+    getSportTypes(),
+  ]);
+  const venue = availability.venues.find((v) => v.venueId === venueId);
+  const sport = sportTypes.find((s) => s.id === venue?.sportTypeId);
+  return buildMockQuote(availability, { venueId, slots }, sport && { sportName: sport.name });
 }

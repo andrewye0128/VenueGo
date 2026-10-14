@@ -1,5 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using VenueGo.Data;
+using VenueGo.Dtos;
 using VenueGo.Helpers;
 using VenueGo.Constants;
 using VenueGo.Models.ContentModels;
@@ -259,7 +260,248 @@ namespace VenueGo.Controllers
         }
 
 
+        /*常見問題*/
+        //每個 Action 都帶著 returnCategory(使用者原本停在哪個分類頁籤),處理完導回同一個頁籤
+
+        //常見問題列表(不分頁,依分類分組)
+        public IActionResult FaqIndex(string? category)
+        {
+            FaqIndexViewModel vm = new CFaqFactory().QueryAdminList(category);
+            return View(vm);
+        }
+
+
+        //常見問題新增 >> 頁面產生
+        //在單一分類頁籤按新增 >> 分類預設為該分類;在「全部」頁籤 >> 不預設,由管理者自己選
+        [HttpGet]
+        public IActionResult FaqCreate(string? returnCategory)
+        {
+            CFaqWrap wrap = new CFaqWrap();
+            if (FaqCategoryOptions.IsValid(returnCategory))
+            {
+                wrap.Category = returnCategory!;
+            }
+            //新增時預設顯示
+            wrap.IsPublished = true;
+
+            ViewData["ReturnCategory"] = returnCategory;
+            return View(wrap);
+        }
+
+
+        //常見問題新增 >> 頁面傳回
+        [HttpPost]
+        public IActionResult FaqCreate(CFaqWrap wrap, string? returnCategory)
+        {
+            //驗證分類在清單內(只擋空值的 [Required] 擋不了被竄改的代碼)
+            if (!string.IsNullOrEmpty(wrap.Category) && !FaqCategoryOptions.IsValid(wrap.Category))
+            {
+                ModelState.AddModelError("Category", "請從清單中選擇分類");
+            }
+            //回答裡的連結網址不合法(例如 www.、http://、javascript:)就擋下;全形括號只在預覽提醒,不擋
+            AddFaqAnswerErrors(wrap.Answer);
+
+            if (!ModelState.IsValid)
+            {
+                ViewData["ReturnCategory"] = returnCategory;
+                return View(wrap);
+            }
+
+            //取得登入者:先檢查 null 再使用
+            int? userId = _currentUser.UserId;
+            if (userId == null)
+            {
+                TempData["FaqErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            //後端決定的值:SortOrder 由 Factory 決定(排在該分類最後)
+            wrap.IsActive = true;
+            wrap.CreatedAt = _timeService.Now;
+            wrap.CreatedBy = userId.Value;
+            wrap.UpdatedAt = null;
+            wrap.UpdatedBy = null;
+
+            new CFaqFactory().Create(wrap);
+
+            TempData["FaqSuccessMessage"] = "已新增常見問題";
+            return RedirectToFaqIndex(returnCategory);
+        }
+
+
+        //常見問題編輯 >> 頁面產生
+        [HttpGet]
+        public IActionResult FaqEdit(int? id, string? returnCategory)
+        {
+            if (id == null)
+            {
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            CFaqWrap? wrap = new CFaqFactory().QueryById((int)id);
+            if (wrap == null)
+            {
+                TempData["FaqErrorMessage"] = "找不到這則問題,可能已經被刪除";
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            ViewData["ReturnCategory"] = returnCategory;
+            return View(wrap);
+        }
+
+
+        //常見問題編輯 >> 頁面傳回
+        [HttpPost]
+        public IActionResult FaqEdit(CFaqWrap wrap, string? returnCategory)
+        {
+            if (!string.IsNullOrEmpty(wrap.Category) && !FaqCategoryOptions.IsValid(wrap.Category))
+            {
+                ModelState.AddModelError("Category", "請從清單中選擇分類");
+            }
+            //回答裡的連結網址不合法(例如 www.、http://、javascript:)就擋下;全形括號只在預覽提醒,不擋
+            AddFaqAnswerErrors(wrap.Answer);
+
+            if (!ModelState.IsValid)
+            {
+                ViewData["ReturnCategory"] = returnCategory;
+                return View(wrap);
+            }
+
+            int? userId = _currentUser.UserId;
+            if (userId == null)
+            {
+                TempData["FaqErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            //換分類時,Factory 會把它排到新分類的最後
+            bool isEdited = new CFaqFactory().Edit(wrap, userId.Value, _timeService.Now);
+            if (isEdited)
+            {
+                TempData["FaqSuccessMessage"] = "已儲存常見問題";
+            }
+            else
+            {
+                TempData["FaqErrorMessage"] = "儲存失敗,該則問題已被其他人刪除";
+            }
+
+            return RedirectToFaqIndex(returnCategory);
+        }
+
+
+        //常見問題刪除(軟刪除)
+        [HttpPost]
+        public IActionResult FaqDelete(int? FaqId, string? returnCategory)
+        {
+            if (FaqId == null)
+            {
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            int? userId = _currentUser.UserId;
+            if (userId == null)
+            {
+                TempData["FaqErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            bool isDeleted = new CFaqFactory().Delete((int)FaqId, userId.Value, _timeService.Now);
+            if (isDeleted)
+            {
+                TempData["FaqSuccessMessage"] = "該則問題已成功刪除";
+            }
+            else
+            {
+                TempData["FaqErrorMessage"] = "刪除失敗,該則問題已被其他人刪除";
+            }
+
+            return RedirectToFaqIndex(returnCategory);
+        }
+
+
+        //常見問題 顯示/隱藏 切換
+        [HttpPost]
+        public IActionResult FaqTogglePublished(int? FaqId, string? returnCategory)
+        {
+            if (FaqId == null)
+            {
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            int? userId = _currentUser.UserId;
+            if (userId == null)
+            {
+                TempData["FaqErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            bool isToggled = new CFaqFactory().TogglePublished((int)FaqId, userId.Value, _timeService.Now);
+            if (!isToggled)
+            {
+                TempData["FaqErrorMessage"] = "切換失敗,該則問題已被其他人刪除";
+            }
+
+            //成功時不放訊息:列表上的狀態標籤已經變了,畫面本身就看得出來
+            return RedirectToFaqIndex(returnCategory);
+        }
+
+
+        //常見問題 上移/下移
+        //direction:"up" = 上移,其他 = 下移
+        [HttpPost]
+        public IActionResult FaqMove(int? FaqId, string? direction, string? returnCategory)
+        {
+            if (FaqId == null)
+            {
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            int? userId = _currentUser.UserId;
+            if (userId == null)
+            {
+                TempData["FaqErrorMessage"] = "無法取得登入者資訊,請重新登入。";
+                return RedirectToFaqIndex(returnCategory);
+            }
+
+            bool moveUp = direction == "up";
+            bool isMoved = new CFaqFactory().Move((int)FaqId, moveUp, userId.Value, _timeService.Now);
+            if (!isMoved)
+            {
+                //已經在最上面/最下面(按鈕本來就停用),或是剛好被別人刪除
+                TempData["FaqErrorMessage"] = "無法移動這則問題,請重新整理後再試";
+            }
+
+            return RedirectToFaqIndex(returnCategory);
+        }
+
+
+        //常見問題回答預覽(AJAX) >> 新增/編輯頁輸入回答時呼叫,回傳解析後的片段、錯誤、提醒
+        //只解析傳進來的文字,不讀寫資料庫
+        [HttpPost]
+        public IActionResult FaqPreview(string? answer)
+        {
+            FaqAnswerParseResult result = FaqAnswerParser.Parse(answer);
+            return Json(ApiResult<FaqAnswerParseResult>.Ok(result));
+        }
+
+
         /*共用私有方法*/
+        //回答的連結錯誤加進 ModelState(顯示在回答欄位下方)
+        private void AddFaqAnswerErrors(string? answer)
+        {
+            foreach (string error in FaqAnswerParser.Parse(answer).Errors)
+            {
+                ModelState.AddModelError("Answer", error);
+            }
+        }
+
+        //導回常見問題列表,停在原本的分類頁籤;分類不在清單內就回到「全部」
+        private RedirectToActionResult RedirectToFaqIndex(string? category)
+        {
+            string? validCategory = FaqCategoryOptions.IsValid(category) ? category : null;
+            return RedirectToAction("FaqIndex", new { category = validCategory });
+        }
+
         //驗證封面圖片 >> 回傳錯誤訊息;沒有上傳或檢查通過回傳 null
         private static string? ValidateNewsImage(IFormFile? imageFile)
         {

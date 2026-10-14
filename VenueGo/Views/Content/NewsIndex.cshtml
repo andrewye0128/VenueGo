@@ -6,14 +6,8 @@
     //查詢、分頁、狀態文字都已經在 Controller/Factory 處理完成,這裡只負責顯示
 }
 
-<!-- 功能頁籤(常見問題完成後再加第二個頁籤) -->
-<ul class="nav nav-tabs mb-3">
-    <li class="nav-item">
-        <a class="nav-link active" asp-controller="Content" asp-action="NewsIndex">
-            <i class="bi bi-newspaper me-1"></i>最新消息
-        </a>
-    </li>
-</ul>
+<!-- 功能頁籤:最新消息、常見問題 -->
+<partial name="_ContentTabs" />
 
 @if (TempData["NewsSuccessMessage"] != null)
 {

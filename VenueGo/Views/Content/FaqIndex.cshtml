@@ -1,0 +1,139 @@
+@model VenueGo.ViewModels.ContentViewModels.FaqIndexViewModel
+@using VenueGo.Models.ContentModels
+
+@{
+    ViewData["Title"] = "資訊刊登";
+    //分組、排序都已經在 Controller/Factory 處理完成,這裡只負責顯示
+    //每個按鈕都帶著目前的分類(returnCategory),處理完會導回同一個頁籤
+    string? currentCategory = Model.CurrentCategory;
+}
+
+<!-- 功能頁籤:最新消息、常見問題 -->
+<partial name="_ContentTabs" />
+
+@if (TempData["FaqSuccessMessage"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i>@TempData["FaqSuccessMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+@if (TempData["FaqErrorMessage"] != null)
+{
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["FaqErrorMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
+
+<!-- 標題 + 新增按鈕同一行，左右分靠 -->
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="mb-0 fw-bold">常見問題列表</h5>
+    @* 在單一分類頁籤按新增 >> 新增頁的分類會預設為該分類 *@
+    <a asp-action="FaqCreate" asp-route-returnCategory="@currentCategory" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>新增問題
+    </a>
+</div>
+
+<!-- 分類頁籤 >> 「全部」不帶 category,依分類分組顯示全部問題 -->
+<ul class="nav nav-pills mb-4">
+    <li class="nav-item">
+        <a class="nav-link @(currentCategory == null ? "active" : "")" asp-action="FaqIndex">全部</a>
+    </li>
+    @foreach (var category in FaqCategoryOptions.All)
+    {
+        <li class="nav-item">
+            <a class="nav-link @(currentCategory == category.Key ? "active" : "")"
+               asp-action="FaqIndex" asp-route-category="@category.Key">@category.Value</a>
+        </li>
+    }
+</ul>
+
+@foreach (var group in Model.Groups)
+{
+    <h6 class="fw-bold mt-4 mb-2">@group.CategoryName <span class="text-muted fw-normal">(@group.Faqs.Count)</span></h6>
+
+    @if (group.Faqs.Count == 0)
+    {
+        <p class="text-muted small mb-4">尚無問題</p>
+        continue;
+    }
+
+    <div class="card shadow-sm mb-4">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    @* 各分類的表格欄寬對齊:問題欄 w-100 佔滿剩餘寬度,其他欄 text-nowrap 只依內容決定寬度 *@
+                    @* (順序、狀態、操作在每個表格的內容寬度都一樣,所以各表格會對齊) *@
+                    <tr>
+                        <th class="text-center text-nowrap">順序</th>
+                        <th class="w-100">問題</th>
+                        <th class="text-center text-nowrap">狀態</th>
+                        <th class="text-end text-nowrap">操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (int i = 0; i < group.Faqs.Count; i++)
+                    {
+                        var faq = group.Faqs[i];
+                        bool isFirst = i == 0;
+                        bool isLast = i == group.Faqs.Count - 1;
+
+                        @* 隱藏的問題整列反灰 *@
+                        <tr class="@(faq.IsPublished ? "" : "table-secondary text-body-secondary")">
+                            <td class="text-center">@(i + 1)</td>
+                            <td>@faq.Question</td>
+                            <td class="text-center">
+                                @if (faq.IsPublished)
+                                {
+                                    <span class="badge text-bg-success">顯示</span>
+                                }
+                                else
+                                {
+                                    <span class="badge text-bg-secondary">隱藏</span>
+                                }
+                            </td>
+                            <td class="text-end text-nowrap">
+                                @* 上移、下移:同分類內跟相鄰的問題交換;第一筆不能上移、最後一筆不能下移 *@
+                                <form asp-action="FaqMove" method="post" class="d-inline">
+                                    <input type="hidden" name="FaqId" value="@faq.FaqId" />
+                                    <input type="hidden" name="direction" value="up" />
+                                    <input type="hidden" name="returnCategory" value="@currentCategory" />
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm" title="上移" disabled="@isFirst">
+                                        <i class="bi bi-arrow-up"></i>
+                                    </button>
+                                </form>
+                                <form asp-action="FaqMove" method="post" class="d-inline">
+                                    <input type="hidden" name="FaqId" value="@faq.FaqId" />
+                                    <input type="hidden" name="direction" value="down" />
+                                    <input type="hidden" name="returnCategory" value="@currentCategory" />
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm" title="下移" disabled="@isLast">
+                                        <i class="bi bi-arrow-down"></i>
+                                    </button>
+                                </form>
+
+                                @* 顯示/隱藏快速切換 *@
+                                <form asp-action="FaqTogglePublished" method="post" class="d-inline ms-2">
+                                    <input type="hidden" name="FaqId" value="@faq.FaqId" />
+                                    <input type="hidden" name="returnCategory" value="@currentCategory" />
+                                    <button type="submit" class="btn btn-outline-secondary btn-sm">
+                                        @(faq.IsPublished ? "隱藏" : "顯示")
+                                    </button>
+                                </form>
+
+                                <a asp-action="FaqEdit" asp-route-id="@faq.FaqId" asp-route-returnCategory="@currentCategory"
+                                   class="btn btn-outline-secondary btn-sm ms-2">編輯</a>
+                                <form asp-action="FaqDelete" method="post" class="d-inline"
+                                      onsubmit="return confirm('確定要刪除這則問題嗎?')">
+                                    <input type="hidden" name="FaqId" value="@faq.FaqId" />
+                                    <input type="hidden" name="returnCategory" value="@currentCategory" />
+                                    <button type="submit" class="btn btn-outline-danger btn-sm">刪除</button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

@@ -1,0 +1,20 @@
+@* 資訊刊登的功能頁籤:最新消息、常見問題共用 *@
+@* 依目前的 Action 名稱判斷亮哪一個:News 開頭(列表、新增、編輯)= 最新消息;Faq 開頭 = 常見問題 *@
+@{
+    string action = ViewContext.RouteData.Values["action"]?.ToString() ?? string.Empty;
+    bool isNews = action.StartsWith("News");
+    bool isFaq = action.StartsWith("Faq");
+}
+
+<ul class="nav nav-tabs mb-3">
+    <li class="nav-item">
+        <a class="nav-link @(isNews ? "active" : "")" asp-controller="Content" asp-action="NewsIndex">
+            <i class="bi bi-newspaper me-1"></i>最新消息
+        </a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link @(isFaq ? "active" : "")" asp-controller="Content" asp-action="FaqIndex">
+            <i class="bi bi-question-circle me-1"></i>常見問題
+        </a>
+    </li>
+</ul>

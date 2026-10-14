@@ -4,8 +4,6 @@ using VenueGo.Dtos;
 using VenueGo.Dtos.ContentDtos;
 using VenueGo.Models.ContentModels;
 using VenueGo.Services;
-using VenueGo.ViewModels;
-using VenueGo.ViewModels.Shared;
 
 namespace VenueGo.Controllers.Api.ContentApi
 {

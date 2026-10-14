@@ -112,8 +112,8 @@ function changePage(page) {
         <NewsCard v-for="news in result.items" :key="news.id" :news="news" />
       </div>
 
-      <!-- 換頁：只有 1 頁時不顯示；頁碼用後端修正過的 result.page（網址頁碼超過總頁數時會退回最後一頁） -->
-      <div v-if="result.totalPages > 1" class="mt-8 flex justify-center">
+      <!-- 換頁：總筆數超過一頁的筆數才顯示（API 只回傳總筆數，總頁數由 UPagination 自己算）；頁碼用後端修正過的 result.page（網址頁碼超過總頁數時會退回最後一頁） -->
+      <div v-if="result.totalCount > result.pageSize" class="mt-8 flex justify-center">
         <UPagination
           :page="result.page"
           :total="result.totalCount"

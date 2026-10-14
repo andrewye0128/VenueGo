@@ -2,7 +2,7 @@ using VenueGo.Data;
 using VenueGo.Dtos.ContentDtos;
 using VenueGo.Models.Entities;
 using VenueGo.ViewModels.ContentViewModels;
-using VenueGo.ViewModels.Shared;
+using VenueGo.Dtos;
 
 
 namespace VenueGo.Models.ContentModels
@@ -252,8 +252,8 @@ namespace VenueGo.Models.ContentModels
                     items.Add(dto);
                 }
 
-                //5. 包成 PagedResult 回傳:屬性是 init,只能在建立物件的大括號裡一次給完
-                //   TotalPages、HasPreviousPage、HasNextPage 由 PagedResult 自己算
+                //5. 包成 PagedResult 回傳(Dtos.PagedResult,全組前台 API 共用的分頁格式):屬性是 init,只能在建立物件的大括號裡一次給完
+                //   只回傳總筆數,總頁數由前台的 UPagination 自己算
                 return new PagedResult<NewsListItemDto>
                 {
                     Items = items,

@@ -163,19 +163,21 @@ namespace VenueGo.Controllers.Api
         /// - 星等分布用「套用星等篩選之前」的結果計算，所以切換星等時分布圖不會變。
         /// - 還沒有分頁，`page`、`totalPages` 目前固定是 1。
         /// - 不認得的 `range`、`sort` 一律改用預設值，不回錯誤。
+        /// - `take`（10/13，首頁評價 Slide 用）只限制 `items` 的筆數；星等分布、平均分數仍然用全部符合條件的評論計算。
         /// </remarks>
         /// <param name="sportTypeId">運動類型的 Id；不給代表全部</param>
         /// <param name="range" example="year">時間範圍：`7days`、`30days`、`year`、`all`；預設 `year`</param>
         /// <param name="star" example="5">只看幾顆星（1～5）；不給代表全部</param>
         /// <param name="hasContentOnly">只看有文字內容的評論</param>
         /// <param name="sort" example="newest">排序：`newest`、`highest`、`lowest`；預設 `newest`</param>
+        /// <param name="take" example="10">最多回傳幾則卡片（1～50）；不給代表全部，超出範圍會自動調整到範圍內</param>
         /// <response code="200">成功</response>
         [HttpGet("")]
         [ProducesResponseType<ApiResult<PublicReviewListDto>>(StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPublicReviews(
-            int? sportTypeId, string? range, int? star, bool hasContentOnly = false, string? sort = null)
+            int? sportTypeId, string? range, int? star, bool hasContentOnly = false, string? sort = null, int? take = null)
         {
-            var data = await _publicReviews.GetPublicReviewsAsync(sportTypeId, range, star, hasContentOnly, sort);
+            var data = await _publicReviews.GetPublicReviewsAsync(sportTypeId, range, star, hasContentOnly, sort, take);
             return Ok(ApiResult<PublicReviewListDto>.Ok(data));
         }
 

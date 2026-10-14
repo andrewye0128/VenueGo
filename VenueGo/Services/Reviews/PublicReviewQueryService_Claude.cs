@@ -18,9 +18,12 @@ namespace VenueGo.Services.Reviews
         private readonly dbVenueContext _db = db;
         private readonly ITimeService _timeService = timeService;
 
+        /// <summary>take 的上限（10/13）：首頁 Slide 用不到這麼多，擋住有人傳一個很大的數字。</summary>
+        private const int MaxTake = 50;
+
         /// <inheritdoc/>
         public async Task<PublicReviewListDto> GetPublicReviewsAsync(
-            int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort)
+            int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort, int? take = null)
         {
             string rg = ReviewRange.Normalize(range);
             string so = ReviewSort.Normalize(sort);
@@ -47,7 +50,10 @@ namespace VenueGo.Services.Reviews
                 listQuery = listQuery.Where(r => r.StarRating == s);
 
             // ⚠️ 還沒有分頁。資料量變大之後要補 Skip / Take（規格已經預留 page／totalPages）。
-            var reviews = await ApplyCardSort(listQuery, so).ToListAsync();
+            // 10/13：take 有給就只取前幾則（首頁 Slide）。排序之後才取，取到的才會是「最新的幾則」
+            var sorted = ApplyCardSort(listQuery, so);
+            var limited = take is int t ? sorted.Take(Math.Clamp(t, 1, MaxTake)) : sorted;
+            var reviews = await limited.ToListAsync();
 
             return new PublicReviewListDto(
                 Filter: new ReviewFilterDto(sportTypeId, rg, st, hasContentOnly, so),

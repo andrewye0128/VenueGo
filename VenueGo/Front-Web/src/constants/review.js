@@ -50,3 +50,13 @@ export const TILE_TONES = Object.freeze({
   error: "bg-semantic-error/10 text-semantic-error",
   warning: "bg-semantic-warning/10 text-semantic-warning",
 });
+
+// 公開評論卡的頭像顏色（10/13）。依名字固定分配（utils/review/avatarTone.js），
+// 都是網站既有的設計色，淡色底＋深色字。class 要寫完整字串，Tailwind 才掃描得到。
+export const AVATAR_TONES = Object.freeze([
+  "bg-brand-primary/15 text-brand-primary",
+  "bg-brand-action/15 text-brand-action",
+  "bg-semantic-success/15 text-semantic-success",
+  "bg-semantic-peak/15 text-semantic-peak",
+  "bg-brand-dark/10 text-brand-dark",
+]);

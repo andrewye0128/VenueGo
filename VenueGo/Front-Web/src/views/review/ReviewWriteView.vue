@@ -248,11 +248,12 @@ const mentionOptions = [
         aria-hidden="true"
       />
       <p class="mb-4 text-neutral-text-primary">{{ blockedMessage }}</p>
+      <!-- 10/13：撰寫的入口只有「我的評論」，返回也回那裡（原本回評論專區） -->
       <UButton
-        :to="{ name: 'review-index' }"
+        :to="{ name: 'member-reviews' }"
         color="primary"
         variant="outline"
-        label="回評論專區"
+        label="回我的評論"
       />
     </div>
 
@@ -364,11 +365,12 @@ const mentionOptions = [
           :loading-auto="false"
           @click="saveDraft"
         />
+        <!-- 10/13：同上，回「我的評論」的待評論分頁 -->
         <UButton
-          :to="{ name: 'review-index' }"
+          :to="{ name: 'member-reviews' }"
           color="primary"
           variant="ghost"
-          label="回評論專區"
+          label="回我的評論"
           class="ms-auto"
         />
         <small v-if="savedAtText" class="w-full text-neutral-text-secondary" aria-live="polite">

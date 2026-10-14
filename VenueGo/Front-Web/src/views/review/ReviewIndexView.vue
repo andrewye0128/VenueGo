@@ -344,11 +344,18 @@ const hasContentOnly = computed({
           <template v-else>這裡還沒有公開的評論</template>
         </div>
 
-        <!-- 一行太長不好讀，限制寬度（208 × 4px = 832px，沿用 Razor 版的 52rem） -->
-        <div v-else class="flex max-w-208 flex-col gap-3">
+        <!-- 原本：一行太長不好讀，限制寬度（208 × 4px = 832px，沿用 Razor 版的 52rem）
+             <div v-else class="flex max-w-208 flex-col gap-3">
+             10/13：寬螢幕改成兩欄（參考 Airbnb 的評論列表）。一欄約 600px，一行的字數仍在好讀的範圍，
+             右半邊也不再空著。手機、平板維持一欄。
+             <div v-else class="grid gap-4 lg:grid-cols-2 lg:items-start">
+             10/14：拿掉 items-start，改成同一列等高（grid 預設 stretch）。
+             items-start 讓每張卡片照自己的內容高度，短的那張下面會空出一塊，卡片之間的空隙就大小不一。
+             等高之後空隙一律是 gap-4；卡片內容固定截斷，長的評論按「閱讀全文」開視窗看（ReviewCard 檔頭第 6 點）。 -->
+        <div v-else class="grid gap-4 lg:grid-cols-2">
           <!-- ⚠️ 卡片資料刻意不含 reviewId（連號整數，不能外流），
                所以 key 用「第幾次載入 + 第幾張」。每次換資料都會整批重建，
-               上一批「展開全文」的狀態不會殘留到下一批。 -->
+               上一批「閱讀全文」的狀態不會殘留到下一批。 -->
           <ReviewCard v-for="(item, i) in vm.items" :key="`${listVersion}-${i}`" :item="item" />
         </div>
       </div>

@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Enums;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 
 namespace VenueGo.Models.CheckinModels
 {
@@ -98,6 +98,13 @@ namespace VenueGo.Models.CheckinModels
             {
                 //補發 QR
                 reasons.Add(TicketManualLogReasonType.QrLostOrLeaked);
+                reasons.Add(TicketManualLogReasonType.SystemError);
+                reasons.Add(TicketManualLogReasonType.Other);
+            }
+            else if (action == TicketManualLogAction.Transfer)
+            {
+                //轉讓
+                reasons.Add(TicketManualLogReasonType.CustomerRequest);
                 reasons.Add(TicketManualLogReasonType.SystemError);
                 reasons.Add(TicketManualLogReasonType.Other);
             }

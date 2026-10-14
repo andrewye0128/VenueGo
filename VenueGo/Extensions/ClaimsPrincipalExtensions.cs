@@ -1,4 +1,5 @@
 ﻿using System.Security.Claims;
+using VenueGo.Constants;
 
 namespace VenueGo.Extensions
 {
@@ -90,6 +91,6 @@ namespace VenueGo.Extensions
 
         /// <summary>是否為可進入後台的角色（Staff／Manager／Admin）。</summary>
         public static bool IsBackOffice(this ClaimsPrincipal? user)
-            => user.HasAnyRole(Models.Constants.RoleNames.BackOffice);
+            => user.HasAnyRole(RoleNames.BackOffice);
     }
 }

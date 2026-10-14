@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using VenueGo.Constants;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;

@@ -2,7 +2,7 @@
 
 @{
     ViewData["Title"] = "今日票券";
-    DateOnly todayDate = DateOnly.FromDateTime(DateTime.Now);
+    DateOnly todayDate = Model.Today;
 }
 
 <div class="d-flex align-items-center gap-3 mb-3">
@@ -64,7 +64,8 @@
         <thead>
             <tr>
                 <th>票券編號</th>
-                <th>會員</th>
+                <th>訂購人</th>
+                <th>持有人</th>
                 <th>電話</th>        <!-- ← 新增 -->
                 <th>場地</th>
                 <th>時段</th>
@@ -88,6 +89,7 @@
                     <tr class="@(item.IsCheckedIn ? "table-secondary" : "")">
                         <td>@item.TicketId</td>
                         <td>@item.UserName</td>
+                        <td>@item.Holder</td>
                         <td>
                             @if (!string.IsNullOrWhiteSpace(item.Phone))
                             {

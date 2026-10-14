@@ -1,5 +1,5 @@
 ﻿using System;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 
 namespace VenueGo.Models.ReservationModels
 {

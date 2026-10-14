@@ -6,11 +6,11 @@ using System.Reflection.Metadata.Ecma335;
 using VenueGo.Data;
 using VenueGo.Extensions;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;
 using VenueGo.Services;
 using VenueGo.ViewModels.VenueViewModels;
 using VenueGo.Services.Auth;
+using VenueGo.Constants;
 
 namespace VenueGo.Controllers
 {

@@ -1,6 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using VenueGo.Constants;
 using VenueGo.Data;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.ViewModels.MemberViewModels;
 

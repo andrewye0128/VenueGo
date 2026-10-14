@@ -4,14 +4,15 @@
 import { reactive, ref } from "vue";
 import { z } from "zod";
 import SportTypeSelect from "@/components/SportTypeSelect.vue";
-import { nameRule, emailRule, mobileRule, mustAgreeRule } from "@/schemas/rules";
+import { nameRule, emailRule, mobileRule, mustAgreeRule, sportTypeRule } from "@/schemas/rules";
+import { delay } from "@/utils/delay";
 
 // 這張表單的驗證規則：共用規則 + 這張表單特有的規則
 const schema = z.object({
   name: nameRule,
   email: emailRule,
   phone: mobileRule,
-  sportType: z.string().min(1, "請選擇運動類型"),
+  sportType: sportTypeRule,
   people: z
     .number({ error: "請輸入人數" })
     .int("人數必須是整數")
@@ -37,7 +38,7 @@ const submitted = ref(null);
 // 全部欄位都通過驗證才會執行；event.data 是驗證後的資料（例如姓名前後空白已去掉）
 async function onSubmit(event) {
   // 模擬呼叫後端 API 等待 1.5 秒；這段期間送出按鈕會自動顯示轉圈圖示、不能重複按
-  await new Promise((resolve) => setTimeout(resolve, 1500));
+  await delay(1500);
   submitted.value = event.data;
 }
 </script>

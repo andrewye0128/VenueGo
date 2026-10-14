@@ -281,7 +281,9 @@ namespace VenueGo.Models.VenueModels
                             {
                                 Id = t.SportTypeId,
                                 Name = t.SportName,
-                                Icon = t.IconName ?? SportTypeIconOptions.DefaultIcon //若icon為null就指定為預設icon
+                                Icon = t.IconName ?? SportTypeIconOptions.DefaultIcon, //若icon為null就指定為預設icon
+                                // 有啟用中的價格規則才能預約(跟預約頁 BookingAvailabilityService 的 IsBookable 同一個條件)
+                                IsBookable = db.SportTypePriceRules.Any(r => r.SportTypeId == t.SportTypeId && r.IsActive == true)
                             };
 
                 return datas.ToList();

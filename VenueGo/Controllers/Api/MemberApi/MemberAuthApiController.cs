@@ -7,8 +7,10 @@ using VenueGo.Data;
 using VenueGo.Services.Auth;
 using VenueGo.ViewModels.MemberViewModels;
 using VenueGo.Dtos.MemberDtos;
-
 using VenueGo.Dtos;
+using VenueGo.Models.Entities;
+using VenueGo.Helpers;
+using VenueGo.Constants;
 namespace VenueGo.Controllers.Api
 {
     [ApiController]
@@ -139,6 +141,146 @@ namespace VenueGo.Controllers.Api
             };
 
             return Ok(ApiResult<MemberMeResponseDto>.Ok(response));
+        }
+
+        [AllowAnonymous]
+        [HttpPost("register")]
+        public async Task<IActionResult> Register(
+    [FromBody] RegisterMemberRequestDto model)
+        {
+            // 1. 檢查生日
+            if (!model.Birth.HasValue)
+            {
+                return BadRequest(
+                    ApiResult.Fail("請選擇出生日期。", "ValidationFailed"));
+            }
+
+            var birth = model.Birth.Value;
+            var today = DateOnly.FromDateTime(DateTime.Today);
+
+            if (birth > today)
+            {
+                return BadRequest(
+                    ApiResult.Fail("生日不可晚於今天。", "ValidationFailed"));
+            }
+
+            if (birth < new DateOnly(1900, 1, 1))
+            {
+                return BadRequest(
+                    ApiResult.Fail("生日日期不正確。", "ValidationFailed"));
+            }
+
+            // 2. Email 統一格式
+            var normalizedEmail = model.Email.Trim().ToLowerInvariant();
+
+            // 3. 檢查 Email 是否已註冊
+            var emailExists = await _db.Users
+                .AnyAsync(u => u.Email.ToLower() == normalizedEmail);
+
+            if (emailExists)
+            {
+                return Conflict(
+                    ApiResult.Fail(
+                        "此 Email 已經註冊，請使用其他 Email。",
+                        "EmailAlreadyExists"));
+            }
+
+            // 4. 取得系統中的會員角色
+            var memberRole = await _db.Roles
+                .FirstOrDefaultAsync(r =>
+                    r.RoleName == RoleNames.Member && r.Status);
+
+            if (memberRole == null)
+            {
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResult.Fail(
+                        "系統尚未設定可用的會員角色，請聯繫管理員。",
+                        "MemberRoleNotConfigured"));
+            }
+
+            // 5. 建立會員資料
+            // 注意：這裡先使用 DateTime.UtcNow 作為暫時時間來源。
+            // 若專案有統一的台灣時間服務，下一步應改用既有服務。
+            var now = DateTime.UtcNow;
+
+            var user = new User
+            {
+                Name = model.Name.Trim(),
+                Email = normalizedEmail,
+                PasswordHash = PasswordHelper.HashPassword(model.Password),
+                Phone = model.Phone.Trim(),
+                Birth = birth,
+                CarrierNo = string.IsNullOrWhiteSpace(model.CarrierNo)
+                    ? null
+                    : model.CarrierNo.Trim().ToUpperInvariant(),
+
+                Status = UserStatuses.Active,
+
+                CumulativeConsumption = 0,
+                CumulativeVisitTime = 0,
+                FailedLoginCount = 0,
+                NoShowCount = 0,
+
+                LockedUntil = null,
+                LastLoginAt = null,
+
+                CreatedAt = now,
+                UpdatedAt = now
+            };
+
+            // 6. 使用交易，確保會員與會員角色一起建立
+            await using var transaction =
+                await _db.Database.BeginTransactionAsync();
+
+            try
+            {
+                _db.Users.Add(user);
+                await _db.SaveChangesAsync();
+
+                _db.UserRoles.Add(new UserRole
+                {
+                    UserId = user.UserId,
+                    RoleId = memberRole.RoleId,
+                    AssignedBy = null,
+                    AssignedAt = now
+                });
+
+                await _db.SaveChangesAsync();
+                await transaction.CommitAsync();
+            }
+            catch (DbUpdateException)
+            {
+                await transaction.RollbackAsync();
+
+                // 可能是兩個請求同時註冊相同 Email，
+                // 因此再確認是否已存在。
+                var duplicateEmail = await _db.Users
+                    .AsNoTracking()
+                    .AnyAsync(u => u.Email == normalizedEmail);
+
+                if (duplicateEmail)
+                {
+                    return Conflict(
+                        ApiResult.Fail(
+                            "此 Email 已經註冊，請使用其他 Email。",
+                            "EmailAlreadyExists"));
+                }
+
+                return StatusCode(
+                    StatusCodes.Status500InternalServerError,
+                    ApiResult.Fail(
+                        "建立會員帳號失敗，請稍後再試。",
+                        "RegistrationFailed"));
+            }
+
+            // 7. 註冊成功，不在這裡自動登入
+            return StatusCode(
+                StatusCodes.Status201Created,
+                ApiResult<object>.Ok(new
+                {
+                    message = "註冊成功，請使用您的 Email 與密碼登入。"
+                }));
         }
     }
 }

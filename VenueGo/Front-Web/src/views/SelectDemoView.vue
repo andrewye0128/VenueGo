@@ -5,7 +5,7 @@ import SportTypeSelect from "@/components/SportTypeSelect.vue";
 import { ALL_SPORTS } from "@/constants/sportTypes";
 
 const sportEmpty = ref("");
-const sportSelected = ref("basketball");
+const sportSelected = ref(2); // sportTypeId：2 是「籃球」（跟資料庫一致）
 const sportDisabled = ref("");
 const sportWithAll = ref(ALL_SPORTS);
 const sportPartial = ref("");
@@ -50,7 +50,7 @@ ${scriptEndTag}
         <h2 class="mb-4 font-semibold text-neutral-text-primary">② 已選擇</h2>
         <SportTypeSelect v-model="sportSelected" />
         <p class="mt-3 text-xs text-neutral-text-secondary">
-          寫法：同 ①，v-model 的初始值設為 "basketball"
+          寫法：同 ①，v-model 的初始值設為 sportTypeId（例如 2）
         </p>
         <p class="mt-1 text-xs text-neutral-text-secondary tabular-nums">
           目前選到的值：{{ sportSelected || "（空）" }}
@@ -78,9 +78,9 @@ ${scriptEndTag}
 
       <div class="rounded border border-neutral-border bg-neutral-surface p-6">
         <h2 class="mb-4 font-semibold text-neutral-text-primary">⑤ 部分運動停用</h2>
-        <SportTypeSelect v-model="sportPartial" :disabled-values="['swimming']" />
+        <SportTypeSelect v-model="sportPartial" :disabled-values="[5]" />
         <p class="mt-3 text-xs text-neutral-text-secondary">
-          寫法：&lt;SportTypeSelect v-model="sport" :disabled-values="['swimming']" /&gt;
+          寫法：&lt;SportTypeSelect v-model="sport" :disabled-values="[5]" /&gt;
         </p>
         <p class="mt-1 text-xs text-neutral-text-secondary tabular-nums">
           目前選到的值：{{ sportPartial || "（空）" }}

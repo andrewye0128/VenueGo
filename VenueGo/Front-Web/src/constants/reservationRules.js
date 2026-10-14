@@ -5,3 +5,7 @@
 // export const MEMBER_MIN_ADVANCE_DAYS = 2;
 export const MEMBER_MIN_ADVANCE_DAYS = 0;
 export const MEMBER_MAX_ADVANCE_DAYS = 30;
+
+// 一筆預約最多可選幾個時段（一格一小時）
+// ⚠️ 要跟後端 appsettings.json 的 ReservationRules.MaxSlotsPerReservation 一致
+export const MAX_SLOTS_PER_RESERVATION = 4;

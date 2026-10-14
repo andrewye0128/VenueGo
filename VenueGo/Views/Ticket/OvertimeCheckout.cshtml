@@ -1,0 +1,104 @@
+﻿@model VenueGo.ViewModels.CheckinViewModels.TicketOvertimeTabViewModel
+@{
+    ViewData["Title"] = "超時結帳";
+    var charge = Model.Charge;
+}
+
+<partial name="_TicketHeader" model="Model" />
+
+<div class="border p-3">
+    <h6 class="mb-3">超時費用</h6>
+
+    @if (charge == null)
+    {
+        <div class="alert alert-info">這張票券所屬的訂單沒有超時費用紀錄。</div>
+    }
+    else
+    {
+        <dl class="row mb-3">
+            <dt class="col-sm-3">超時分鐘</dt>
+            <dd class="col-sm-9">@charge.OverdueMinutes 分鐘</dd>
+            <dt class="col-sm-3">計費時數</dt>
+            <dd class="col-sm-9">@charge.BillingHours.ToString("0.#") 小時</dd>
+            <dt class="col-sm-3">每小時單價</dt>
+            <dd class="col-sm-9">@charge.UnitPrice 元</dd>
+            <dt class="col-sm-3">應收金額</dt>
+            <dd class="col-sm-9 fw-bold text-danger">@charge.ChargeAmount 元</dd>
+            <dt class="col-sm-3">金額計算時間</dt>
+            <dd class="col-sm-9">@charge.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss")（出場當下，之後不再變動）</dd>
+            <dt class="col-sm-3">收費狀態</dt>
+            <dd class="col-sm-9">@Model.ChargeStatusText</dd>
+
+            @if (!Model.IsPending)
+            {
+                <dt class="col-sm-3">付款方式</dt>
+                <dd class="col-sm-9">@Model.PaymentMethodText</dd>
+                <dt class="col-sm-3">備註</dt>
+                <dd class="col-sm-9">@(string.IsNullOrEmpty(charge.Remark) ? "—" : charge.Remark)</dd>
+                <dt class="col-sm-3">處理員工</dt>
+                <dd class="col-sm-9">@charge.OperatorId</dd>
+                <dt class="col-sm-3">處理時間</dt>
+                <dd class="col-sm-9">@charge.ConfirmedAt</dd>
+            }
+        </dl>
+
+         @if (Model.CancheckOut)
+        {
+            <form asp-action="ConfirmOvertimeCheckout" asp-route-id="@Model.TicketId" method="post" class="d-flex flex-column gap-3" style="max-width:480px">
+                <div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="isWaived" id="chargeRadio" value="false" checked />
+                        <label class="form-check-label" for="chargeRadio">確認收費</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="isWaived" id="waiveRadio" value="true" />
+                        <label class="form-check-label" for="waiveRadio">免收放行</label>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="form-label fw-medium" for="method">付款方式 <span class="text-danger">*</span></label>
+                    <select class="form-select" id="method" name="method" asp-items="Model.PaymentOptions">
+                        <option value="">請選擇付款方式</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="form-label fw-medium" for="remark">備註 <span id="remarkStar" class="text-danger d-none">*（免收必填）</span></label>
+                    <textarea class="form-control" id="remark" name="remark" rows="3" maxlength="100"></textarea>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="submit" class="btn btn-primary">確認並放行離場</button>
+                    <a asp-action="ScanLog" asp-route-id="@Model.TicketId" class="btn btn-outline-secondary">返回</a>
+                </div>
+            </form>
+        }
+        else
+        {
+            <div class="alert alert-secondary">這張票券目前不需要結帳（可能已處理過）。</div>
+            <a asp-action="ScanLog" asp-route-id="@Model.TicketId" class="btn btn-outline-secondary">返回報到管理</a>
+        }
+    }
+</div>
+
+<script>
+    (function () {
+        const radios = document.querySelectorAll('input[name="isWaived"]');
+        const method = document.getElementById('method');
+        const remark = document.getElementById('remark');
+        const remarkStar = document.getElementById('remarkStar');
+        if (!method) return;
+
+        function sync() {
+            const waived = document.querySelector('input[name="isWaived"]:checked').value === 'true';
+            method.disabled = waived;     // disabled 的欄位不會送出,後端收到 method = null
+            method.required = !waived;
+            if (waived) method.value = '';
+            remark.required = waived;
+            remarkStar.classList.toggle('d-none', !waived);
+        }
+        radios.forEach(r => r.addEventListener('change', sync));
+        sync();
+    })();
+</script>

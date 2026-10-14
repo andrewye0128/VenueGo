@@ -3,8 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Services.Ticket;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Services;
+using VenueGo.Constants;
 
 namespace VenueGo.Controllers
 {

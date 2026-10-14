@@ -1,4 +1,5 @@
 using VenueGo.Data;
+using VenueGo.Dtos.ContentDtos;
 using VenueGo.Models.Entities;
 using VenueGo.ViewModels.ContentViewModels;
 
@@ -219,6 +220,46 @@ namespace VenueGo.Models.ContentModels
                 //一次 SaveChanges = 同一個交易,全部成功或全部不存
                 db.SaveChanges();
                 return true;
+            }
+        }
+
+
+        /*前台API所需資料*/
+        //前台常見問題 >> 供 GET /api/faqs 使用,一次回傳全部分類
+        //只列出顯示中的問題;沒有問題的分類也回傳(Faqs 是空清單),前台 5 個頁籤固定出現
+        public List<FaqCategoryGroupDto> QueryPublicGroups()
+        {
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                //1. 一次查出前台看得到的問題:未刪除、顯示中,依後台排好的順序
+                List<Faq> faqs = db.Faqs
+                    .Where(f => f.IsActive && f.IsPublished)
+                    .OrderBy(f => f.SortOrder)
+                    .ThenBy(f => f.FaqId)
+                    .ToList();
+
+                //2. 依分類清單的順序分組;回答交給 FaqAnswerParser 切成文字/連結片段
+                //   網址不合法的連結(存檔時已經擋下,萬一資料庫有舊資料)Parser 會當成文字,不會變成連結
+                List<FaqCategoryGroupDto> groups = new List<FaqCategoryGroupDto>();
+                foreach (KeyValuePair<string, string> option in FaqCategoryOptions.All)
+                {
+                    FaqCategoryGroupDto group = new FaqCategoryGroupDto();
+                    group.Category = option.Key;
+                    group.CategoryName = option.Value;
+
+                    foreach (Faq faq in faqs.Where(f => f.Category == option.Key))
+                    {
+                        FaqItemDto item = new FaqItemDto();
+                        item.Id = faq.FaqId;
+                        item.Question = faq.Question;
+                        item.AnswerSegments = FaqAnswerParser.Parse(faq.Answer).Segments;
+                        group.Faqs.Add(item);
+                    }
+
+                    groups.Add(group);
+                }
+
+                return groups;
             }
         }
 

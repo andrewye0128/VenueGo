@@ -31,8 +31,15 @@ export const ErrorCodes = Object.freeze({
   SpamMarked: "SpamMarked", // 評論已下架，不能切換公開
   InvalidSatisfaction: "InvalidSatisfaction", // 表態的值不是 0／1／2
 
-  // ── 場地預約（BookingApiController）──
+  // ── 場地預約（BookingApiController、ReservationApiController）──
+  // 後端的常數在 Services/Reservations/IMemberBookingService.cs 的 BookingErrorCodes，改名時兩邊要一起改
   DateOutOfRange: "DateOutOfRange", // 日期不在會員可預約的範圍內（今天～30 天後）
+  SlotUnavailable: "SlotUnavailable", // 時段不能訂：被訂走、不連續、超過 4 小時
+  SlotTaken: "SlotTaken", // 送出的那一刻時段剛被別人訂走（409）
+  VenueNotBookable: "VenueNotBookable", // 場地停用，或沒有啟用中的價格
+  PaymentMethodNotAllowed: "PaymentMethodNotAllowed", // 付款方式不符合規則（例如 2 天內選現場付款）
+  TermsVersionMismatch: "TermsVersionMismatch", // 沒同意條款，或條款改版了，要重新同意
+  InvalidInput: "InvalidInput", // 填的內容有錯：人數超過容納人數、載具格式錯誤…（直接顯示後端的訊息）
 
   // ── 前台 src/api/http.js 產生（不是後端回傳）──
   ValidationFailed: "ValidationFailed", // [ApiController] 自動產生的輸入驗證錯誤

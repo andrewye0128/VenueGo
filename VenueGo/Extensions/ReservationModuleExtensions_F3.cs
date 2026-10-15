@@ -36,6 +36,9 @@ namespace VenueGo.Extensions
             // 前台場地預約頁：查某天各場地的時段、每天剩幾格
             services.AddScoped<IBookingAvailabilityService, BookingAvailabilityService>();
 
+            // 前台會員預約：試算、建立預約（寫入交給 IReservationCreationService.WriteAsync）
+            services.AddScoped<IMemberBookingService, MemberBookingService>();
+
             return services;
         }
     }

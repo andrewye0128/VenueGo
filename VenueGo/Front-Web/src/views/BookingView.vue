@@ -1,5 +1,5 @@
 <!--
-  場地預約頁（階段 1：看時段、選時段；「下一步」先停用）
+  場地預約頁（步驟 1：看時段、選時段；「下一步」到填寫資料頁 /booking/confirm）
   網址：/booking?sportTypeId=2&date=2026-10-14
     沒有 sportTypeId → 全部運動（依運動分組顯示所有場地，不自動選場地）
     有 sportTypeId   → 只顯示這種運動，自動選中第一個有空位的場地
@@ -31,7 +31,7 @@ import {
 } from "@/constants/reservationRules";
 import { ErrorCodes } from "@/constants/errorCodes";
 import { ALL_SPORTS } from "@/constants/sportTypes";
-import { formatDate } from "@/utils/format";
+import { formatDateWithWeekday } from "@/utils/format";
 import { isSelectableSlot, toggleSlot } from "@/utils/slotSelection";
 
 const route = useRoute();
@@ -285,11 +285,7 @@ function onSlotSelect(slotTime) {
 }
 
 // 摘要：選了別的場地的時段時，摘要仍顯示「已選的那個場地」
-const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
-const dateLabel = computed(() => {
-  const d = parseDate(date.value);
-  return `${formatDate(date.value)}（${WEEKDAYS[new Date(d.year, d.month - 1, d.day).getDay()]}）`;
-});
+const dateLabel = computed(() => formatDateWithWeekday(date.value));
 const summary = computed(() => {
   if (!selection.value) return null;
   const venue = allVenues.value.find((v) => v.venueId === selection.value.venueId);
@@ -301,6 +297,21 @@ const summary = computed(() => {
     slots: venue.slots.filter((s) => selection.value.slotTimes.includes(s.slotTime)),
   };
 });
+
+// 「下一步：填寫資料」：帶著場地、日期、時段到填寫頁
+// 放在網址（不是存在記憶體）：沒登入時會先去登入頁，登入完照著網址回來，選擇不會遺失；重新整理也一樣
+// 填寫頁需要登入，沒登入的話路由守衛會先帶去登入頁
+function goToConfirm() {
+  if (!selection.value) return;
+  router.push({
+    name: "booking-confirm",
+    query: {
+      venueId: selection.value.venueId,
+      date: date.value,
+      slots: selection.value.slotTimes.join(","),
+    },
+  });
+}
 
 // 公休日的「看下一天」
 const nextDay = computed(() => parseDate(date.value).add({ days: 1 }).toString());
@@ -467,7 +478,7 @@ const nextDay = computed(() => parseDate(date.value).add({ days: 1 }).toString()
 
       <!-- ── 已選摘要（電腦右側、手機底部） ── -->
       <aside aria-label="已選時段" class="mt-6 lg:mt-0">
-        <BookingSummary :summary="summary" @clear="selection = null" />
+        <BookingSummary :summary="summary" @clear="selection = null" @next="goToConfirm" />
       </aside>
     </div>
   </main>

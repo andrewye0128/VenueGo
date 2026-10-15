@@ -47,3 +47,27 @@ export async function getMyReservations({
 export async function cancelMyReservation(reservationId, reason = null) {
   throw new Error("取消預約功能尚未開放，請洽櫃檯辦理");
 }
+
+/**
+ * 建立預約：[POST] /api/reservations
+ * 需要會員登入（http.js 自動帶 JWT）；預約記在登入的會員名下，不送會員
+ * 不送金額：金額由後端依時段重新計算（送了也不會採用）
+ * @param {object} request
+ * @param {number} request.venueId
+ * @param {string} request.bookingDate "2026-10-20"
+ * @param {string[]} request.slotTimes ["17:00", "18:00"]
+ * @param {number} request.personAmount 使用人數
+ * @param {number} request.paymentMethod constants/payment.js 的 PAYMENT_METHOD
+ * @param {number} request.invoiceType constants/payment.js 的 INVOICE_TYPE
+ * @param {string|null} request.carrierNo 手機條碼載具；紙本發票時是 null
+ * @param {boolean} request.termsAccepted 一定要是 true
+ * @param {string} request.termsVersion 客人同意的條款版本（試算回傳的 termsVersion）
+ * @returns {Promise<object>} { reservationId, orderNo, venueName, sportName, bookingDate, startTime, endTime,
+ *   personAmount, totalAmount, paymentMethod, paymentDueAt, reservationStatus }
+ *   成功是 201；錯誤：SlotTaken（409）、DateOutOfRange、VenueNotBookable、SlotUnavailable、
+ *   PaymentMethodNotAllowed、TermsVersionMismatch、InvalidInput、ValidationFailed（400）、NotLoggedIn（401）
+ */
+export async function createReservation(request) {
+  const { data } = await http.post("/reservations", request);
+  return data;
+}

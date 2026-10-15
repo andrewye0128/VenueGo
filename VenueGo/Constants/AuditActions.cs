@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Models.Constants
+﻿namespace VenueGo.Constants
 {
     /// <summary>
     /// 稽核紀錄的動作代碼，寫入 AuditLogs.Action（nvarchar 100）。

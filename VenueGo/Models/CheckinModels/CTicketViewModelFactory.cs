@@ -2,9 +2,9 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Enums;
 using VenueGo.Helpers;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services.Time;
 using VenueGo.Services.ReviewTickets;

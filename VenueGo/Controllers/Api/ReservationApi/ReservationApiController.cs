@@ -1,9 +1,9 @@
-﻿using Microsoft.AspNetCore.Authentication.JwtBearer; 
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using VenueGo.Constants;
 using VenueGo.Dtos;
 using VenueGo.Dtos.ReservationDtos;
-using VenueGo.Models.Constants;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Reservations;
 

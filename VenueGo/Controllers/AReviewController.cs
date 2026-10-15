@@ -3,13 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;   // 新增：Database.SqlQuery<T> 在這個命名空間
 using VenueGo.Data;
 using VenueGo.Dtos;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
 using static VenueGo.Models.ReviewModels.ReviewQueueRules;   // 10/6 新增：規則搬出去之後，呼叫的地方不用改名字
 using VenueGo.Services.Auth;
 using VenueGo.ViewModels.ReviewViewModels;
 using VenueGo.Services.Time;
+using VenueGo.Constants;
 
 namespace VenueGo.Controllers
 {

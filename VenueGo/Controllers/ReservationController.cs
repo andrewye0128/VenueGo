@@ -5,13 +5,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 using VenueGo.Models.ReservationModels;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Reservations;
 using VenueGo.ViewModels.ReservationViewModels;
+using VenueGo.Constants;
+using VenueGo.Enums;
 
 namespace VenueGo.Controllers
 {

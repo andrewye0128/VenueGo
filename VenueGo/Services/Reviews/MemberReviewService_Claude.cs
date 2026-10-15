@@ -9,7 +9,7 @@ using VenueGo.Dtos.ReviewDtos.WriteReview;
 using VenueGo.Helpers;
 using VenueGo.Mappers;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services.ReviewScreening;
 using VenueGo.Services.Time;

@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Enums;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 using VenueGo.Services.Time;
 
 namespace VenueGo.Services.Ticket

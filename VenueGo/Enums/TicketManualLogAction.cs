@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace VenueGo.Models.Enums
+namespace VenueGo.Enums
 {
     // 人工異動動作
     // 注意：跟 CheckInAction 是不同欄位，數字重疊沒關係

@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Models.Constants
+﻿namespace VenueGo.Constants
 {
     /// <summary>
     /// 員工在職狀態（Employees.Status）的允許值。

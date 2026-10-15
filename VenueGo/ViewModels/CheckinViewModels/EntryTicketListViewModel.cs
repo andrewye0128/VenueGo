@@ -1,5 +1,5 @@
 ﻿using System.ComponentModel.DataAnnotations.Schema;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 
 namespace VenueGo.ViewModels.CheckinViewModels
 {

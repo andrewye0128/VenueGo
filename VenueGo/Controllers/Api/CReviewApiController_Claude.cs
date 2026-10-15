@@ -6,9 +6,9 @@ using VenueGo.Dtos.ReviewDtos.MyReviews;
 using VenueGo.Dtos.ReviewDtos.PublicReviews;
 using VenueGo.Dtos.ReviewDtos.WriteReview;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
-using VenueGo.Services.Auth;
+using VenueGo.Constants;
 using VenueGo.Services.Reviews;
+using VenueGo.Services.Auth;
 
 namespace VenueGo.Controllers.Api
 {

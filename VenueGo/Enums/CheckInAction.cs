@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Models.Enums
+﻿namespace VenueGo.Enums
 {
     public enum CheckInAction : byte
     {

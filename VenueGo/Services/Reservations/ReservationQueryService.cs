@@ -4,11 +4,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using VenueGo.Constants;
 using VenueGo.Data;
 using VenueGo.Dtos;
 using VenueGo.Dtos.ReservationDtos;
-using VenueGo.Models.Constants;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Services.Reservations

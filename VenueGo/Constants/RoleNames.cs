@@ -1,6 +1,6 @@
 ﻿using System.Collections.ObjectModel;
 
-namespace VenueGo.Models.Constants
+namespace VenueGo.Constants
 {
     /// <summary>
     /// 角色名稱常數，對應 Roles.RoleName 欄位的值。

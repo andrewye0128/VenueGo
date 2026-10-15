@@ -4,7 +4,7 @@ using VenueGo.Dtos.ReviewDtos;
 using VenueGo.Dtos.ReviewDtos.MyReviews;
 using VenueGo.Dtos.ReviewDtos.PublicReviews;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services.ReviewScreening;
 

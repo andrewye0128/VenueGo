@@ -8,9 +8,9 @@ using VenueGo.Services.Auth;
 using VenueGo.ViewModels.MemberViewModels;
 using VenueGo.Dtos.MemberDtos;
 using VenueGo.Dtos;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Helpers;
+using VenueGo.Constants;
 namespace VenueGo.Controllers.Api
 {
     [ApiController]

@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.Reflection;
 
-namespace VenueGo.Models.Enums
+namespace VenueGo.Enums
 {
     public static class EnumExtensions
     {

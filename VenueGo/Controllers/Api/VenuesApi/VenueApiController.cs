@@ -27,10 +27,11 @@ namespace VenueGo.Controllers.Api.VenuesApi
         //前台"場館資訊"頁 >> GET /api/venues/introduction
         //回傳開放時間 + 各運動類型的代表照片、注意事項、收費標準
         [HttpGet("introduction")]
-        public IActionResult GetIntroduction()
+        //非同步:查資料庫的期間不佔住執行緒
+        public async Task<IActionResult> GetIntroduction()
         {
             //取得DTO
-            SportTypeIntroPageDto page = new CSportTypeFactory().QueryIntroPage();
+            SportTypeIntroPageDto page = await new CSportTypeFactory().QueryIntroPageAsync();
 
             //回傳DTO
             return Ok(ApiResult<SportTypeIntroPageDto>.Ok(page));

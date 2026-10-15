@@ -118,7 +118,7 @@ async function onSubmit() {
     <div class="mx-auto w-full max-w-lg">
       <div class="mb-8 text-center">
         <h1 class="text-2xl font-bold leading-8 text-neutral-text-primary">註冊會員</h1>
-        <p class="mt-2 text-sm leading-[22px] text-neutral-text-secondary">
+        <p class="mt-2 text-sm leading-5.5 text-neutral-text-secondary">
           加入 VenueGo，開始預約場地
         </p>
       </div>

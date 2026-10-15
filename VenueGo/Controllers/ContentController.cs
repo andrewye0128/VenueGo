@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using VenueGo.Data;
 using VenueGo.Dtos;
-using VenueGo.Helpers;
+using VenueGo.Filters;
 using VenueGo.Constants;
 using VenueGo.Models.ContentModels;
 using VenueGo.Services;
@@ -10,7 +10,7 @@ using VenueGo.ViewModels.ContentViewModels;
 
 namespace VenueGo.Controllers
 {
-    [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]//權限過濾 >> 只有 Admin、Manager 可以進入這個 Controller
+    [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]//權限過濾 >> 只有 Admin、Manager 可以進入這個 Controller
     public class ContentController : Controller
     {
 

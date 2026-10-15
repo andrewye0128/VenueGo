@@ -127,19 +127,20 @@
                 <div class="col-md-4">
                     <label asp-for="PublishedAt" class="form-label fw-bold">發布時間 <span class="text-danger">*</span></label>
                     <input asp-for="PublishedAt" asp-format="{0:yyyy-MM-ddTHH:mm}" type="datetime-local" class="form-control" />
-                    <div class="form-text">設定未來的時間,到時才會在前台顯示;改成過去的時間會依該日期排序,送出前會再確認</div>
+                    @* 選完時間後即時顯示設定結果(瀏覽器的日期選擇器沒有確定按鈕),內容由 news-publish-confirm.js 產生 *@
+                    <div id="publishedAtSummary" class="small mt-1" aria-live="polite"></div>
                     <span asp-validation-for="PublishedAt" class="text-danger small"></span>
                 </div>
                 <div class="col-md-8">
                     <div class="form-check form-switch mb-2">
                         <input asp-for="IsPublished" class="form-check-input" role="switch" />
                         <label asp-for="IsPublished" class="form-check-label">上架</label>
-                        <div class="form-text">不開啟就是草稿,前台不會顯示</div>
+                        <div class="form-text">未開啟則設置為草稿</div>
                     </div>
                     <div class="form-check form-switch">
                         <input asp-for="IsPinned" class="form-check-input" role="switch" />
                         <label asp-for="IsPinned" class="form-check-label">置頂</label>
-                        <div class="form-text">置頂的消息排在最前面</div>
+                        <div class="form-text">發布後將置頂顯示</div>
                     </div>
                 </div>
             </div>

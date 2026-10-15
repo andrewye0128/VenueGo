@@ -5,7 +5,7 @@
     /// <para>
     /// 前端的預約完成頁直接顯示這份資料（不另外再查），
     /// 所以除了編號，場地、日期、時段、金額、付款期限都要一起回傳。
-    /// 欄位要跟前端 src/mocks/bookingQuote.js 的 buildMockReservation 一致。
+    /// /// 欄位要跟前端 src/api/reservationApi.js 的 createReservation註解一致（預約完成頁使用）。
     /// </para>
     /// </summary>
     public class CreateReservationResultDto

@@ -3,7 +3,7 @@
     /// <summary>
     /// 試算結果（GET /api/booking/quote）：填寫資料頁一打開就呼叫。
     /// <para>
-    /// 欄位要跟前端 src/mocks/bookingQuote.js 的 buildMockQuote 一致（2-1 切版時的假資料）。
+    /// 欄位要跟前端 src/api/bookingApi.js 的 getBookingQuote 註解一致（填寫資料頁使用）。
     /// </para>
     /// <para>
     /// 金額只是給客人看的；建立預約時後端會重新查證時段、重新計價，不採用這裡的金額。

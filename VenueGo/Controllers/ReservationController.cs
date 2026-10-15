@@ -15,7 +15,7 @@ using VenueGo.Enums;
 using VenueGo.Filters;
 namespace VenueGo.Controllers
 {
-    [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
+    [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     public class ReservationController : Controller
     {
         private readonly dbVenueContext _db;

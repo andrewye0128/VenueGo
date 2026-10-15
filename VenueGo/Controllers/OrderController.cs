@@ -9,7 +9,7 @@ using VenueGo.Constants;
 
 namespace VenueGo.Controllers
 {
-    [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
+    [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     public class OrderController : Controller
     {
         private readonly dbVenueContext _db;

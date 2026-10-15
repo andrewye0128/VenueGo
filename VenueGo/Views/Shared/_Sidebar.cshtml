@@ -43,7 +43,7 @@
             @foreach (var m in menus)
             {
                 // 判斷權限：若沒有限制角色，或是目前登入使用者具備該角色，才予以渲染
-                bool canView = m.Roles.Length == 0 || await AuthHelper.HasRoleAsync(User, Db, m.Roles);
+                bool canView = m.Roles.Length == 0 || await AuthFilters.HasRoleAsync(User, Db, m.Roles);
                 if (canView)
                 {
                     var isActive = string.Equals(current, m.Controller, StringComparison.OrdinalIgnoreCase);

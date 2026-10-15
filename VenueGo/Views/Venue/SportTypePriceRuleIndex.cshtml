@@ -9,7 +9,7 @@
     ViewData["Title"] = "價格規則管理";
 
     //是否有新增/編輯/刪除的權限,只有Admin跟Manager可以,Staff看得到列表但不能異動
-    bool canManage = await AuthHelper.HasRoleAsync(User, Db, RoleNames.Admin, RoleNames.Manager);
+    bool canManage = await AuthFilters.HasRoleAsync(User, Db, RoleNames.Admin, RoleNames.Manager);
 }
 
 @section Styles {

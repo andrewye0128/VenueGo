@@ -19,6 +19,7 @@
   1. 一張白底面板、一列一則（分隔線），取代原本「一則一張卡片」：同一畫面看得到更多則，列高也壓低了。
   2. 每列左邊一個有底色的圖示方塊：藍色＝現場評論、橘色＝預約評論、紅色＝已下架、黃色＝快到期，掃一眼就分得出來。
   3. 展開後，那一列加上藍色左邊線、展開區用淡藍底，看得出「哪裡到哪裡是這一則的詳情」。
+     10/14：淡藍底從 5% 加深到 10%，原本太淡，白色的館方回覆泡泡也襯不出來。
   4. 展開區不再重複列上已經有的資訊（星等、日期、場地時段），只放完整內容、館方回覆、表態與公開切換
     （MyReviewDetail 的 compact 模式）。展開時列上的摘要那一行會藏起來，換成完整內容。
   5. 標籤只標「例外」：公開是預設，不再每列都標「公開中」，只有不公開才標；館方已回覆改成一行小字。
@@ -308,7 +309,7 @@ const keyOf = (item) => `${item.kind}-${item.ticket}`;
             <!-- 觸發區是整列。裡面不能再放按鈕（例如 TimeText），按鈕裡面放按鈕不合 HTML 規範 -->
             <button
               type="button"
-              class="group flex w-full cursor-pointer items-start gap-3 border-l-[3px] border-transparent px-4 py-3 text-left transition-colors hover:bg-brand-background focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary data-[state=open]:border-brand-primary data-[state=open]:bg-brand-primary/5"
+              class="group flex w-full cursor-pointer items-start gap-3 border-l-[3px] border-transparent px-4 py-3 text-left transition-colors hover:bg-brand-background focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary data-[state=open]:border-brand-primary data-[state=open]:bg-brand-primary/10"
             >
               <span
                 class="flex size-10 shrink-0 items-center justify-center rounded-lg"
@@ -376,7 +377,7 @@ const keyOf = (item) => `${item.kind}-${item.ticket}`;
               <!-- 展開區：跟上面那一列同一條藍色左邊線、同一個淡藍底，看得出這是同一則。
                    左邊縮排對齊列上的文字（圖示方塊 2.5rem＋間距 0.75rem＋列的左內距 1rem） -->
               <div
-                class="border-l-[3px] border-brand-primary bg-brand-primary/5 pr-4 pb-4 pl-4 sm:pl-[4.25rem]"
+                class="border-l-[3px] border-brand-primary bg-brand-primary/10 pr-4 pb-4 pl-4 sm:pl-[4.25rem]"
               >
                 <MyReviewDetail
                   v-if="opened.has(keyOf(item))"

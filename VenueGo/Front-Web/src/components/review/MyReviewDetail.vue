@@ -31,7 +31,7 @@ import {
   setSatisfaction,
 } from "@/api/reviewApi";
 import { ErrorCodes } from "@/constants/errorCodes";
-import { REPLY_SATISFACTION } from "@/constants/review";
+import { MENTION_TAGS, REPLY_SATISFACTION } from "@/constants/review";
 import { kindInfo } from "@/utils/review/reviewKinds";
 import StarView from "@/components/review/StarView.vue";
 
@@ -263,17 +263,17 @@ async function rate(value) {
           <div v-if="vm.mentionsVenue || vm.mentionsStaff" class="mb-3 flex flex-wrap gap-1">
             <UBadge
               v-if="vm.mentionsVenue"
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-hash"
-              label="場地設施"
+              :color="MENTION_TAGS.venue.color"
+              variant="soft"
+              :icon="MENTION_TAGS.venue.icon"
+              :label="MENTION_TAGS.venue.label"
             />
             <UBadge
               v-if="vm.mentionsStaff"
-              color="neutral"
-              variant="outline"
-              icon="i-lucide-hash"
-              label="人員服務"
+              :color="MENTION_TAGS.staff.color"
+              variant="soft"
+              :icon="MENTION_TAGS.staff.icon"
+              :label="MENTION_TAGS.staff.label"
             />
           </div>
 

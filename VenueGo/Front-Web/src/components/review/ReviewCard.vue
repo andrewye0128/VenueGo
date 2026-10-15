@@ -21,12 +21,15 @@
   7. 館方回覆緊接在評論下面，等高多出來的空白留在卡片底部。
      （試過把回覆固定在卡片底部：首頁 Slide 的卡片高度跟最長的那張一樣，回覆會跟評論隔一大段，看起來像兩件事。）
   8. full：視窗裡用的完整版，不截斷、沒有外框、沒有「閱讀全文」。
+  9. 10/14 晚：「閱讀全文 >」靠右。從左讀到右，讀到這一段的結尾才看到「還有下文」，箭頭也指向右邊。
+  10. 10/14 晚：提及標籤兩種顏色（藍＝場地設施、橘＝人員服務），圖示也不同（constants/review.js 的 MENTION_TAGS）。
 -->
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
 import StarView from "./StarView.vue";
 import TimeText from "@/components/TimeText.vue";
 import { avatarTone, avatarInitial } from "@/utils/review/avatarTone";
+import { MENTION_TAGS } from "@/constants/review";
 
 const props = defineProps({
   item: { type: Object, required: true },
@@ -123,34 +126,35 @@ onBeforeUnmount(() => observer?.disconnect());
       <div v-if="item.mentionsVenue || item.mentionsStaff" class="mt-2 flex flex-wrap gap-1">
         <UBadge
           v-if="item.mentionsVenue"
-          color="neutral"
+          :color="MENTION_TAGS.venue.color"
           variant="soft"
           size="sm"
-          icon="i-lucide-hash"
-          label="場地設施"
+          :icon="MENTION_TAGS.venue.icon"
+          :label="MENTION_TAGS.venue.label"
         />
         <UBadge
           v-if="item.mentionsStaff"
-          color="neutral"
+          :color="MENTION_TAGS.staff.color"
           variant="soft"
           size="sm"
-          icon="i-lucide-hash"
-          label="人員服務"
+          :icon="MENTION_TAGS.staff.icon"
+          :label="MENTION_TAGS.staff.label"
         />
       </div>
 
       <!-- 評論或回覆被截掉才出現（檔頭第 6 點） -->
-      <UButton
-        v-if="clamped"
+      <div v-if="clamped" class="mt-1 flex justify-end">
+        <UButton
         color="primary"
         variant="link"
         size="sm"
         label="閱讀全文"
         trailing-icon="i-lucide-chevron-right"
         aria-haspopup="dialog"
-        class="mt-1 -ms-2.5"
+          class="-me-2.5"
         @click="fullOpen = true"
       />
+      </div>
     </div>
 
     <!-- 館方回覆：留言串樣式（左邊細線＋小頭像），只有內容與時間 -->

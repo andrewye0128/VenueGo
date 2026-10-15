@@ -60,3 +60,10 @@ export const AVATAR_TONES = Object.freeze([
   "bg-semantic-peak/15 text-semantic-peak",
   "bg-brand-dark/10 text-brand-dark",
 ]);
+
+// 評論提及標籤（10/14）：公開評論卡、我的評論共用。
+// 兩個標籤用不同顏色＋不同圖示：只靠顏色分不出來的人（色弱）看圖示也分得出。
+export const MENTION_TAGS = Object.freeze({
+      venue: { label: "場地設施", color: "primary", icon: "i-lucide-building-2" },
+      staff: { label: "人員服務", color: "action", icon: "i-lucide-user-round" },
+});

@@ -19,11 +19,19 @@
      張數不夠循環時（不到「一頁＋1 張」），Embla 會自動當成一般輪播。
   6. 12 張：手機一頁 1 張、平板 2 張、電腦 3 張，12 都整除，每種寬度的最後一頁都是滿的，
      接回第一頁時不會出現半頁空白。
-  7. 分頁點點（平板以上）：循環之後沒有「最後一頁」，用點點告訴使用者看到第幾頁。手機 12 個點太密，不顯示。
-  8. 卡片本身不能點；評論或回覆被截斷時，卡片裡才有「閱讀全文」，開中央視窗看（ReviewCard 檔頭第 6 點）。
+  7. 位置提示：4 條短橫桿，每條代表 3 則（第 1 條＝第 1～3 則、第 2 條＝第 4～6 則⋯）。
+     按第 1 條，第 2 則移到正中間，第 1～3 則同時看得到；按第 2 條，第 5 則移到正中間，以此類推。
+     為了做到「按了之後那 3 則剛好都在畫面上」，卡片改成置中對齊（align=center），一開始停在第 2 則。
+     （10/14 晚：原本 12 個點點太密拿掉了；完全沒有提示又看不出自己在哪，所以改成 4 條。）
+  8. 10/14 晚：滑動改成「像拉霸機」——
+     - slides-to-scroll=1：每一張都是停靠點，可以停在任何一張，不再一次固定三張。
+     - skip-snaps：用力甩的時候會帶著慣性連續滑過好幾張，減速後停在某一張；輕輕拖就只移一張。
+     - 箭頭一次移一張。
+     不用 drag-free（完全自由滑動）：它會停在兩張卡片中間，卡片被切一半，看起來像沒滑好。
+  9. 卡片本身不能點；評論或回覆被截斷時，卡片裡才有「閱讀全文」，開中央視窗看（ReviewCard 檔頭第 6 點）。
 -->
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
 import { getPublicReviews } from "@/api/reviewApi";
 import ReviewCard from "@/components/review/ReviewCard.vue";
@@ -59,6 +67,29 @@ const cards = computed(() =>
 );
 
 // 平均分數顯示一位小數（4.666… → 4.7）；四捨五入後的整數星等給星星用
+// ── 位置提示（檔頭第 7 點）──
+const GROUP_SIZE = 3;
+const carouselRef = ref(null);
+const selected = ref(1); // 目前置中的是第幾張（從 0 算）。一開始停在第 2 張（start-index）
+const groupCount = computed(() => Math.ceil(cards.value.length / GROUP_SIZE));
+const activeGroup = computed(() => Math.floor(selected.value / GROUP_SIZE));
+// 卡片不到 2 張時從第 1 張開始，不然會停在不存在的第 2 張
+const startIndex = computed(() => (cards.value.length >= 2 ? 1 : 0));
+watch(startIndex, (i) => (selected.value = i), { immediate: true });
+
+function groupLabel(g) {
+      const from = g * GROUP_SIZE + 1;
+      const to = Math.min(from + GROUP_SIZE - 1, cards.value.length);
+      return from === to ? `第 ${from} 則` : `第 ${from}～${to} 則`;
+}
+
+// 把那一組中間那張移到正中間；最後一組不滿 3 張時，取那一組實際有的中間
+function goToGroup(g) {
+      const from = g * GROUP_SIZE;
+      const to = Math.min(from + GROUP_SIZE, cards.value.length) - 1;
+      carouselRef.value?.emblaApi?.scrollTo(Math.floor((from + to) / 2));
+}
+
 const averageText = computed(() => (vm.value ? vm.value.summary.average.toFixed(1) : ""));
 const averageStars = computed(() => (vm.value ? Math.round(vm.value.summary.average) : 0));
 
@@ -72,9 +103,6 @@ const carouselUi = {
   arrows: "max-lg:hidden has-[[data-slot=prev]:disabled]:has-[[data-slot=next]:disabled]:hidden",
   prev: "-start-5 sm:-start-5 rounded text-neutral-text-primary",
   next: "-end-5 sm:-end-5 rounded text-neutral-text-primary",
-  // 10/14：分頁點點（檔頭第 7 點）。目前這一頁用品牌藍
-  dots: "max-md:hidden",
-  dot: "size-2.5 data-[state=active]:bg-brand-primary",
 };
 </script>
 
@@ -130,18 +158,49 @@ const carouselUi = {
       <UCarousel
         v-slot="{ item }"
         :items="cards"
-        align="start"
-        slides-to-scroll="auto"
+        ref="carouselRef"
+        align="center"
+        :start-index="startIndex"
+        :slides-to-scroll="1"
+        skip-snaps
         loop
         arrows
-        dots
         :prev-icon="IconChevronLeftBold"
         :next-icon="IconChevronRightBold"
         :ui="carouselUi"
-        class="mt-4 md:mb-10"
+        class="mt-4"
+        @select="(i) => (selected = i)"
       >
         <ReviewCard :item="item" />
       </UCarousel>
+
+      <!-- 位置提示：4 條短橫桿，每條 3 則（檔頭第 7 點）。只有 1 組時不顯示 -->
+      <div
+        v-if="groupCount > 1"
+        role="group"
+        aria-label="評價位置"
+        class="mt-3 flex items-center justify-center gap-1"
+      >
+        <!-- 看得到的橫桿只有 6px 高，按鈕本身留 p-2，手指比較好按 -->
+        <button
+          v-for="g in groupCount"
+          :key="g"
+          type="button"
+          class="group cursor-pointer rounded p-2 focus-visible:outline-2 focus-visible:outline-brand-primary"
+          :aria-label="`看${groupLabel(g - 1)}`"
+          :aria-current="activeGroup === g - 1 ? 'true' : undefined"
+          @click="goToGroup(g - 1)"
+        >
+          <span
+            class="block h-1.5 rounded-full transition-all duration-300"
+            :class="
+              activeGroup === g - 1
+                ? 'w-8 bg-brand-primary'
+                : 'w-4 bg-neutral-border group-hover:bg-brand-primary/40'
+            "
+          ></span>
+        </button>
+      </div>
     </template>
   </section>
 </template>

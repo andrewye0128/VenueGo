@@ -118,7 +118,9 @@ namespace VenueGo.Models.ContentModels
         }
 
         //Edit
-        public bool Edit(CNewsWrap Wrap, string? newImagePath, int userId, DateTime now)
+        //replaceCover = true >> 這次換了封面(上傳圖或公版底稿),4 個 Cover 欄位改成 Wrap 的值
+        //                      (呼叫前 Controller 已經驗證並設定好:公版底稿有值、上傳圖清成 null)
+        public bool Edit(CNewsWrap Wrap, string? newImagePath, bool replaceCover, int userId, DateTime now)
         {
             using (dbVenueContext db = new dbVenueContext())
             {
@@ -130,7 +132,7 @@ namespace VenueGo.Models.ContentModels
                 }
 
                 //2. 只更新表單上可以修改的欄位
-                //   CreatedAt / CreatedBy / IsActive / Cover 欄位都不從 Wrap 取值,避免被表單夾帶的值覆蓋
+                //   CreatedAt / CreatedBy / IsActive 不從 Wrap 取值,避免被表單夾帶的值覆蓋
                 newsDb.Category = Wrap.Category;
                 newsDb.Title = Wrap.Title;
                 newsDb.Content = Wrap.Content;
@@ -143,6 +145,15 @@ namespace VenueGo.Models.ContentModels
                 if (newImagePath != null)
                 {
                     newsDb.ImagePath = newImagePath;
+                }
+
+                //   Cover 欄位只有換封面時才更新;沒換封面時保留原本的(表單上的 Cover 欄位可能是空的或被竄改)
+                if (replaceCover)
+                {
+                    newsDb.CoverTitle = Wrap.CoverTitle;
+                    newsDb.CoverTitleStyles = Wrap.CoverTitleStyles;
+                    newsDb.CoverText = Wrap.CoverText;
+                    newsDb.CoverTextStyles = Wrap.CoverTextStyles;
                 }
 
                 //4. 稽核欄位:記錄最後修改時間與修改者

@@ -70,7 +70,9 @@ namespace VenueGo.Controllers
 
         //最新消息新增 >> 頁面傳回
         [HttpPost]
-        public async Task<IActionResult> NewsCreate(CNewsWrap wrap, IFormFile? ImageFile)
+        //CoverSource:封面來源 default(分類預設圖)/ upload(上傳圖片)/ template(公版底稿)
+        //CoverImageData:公版底稿在瀏覽器合成好的 PNG(base64 文字)
+        public async Task<IActionResult> NewsCreate(CNewsWrap wrap, IFormFile? ImageFile, string? CoverSource, string? CoverImageData)
         {
             //驗證分類清單項目是否來自清單內
             if (!NewsCategoryOptions.IsValid(wrap.Category))
@@ -79,11 +81,32 @@ namespace VenueGo.Controllers
                 ModelState.AddModelError("Category", "請從清單中選擇分類");
             }
 
-            //驗證上傳的封面圖片(沒上傳不算錯,會改用分類預設圖)
-            string? imageError = ValidateNewsImage(ImageFile);
-            if (imageError != null)
+            //驗證封面:依來源各自檢查
+            //   上傳圖片 >> 檢查格式與大小(沒上傳不算錯,會改用分類預設圖)
+            //   公版底稿 >> 檢查內文、樣式與合成圖
+            //   其他來源不用上傳的檔案 >> 就算表單夾帶也不使用
+            if (CoverSource == "upload")
             {
-                ModelState.AddModelError("ImageFile", imageError);
+                string? imageError = ValidateNewsImage(ImageFile);
+                if (imageError != null)
+                {
+                    ModelState.AddModelError("ImageFile", imageError);
+                }
+            }
+            else
+            {
+                ImageFile = null;
+            }
+
+            byte[]? coverPng = null;
+            if (CoverSource == "template")
+            {
+                coverPng = ValidateCoverTemplate(wrap, CoverImageData);
+            }
+            else
+            {
+                //不是公版底稿就不使用封面內文 >> 移除它的驗證結果(錯誤會顯示在隱藏的區塊,使用者看不到)
+                ModelState.Remove("CoverText");
             }
 
             //驗證資料是否正確填寫 >> 若填寫不正確，則回到原本頁面並顯示錯誤訊息
@@ -107,14 +130,22 @@ namespace VenueGo.Controllers
             wrap.IsActive = true;
             wrap.UpdatedAt = null;
             wrap.UpdatedBy = null;
-            wrap.CoverTextStyles = null;
-            wrap.CoverText = null;
-            wrap.CoverTitle = null;
-            wrap.CoverTitleStyles = null;
 
-            //封面:有上傳就存檔並使用上傳的圖,沒上傳就使用該分類的預設圖
-            string? uploadedPath = await SaveNewsImageAsync(ImageFile);
-            wrap.ImagePath = uploadedPath ?? NewsCategoryOptions.GetDefaultImagePath(wrap.Category);
+            //封面
+            //   公版底稿 >> 存合成圖,標題由分類決定(ValidateCoverTemplate 已整理好內文與樣式)
+            //   其他 >> 有上傳就用上傳的圖,沒上傳就用分類預設圖;Cover 欄位全部清空
+            if (coverPng != null)
+            {
+                wrap.ImagePath = await SaveCoverPngAsync(coverPng);
+                wrap.CoverTitle = NewsCategoryOptions.GetName(wrap.Category);
+                wrap.CoverTitleStyles = NewsCoverOptions.TitleStyles;
+            }
+            else
+            {
+                string? uploadedPath = await SaveNewsImageAsync(ImageFile);
+                wrap.ImagePath = uploadedPath ?? NewsCategoryOptions.GetDefaultImagePath(wrap.Category);
+                ClearCoverFields(wrap);
+            }
 
             //呼叫Factory執行新增
             CNewsFactory newsFactory = new CNewsFactory();
@@ -145,13 +176,17 @@ namespace VenueGo.Controllers
                 return RedirectToAction("NewsIndex");
             }
 
+            //原本的分類 >> 封面是公版底稿時,換分類要提醒重新產生封面
+            ViewData["OriginalCategory"] = wrap.Category;
             return View(wrap);
         }
 
 
         //最新消息編輯 >> 頁面傳回
         [HttpPost]
-        public async Task<IActionResult> NewsEdit(CNewsWrap wrap, IFormFile? ImageFile)
+        //CoverSource:封面來源 keep(保留目前封面)/ upload(上傳圖片)/ template(公版底稿)
+        //CoverImageData:公版底稿在瀏覽器合成好的 PNG(base64 文字)
+        public async Task<IActionResult> NewsEdit(CNewsWrap wrap, IFormFile? ImageFile, string? CoverSource, string? CoverImageData)
         {
             //1. 先查出資料庫原本那一筆 >> 判斷換圖要用原本的分類與封面路徑
             //   不用 Wrap 的值:Wrap 直接接表單,ImagePath 不在表單上,而且可能被竄改
@@ -163,22 +198,48 @@ namespace VenueGo.Controllers
                 return RedirectToAction("NewsIndex");
             }
 
-            //2. 驗證:分類在清單內、上傳的圖片格式與大小
+            //2. 驗證:分類在清單內;封面依來源各自檢查(同新增)
             if (!NewsCategoryOptions.IsValid(wrap.Category))
             {
                 ModelState.AddModelError("Category", "請從清單中選擇分類");
             }
 
-            string? imageError = ValidateNewsImage(ImageFile);
-            if (imageError != null)
+            if (CoverSource == "upload")
             {
-                ModelState.AddModelError("ImageFile", imageError);
+                string? imageError = ValidateNewsImage(ImageFile);
+                if (imageError != null)
+                {
+                    ModelState.AddModelError("ImageFile", imageError);
+                }
+            }
+            else
+            {
+                ImageFile = null;
+            }
+
+            byte[]? coverPng = null;
+            if (CoverSource == "template")
+            {
+                coverPng = ValidateCoverTemplate(wrap, CoverImageData);
+            }
+            else
+            {
+                //不是公版底稿就不使用封面內文 >> 移除它的驗證結果(錯誤會顯示在隱藏的區塊,使用者看不到)
+                ModelState.Remove("CoverText");
             }
 
             if (!ModelState.IsValid)
             {
-                //表單沒有送封面路徑 >> 從原本的資料補回來,畫面才能顯示目前的封面
+                //表單沒有送封面路徑與標題 >> 從原本的資料補回來,畫面才能顯示目前的封面
                 wrap.ImagePath = original.ImagePath;
+                wrap.CoverTitle = original.CoverTitle;
+                //不是公版底稿時表單沒有送內文 >> 補回原本的,編輯器才能還原
+                if (CoverSource != "template")
+                {
+                    wrap.CoverText = original.CoverText;
+                    wrap.CoverTextStyles = original.CoverTextStyles;
+                }
+                ViewData["OriginalCategory"] = original.Category;
                 return View(wrap);
             }
 
@@ -190,11 +251,30 @@ namespace VenueGo.Controllers
                 return RedirectToAction("NewsIndex");
             }
 
-            //4. 決定新的封面路徑(null = 不換)
-            //   有上傳 >> 用新上傳的圖
-            //   沒上傳、換了分類、原本用的是預設圖 >> 改成新分類的預設圖(自己上傳的圖保留不動)
-            string? uploadedPath = await SaveNewsImageAsync(ImageFile);
-            string? newImagePath = uploadedPath;
+            //4. 決定新的封面(newImagePath = null 表示不換圖)
+            //   公版底稿 >> 存新的合成圖,Cover 欄位換成這次的內容
+            //   有上傳 >> 用新上傳的圖,Cover 欄位清空
+            //   都沒有、換了分類、原本用的是預設圖 >> 改成新分類的預設圖(自己上傳的圖、公版底稿保留不動)
+            string? savedPath = null;
+            bool replaceCover = false;
+            if (coverPng != null)
+            {
+                savedPath = await SaveCoverPngAsync(coverPng);
+                wrap.CoverTitle = NewsCategoryOptions.GetName(wrap.Category);
+                wrap.CoverTitleStyles = NewsCoverOptions.TitleStyles;
+                replaceCover = true;
+            }
+            else
+            {
+                savedPath = await SaveNewsImageAsync(ImageFile);
+                if (savedPath != null)
+                {
+                    ClearCoverFields(wrap);
+                    replaceCover = true;
+                }
+            }
+
+            string? newImagePath = savedPath;
             if (newImagePath == null
                 && wrap.Category != original.Category
                 && IsDefaultNewsImage(original.ImagePath))
@@ -203,17 +283,17 @@ namespace VenueGo.Controllers
             }
 
             //5. 存檔
-            bool isEdited = newsFactory.Edit(wrap, newImagePath, userId.Value, _timeService.Now);
+            bool isEdited = newsFactory.Edit(wrap, newImagePath, replaceCover, userId.Value, _timeService.Now);
             if (!isEdited)
             {
-                //存檔失敗(剛好被別人刪除) >> 這次上傳的圖沒有人使用,刪掉
-                DeleteUploadedNewsImage(uploadedPath);
+                //存檔失敗(剛好被別人刪除) >> 這次存的圖沒有人使用,刪掉
+                DeleteUploadedNewsImage(savedPath);
                 TempData["NewsErrorMessage"] = "儲存失敗,該則消息已被其他人刪除";
                 return RedirectToAction("NewsIndex");
             }
 
-            //6. 換了上傳圖 >> 舊的上傳圖已經沒有人使用,刪掉(預設圖不會被刪)
-            if (uploadedPath != null)
+            //6. 換了新圖(上傳圖或公版合成圖) >> 舊圖已經沒有人使用,刪掉(預設圖不會被刪)
+            if (savedPath != null)
             {
                 DeleteUploadedNewsImage(original.ImagePath);
             }
@@ -538,20 +618,117 @@ namespace VenueGo.Controllers
             //檔名用 Guid 重新命名 >> 避免同名檔案互相覆蓋,也不使用上傳者自訂的檔名
             string fileName = Guid.NewGuid() + Path.GetExtension(imageFile.FileName).ToLowerInvariant();
 
-            //實際存放位置:wwwroot/images/news/uploads(資料夾不存在就建立)
-            string folderPath = Path.Combine(_env.WebRootPath, "images", "news", "uploads");
-            if (!Directory.Exists(folderPath))
-            {
-                Directory.CreateDirectory(folderPath);
-            }
-
-            using (var stream = new FileStream(Path.Combine(folderPath, fileName), FileMode.Create))
+            using (var stream = new FileStream(Path.Combine(GetNewsUploadFolder(), fileName), FileMode.Create))
             {
                 await imageFile.CopyToAsync(stream);
             }
 
             //資料庫只存網頁路徑,不存實際的磁碟路徑
             return "/images/news/uploads/" + fileName;
+        }
+
+        //上傳圖與公版合成圖的實際存放位置:wwwroot/images/news/uploads(資料夾不存在就建立)
+        private string GetNewsUploadFolder()
+        {
+            string folderPath = Path.Combine(_env.WebRootPath, "images", "news", "uploads");
+            if (!Directory.Exists(folderPath))
+            {
+                Directory.CreateDirectory(folderPath);
+            }
+            return folderPath;
+        }
+
+        //公版底稿的驗證:內文、樣式、合成圖 >> 有錯就加進 ModelState("CoverText")
+        //通過時:wrap.CoverTextStyles 換成整理過的 JSON,回傳合成圖的位元組;不通過回傳 null
+        private byte[]? ValidateCoverTemplate(CNewsWrap wrap, string? imageData)
+        {
+            //1. 內文不可空白(字數上限由 CNewsWrap 的 [StringLength] 檢查)
+            if (string.IsNullOrWhiteSpace(wrap.CoverText))
+            {
+                ModelState.AddModelError("CoverText", "公版底稿的封面內文不可空白");
+                return null;
+            }
+
+            //2. 樣式:範圍、顏色、字級
+            string? styleError = NewsCoverOptions.ValidateStyles(wrap.CoverText, wrap.CoverTextStyles, out string normalizedJson);
+            if (styleError != null)
+            {
+                ModelState.AddModelError("CoverText", styleError);
+                return null;
+            }
+            wrap.CoverTextStyles = normalizedJson;
+
+            //3. 合成圖
+            byte[]? png = DecodeCoverPng(imageData);
+            if (png == null)
+            {
+                ModelState.AddModelError("CoverText", "封面圖片產生失敗,請重新整理頁面後再試一次");
+                return null;
+            }
+            return png;
+        }
+
+        //合成圖上限 3MB(1200 × 1500 的純色底稿＋文字,實際約幾百 KB)
+        private const int MaxCoverPngBytes = 3 * 1024 * 1024;
+
+        //把瀏覽器送來的 data URL 轉回 PNG 位元組;格式、大小、尺寸不對就回傳 null
+        private static byte[]? DecodeCoverPng(string? imageData)
+        {
+            //1. 開頭一定是 canvas.toDataURL 產生的 PNG 格式
+            const string prefix = "data:image/png;base64,";
+            if (imageData == null || !imageData.StartsWith(prefix))
+            {
+                return null;
+            }
+
+            //2. base64 轉回位元組
+            byte[] bytes;
+            try
+            {
+                bytes = Convert.FromBase64String(imageData.Substring(prefix.Length));
+            }
+            catch (FormatException)
+            {
+                return null;
+            }
+            if (bytes.Length > MaxCoverPngBytes || bytes.Length < 24)
+            {
+                return null;
+            }
+
+            //3. 檔頭:PNG 檔案固定以這 8 個位元組開頭
+            byte[] signature = { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A };
+            if (!bytes.Take(8).SequenceEqual(signature))
+            {
+                return null;
+            }
+
+            //4. 尺寸:PNG 第 16～23 個位元組是寬、高(大端序)>> 一定要是 1200 × 1500
+            int width = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(16, 4));
+            int height = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(bytes.AsSpan(20, 4));
+            if (width != 1200 || height != 1500)
+            {
+                return null;
+            }
+
+            return bytes;
+        }
+
+        //存公版合成圖 >> 回傳網頁路徑
+        private async Task<string> SaveCoverPngAsync(byte[] png)
+        {
+            string fileName = Guid.NewGuid() + ".png";
+            await System.IO.File.WriteAllBytesAsync(Path.Combine(GetNewsUploadFolder(), fileName), png);
+            return "/images/news/uploads/" + fileName;
+        }
+
+        //不是公版底稿的封面 >> 4 個 Cover 欄位都要是 null(資料庫 CK_News_CoverAllOrNone)
+        private static void ClearCoverFields(CNewsWrap wrap)
+        {
+            wrap.CoverTitle = null;
+            wrap.CoverTitleStyles = null;
+            wrap.CoverText = null;
+            wrap.CoverTextStyles = null;
         }
 
         //判斷封面是不是分類預設圖

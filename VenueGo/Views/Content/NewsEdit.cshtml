@@ -85,6 +85,14 @@
                 <img src="@Model.ImagePath" alt="目前的封面"
                      class="rounded border" style="width: 180px; height: 225px; object-fit: cover;" />
                 <div class="form-text">目前使用分類預設圖時,更換分類會自動換成新分類的預設圖</div>
+                @* 目前封面是公版底稿 >> 分類名稱已畫進圖裡,換分類後不會跟著變,由 JS 在分類改變時顯示提醒 *@
+                @if (Model.CoverTitle != null)
+                {
+                    <div id="newsCoverCategoryWarning" class="alert alert-warning py-2 small mt-2 mb-0"
+                         data-original-category="@ViewData["OriginalCategory"]" hidden>
+                        封面上的分類名稱是「@Model.CoverTitle」,換分類後不會自動更新;請改選「公版底稿」重新產生封面(原本的內文與樣式會保留)
+                    </div>
+                }
             </div>
 
             <div data-cover-panel="template" class="mb-4" hidden="@(coverSource != "template")">

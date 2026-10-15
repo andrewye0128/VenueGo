@@ -38,12 +38,16 @@ namespace VenueGo.Models.ContentModels
         [Display(Name = "封面圖片")]
         public string ImagePath { get { return _news.ImagePath; } set { _news.ImagePath = value; } }
 
-        //公版底稿的 4 個欄位(第二階段才使用)
+        //公版底稿的 4 個欄位:選公版底稿時才有值,其他封面 4 個都是 null(資料庫 CK_News_CoverAllOrNone)
+        //CoverTitle、CoverTitleStyles 由 Controller 依分類填入,不從表單取值
         public string? CoverTitle { get { return _news.CoverTitle; } set { _news.CoverTitle = value; } }
 
         public string? CoverTitleStyles { get { return _news.CoverTitleStyles; } set { _news.CoverTitleStyles = value; } }
 
-        public string? CoverText { get { return _news.CoverText; } set { _news.CoverText = value; } }
+        //瀏覽器送出表單時換行會變成 \r\n >> 統一成 \n,字數才會跟編輯器顯示的一致
+        [StringLength(NewsCoverOptions.MaxTextLength, ErrorMessage = "封面內文最多 200 字")]
+        [Display(Name = "封面內文")]
+        public string? CoverText { get { return _news.CoverText; } set { _news.CoverText = value?.Replace("\r\n", "\n"); } }
 
         public string? CoverTextStyles { get { return _news.CoverTextStyles; } set { _news.CoverTextStyles = value; } }
 

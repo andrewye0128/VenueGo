@@ -1,0 +1,69 @@
+@* 公版底稿編輯器(新增、編輯頁共用),行為寫在 wwwroot/js/news-cover-editor.js *@
+@* 版面跟「上傳圖片」一致:左邊操作、右邊封面預覽,各佔半欄 *@
+@* 字級、顏色的選項清單:第 2 步後端驗證時要跟這裡一致 *@
+@{
+    var sizeOptions = new[]
+    {
+        new { Code = "sm", Name = "小" },
+        new { Code = "md", Name = "中" },
+        new { Code = "lg", Name = "大" },
+    };
+    //色碼取自前台 main.css 色票,不新增顏色;第一個是內文預設色
+    var colorOptions = new[]
+    {
+        new { Code = "#1a2230", Name = "深灰" },
+        new { Code = "#1d5faf", Name = "品牌藍" },
+        new { Code = "#b42318", Name = "強調紅" },
+        new { Code = "#c24e17", Name = "強調橘" },
+    };
+}
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <label class="form-label fw-bold d-block">字級</label>
+        <div class="btn-group mb-3" role="group" aria-label="字級">
+            @foreach (var size in sizeOptions)
+            {
+                <button type="button" class="btn btn-outline-secondary" data-cover-size="@size.Code">@size.Name</button>
+            }
+        </div>
+
+        <label class="form-label fw-bold d-block">文字顏色</label>
+        <div class="d-flex flex-wrap gap-2 mb-3">
+            @foreach (var color in colorOptions)
+            {
+                @* 只顯示色票;顏色名稱放在 title(滑鼠移上去提示)與 aria-label(螢幕閱讀器) *@
+                <button type="button" class="btn btn-outline-secondary p-1" data-cover-color="@color.Code"
+                        title="@color.Name" aria-label="@color.Name">
+                    <span class="d-block rounded-circle"
+                          style="width: 24px; height: 24px; background-color: @color.Code;"></span>
+                </button>
+            }
+        </div>
+
+        <button type="button" id="newsCoverClearStyle" class="btn btn-outline-secondary btn-sm mb-2">
+            <i class="bi bi-eraser me-1"></i>清除選取文字的樣式
+        </button>
+        <div class="form-text mb-1">先在畫布上反白要調整的文字,再按字級或顏色</div>
+        <div id="newsCoverHint" class="text-danger small mb-3"></div>
+
+        <div class="mb-3">內文字數:<span id="newsCoverCharCount">0 / 200</span></div>
+        <div id="newsCoverMessage"></div>
+
+        <label class="form-label fw-bold d-block">列表圖卡預覽</label>
+        <img id="newsCoverThumb" alt="封面縮圖預覽" class="rounded border"
+             style="width: 150px; height: 188px; object-fit: cover;" />
+        <div class="form-text">前台列表的圖卡大約這個大小</div>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label fw-bold">公告內容編輯</label>
+        @* 畫布實際大小 1200 × 1500(輸出封面用),畫面上由 JS 縮小成 400 × 500 顯示 *@
+        <div>
+            <div class="border rounded overflow-hidden d-inline-block">
+                <canvas id="newsCoverCanvas" width="1200" height="1500"
+                        data-template-url="@Url.Content("~/images/news/templates/cover-base.png")"></canvas>
+            </div>
+        </div>
+        <div class="form-text">點畫布的白色區域開始輸入內文;標題會自動帶入分類名稱</div>
+    </div>
+</div>

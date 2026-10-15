@@ -54,15 +54,45 @@
 
             <hr class="my-4" />
 
-            @* 封面:沒上傳就使用該分類的預設圖 *@
+            @* 封面:分類預設圖／上傳圖片／公版底稿三選一,切換由 news-cover-editor.js 處理 *@
+            @* 公版底稿目前只有編輯與預覽,還不會存檔 *@
             <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-image me-1"></i>封面圖片</h6>
-            <div class="row g-3 mb-4">
+            @{
+                //資料有誤退回時保留原本選的封面來源;圖片有錯時停在「上傳圖片」
+                string coverSource = Context.Request.HasFormContentType ? Context.Request.Form["CoverSource"].ToString() : "";
+                if (ViewData.ModelState["ImageFile"]?.Errors.Count > 0) coverSource = "upload";
+                if (coverSource != "upload" && coverSource != "template") coverSource = "default";
+            }
+            <div id="newsCoverSource" class="mb-3">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="CoverSource" id="coverSourceDefault" value="default" checked="@(coverSource == "default")" />
+                    <label class="form-check-label" for="coverSourceDefault">分類預設圖</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="CoverSource" id="coverSourceUpload" value="upload" checked="@(coverSource == "upload")" />
+                    <label class="form-check-label" for="coverSourceUpload">上傳圖片</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="CoverSource" id="coverSourceTemplate" value="template" checked="@(coverSource == "template")" />
+                    <label class="form-check-label" for="coverSourceTemplate">公版底稿</label>
+                </div>
+            </div>
+
+            <div data-cover-panel="default" class="mb-4" hidden="@(coverSource != "default")">
+                <div class="form-text">使用所選分類的預設圖</div>
+            </div>
+
+            <div data-cover-panel="template" class="mb-4" hidden="@(coverSource != "template")">
+                <partial name="_NewsCoverEditor" />
+            </div>
+
+            <div data-cover-panel="upload" class="row g-3 mb-4" hidden="@(coverSource != "upload")">
                 <div class="col-md-6">
                     @* CNewsWrap 沒有 ImageFile 屬性,不能用 asp-for;name 要跟 Controller 參數 ImageFile 一致 *@
                     <label for="ImageFile" class="form-label fw-bold">上傳圖片</label>
                     <input id="ImageFile" name="ImageFile" type="file" class="form-control"
                            accept=".jpg,.jpeg,.png,.webp" data-preview-target="imagePreview" />
-                    <div class="form-text">接受 jpg、png、webp,5MB 以內,建議使用 1200 × 1500 的直式圖片(4:5),其他比例會被裁切;沒上傳會使用分類預設圖</div>
+                    <div class="form-text">接受 jpg、png、webp,5MB 以內,建議使用 1200 × 1500 的直式圖片(4:5),其他比例會被裁切</div>
                     <div class="form-text">資料有誤退回時,需要重新選擇圖片</div>
                     @* 圖片的錯誤由 Controller 加進 ModelState("ImageFile"),不是 Wrap 的屬性,所以用 ValidationMessage 顯示 *@
                     @Html.ValidationMessage("ImageFile", null, new { @class = "text-danger small" })
@@ -71,7 +101,7 @@
                     <label class="form-label fw-bold">圖片預覽</label>
                     <div>
                         <img id="imagePreview" src="" alt="封面圖片預覽"
-                             class="rounded" style="width: 180px; height: 225px; object-fit: cover;"
+                             class="rounded border" style="width: 180px; height: 225px; object-fit: cover;"
                              hidden />
                         <p id="imagePreviewEmptyText" class="text-muted mb-0">尚未上傳圖片</p>
                     </div>
@@ -117,4 +147,6 @@
     <partial name="_ValidationScriptsPartial" />
     <script src="~/js/photo-preview.js" asp-append-version="true"></script>
     <script src="~/js/news-publish-confirm.js" asp-append-version="true"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fabric@@6.7.1/dist/index.min.js"></script>
+    <script src="~/js/news-cover-editor.js" asp-append-version="true"></script>
 }

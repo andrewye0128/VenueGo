@@ -1,7 +1,8 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using System.Net.Sockets;
 using VenueGo.Data;
+using VenueGo.Enums;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 using VenueGo.Services.ReviewTickets;
 using static VenueGo.Services.CheckIn.ICheckInService;
 
@@ -11,21 +12,31 @@ namespace VenueGo.Services.CheckIn
     {
         private readonly dbVenueContext _db;
         private readonly IVisitReviewTicketFactory _visitReviewTicketFactory;
+        private readonly ILogger<CheckInService> _logger;
+        private readonly ITimeService _time;
 
-        public CheckInService(dbVenueContext db, IVisitReviewTicketFactory visitReviewTicketFactory)
+        public CheckInService(dbVenueContext db, IVisitReviewTicketFactory visitReviewTicketFactory, ITimeService time, ILogger<CheckInService> logger)
         {
+
             _db = db;
+            _time = time;
+            _logger = logger;
             _visitReviewTicketFactory = visitReviewTicketFactory;
         }
 
-        // 儀錶板
+
+        // 儀錶板 -> 只撈今天以前的票
         public async Task<int> SettleAllDueTicketsAsync()
         {
+            var today = DateOnly.FromDateTime(_time.Now);
             // 只有 Valid/Used 是非終態,才需要檢查是否過期
-            var candidateTickets = await _db.EntryTickets
-                .Where(t => t.Status == (byte)EntryTicketStatus.Valid ||
-                            t.Status == (byte)EntryTicketStatus.Used)
-                .ToListAsync();
+            var candidateTickets = await (from t in _db.EntryTickets
+                                          join o in _db.Orders on t.OrderId equals o.OrderId
+                                          join r in _db.Reservations on o.ReservationId equals r.ReservationId
+                                          where (t.Status == (byte)EntryTicketStatus.Valid ||
+                                                 t.Status == (byte)EntryTicketStatus.Used)
+                                                && r.BookingDate <= today
+                                          select t).ToListAsync();
 
             int settledCount = 0;
             foreach (var ticket in candidateTickets)
@@ -38,6 +49,121 @@ namespace VenueGo.Services.CheckIn
             }
 
             return settledCount;
+        }
+
+        public async Task<int> SettleOvertimeAsync()
+        {
+            var now = _time.Now;
+            var today = DateOnly.FromDateTime(now);
+            var earliest = today.AddDays(-1);   // 只看昨天和今天,舊的不再追
+
+            var candidates = await (from t in _db.EntryTickets
+                                    join o in _db.Orders on t.OrderId equals o.OrderId
+                                    join r in _db.Reservations on o.ReservationId equals r.ReservationId
+                                    where t.Status == (byte)EntryTicketStatus.Expired
+                                          && r.BookingDate >= earliest && r.BookingDate <= today
+                                          && !_db.OvertimeCharges.Any(c => c.OrderId == t.OrderId)
+                                    select new { t.TicketId, t.OrderId, r.BookingDate, r.EndTime })
+                                   .ToListAsync();
+
+            var handledOrders = new HashSet<int>();   // 同訂單多張票只建一筆
+            int count = 0;
+
+            foreach (var c in candidates)
+            {
+                if (handledOrders.Contains(c.OrderId)) continue;
+
+                var endAt = c.BookingDate.ToDateTime(c.EndTime);
+                if (now < endAt.AddMinutes(31)) continue;   // 金額還沒封頂,先不建
+
+                var lastLog = await GetLastInOutLogAsync(c.TicketId);
+                bool isInside = lastLog != null && lastLog.Action == (byte)CheckInAction.CheckIn;
+                if (!isInside) continue;
+
+                var fee = OvertimeFee.Calculate(endAt, now);
+                if (fee.IsFree) continue;
+
+                _db.OvertimeCharges.Add(new OvertimeCharge
+                {
+                    OrderId = c.OrderId,
+                    TicketId = c.TicketId,
+                    OverdueMinutes = fee.OverdueMinutes,
+                    UnitPrice = fee.UnitPrice,
+                    BillingHours = fee.BillingHours,
+                    ChargeAmount = fee.ChargeAmount,
+                    Status = (byte)OvertimeChargeStatus.Pending,
+                    Remark = "排程代建：未掃碼離場",
+                    OperatorId = null,
+                    CreatedAt = now,
+                    ConfirmedAt = null
+                });
+
+
+                // 衝突處理 ex:員工手動/客人出場建立待付款超時紀錄和排程同時建立 -> log顯示
+                try
+                {
+                    await _db.SaveChangesAsync();
+                    handledOrders.Add(c.OrderId);
+                    count++;
+                }
+                catch(DbUpdateException e)
+                {
+                    _db.ChangeTracker.Clear();   // 把失敗那筆移出追蹤
+                    handledOrders.Add(c.OrderId); // 同訂單也要一起紀錄移除不處理
+                    _logger.LogWarning(e, "排程代建超時代收失敗。OrderId={OrderId}", c.OrderId);
+                }
+            }
+            return count;
+        }
+
+        // 員工快速處理
+        public async Task<OvertimePaymentResult> QuickOvertimeChargeAsync(int ticketId)
+        {
+            var ticket = await _db.EntryTickets.FirstOrDefaultAsync(t => t.TicketId == ticketId);
+            if (ticket == null)
+            {
+                return OvertimePaymentResult.Fail("找不到這張票券");
+            }
+
+            // 還是 Used 但已過預約結束時間的票,先當場轉 Expired
+            await SettleIfPastEndAsync(ticket);
+
+            var lastLog = await GetLastInOutLogAsync(ticketId);
+            bool isInside = lastLog != null && lastLog.Action == (byte)CheckInAction.CheckIn;
+            if (ticket.Status != (byte)EntryTicketStatus.Expired || !isInside)
+            {
+                return OvertimePaymentResult.Fail("這張票券目前不需要結帳（可能已處理過）");
+            }
+
+            OvertimeFeeResult? fee = await CalculateOvertimeFeeAsync(ticket);
+            if (fee == null)
+            {
+                return OvertimePaymentResult.Fail("找不到這張票券的預約資料");
+            }
+            if (fee.IsFree)
+            {
+                return OvertimePaymentResult.Fail("目前在寬限時間內免收費，請使用一般手動離場");
+            }
+
+            try
+            {
+                // 回傳 false = 同訂單已收/已免收,不需要再結帳
+                bool needPaid = await EnsurePendingChargeAsync(ticket, fee);
+                await _db.SaveChangesAsync();   // Ensure 只 Add 不 Save,這裡才真的寫入
+                if (!needPaid)
+                {
+                    return OvertimePaymentResult.Fail("這筆訂單的超時費用已處理，請使用一般手動離場");
+                }
+            }
+            catch (DbUpdateException ex)
+            {
+                // 剛好跟排程或出場同時建了同訂單的紀錄(OrderId 唯一索引)
+                _db.ChangeTracker.Clear();
+                _logger.LogWarning(ex, "建立待收衝突。OrderId={OrderId}", ticket.OrderId);
+                return OvertimePaymentResult.Fail("這筆訂單剛剛已有超時紀錄，請重新整理");
+            }
+
+            return OvertimePaymentResult.OK(fee.ChargeAmount);
         }
 
         public async Task SettleTicketAsync(int ticketId)
@@ -81,7 +207,7 @@ namespace VenueGo.Services.CheckIn
             // 第二層驗證 - 票證合法但不符合入場條件
             // 未到預約時間
             var reservation = await GetReservationTime(ticket.OrderId);
-            if (reservation != null && DateTime.Now < reservation.Value.BookingDate.ToDateTime(reservation.Value.StartTIme))
+            if (reservation != null && _time.Now < reservation.Value.BookingDate.ToDateTime(reservation.Value.StartTIme))
             {
                 return await LogAndFailAsync(ticketId, CheckInAction.CheckIn, operatorId, isManualOverride, CheckInFailReason.NotYetStartTime);
             }
@@ -101,7 +227,7 @@ namespace VenueGo.Services.CheckIn
             {
                 TicketId = ticketId,
                 Action = (byte)CheckInAction.CheckIn,
-                ActionTime = DateTime.Now,
+                ActionTime = _time.Now,
                 IsValid = isVaild,
                 IsManualOverride = isManualOverride,
                 OperatorId = operatorId,
@@ -151,7 +277,23 @@ namespace VenueGo.Services.CheckIn
             // 已失效但人還在場內（超時失效）→ 繳費放行，唯一允許的動作
             /////////////////////
             // TODO：之後接超時費用
-
+            if (ticket.Status == (byte)EntryTicketStatus.Expired && isInside)
+            {
+                OvertimeFeeResult? fee = await CalculateOvertimeFeeAsync(ticket);
+                if (fee == null)
+                {
+                    return await LogAndFailAsync(ticketId, CheckInAction.CheckOut, operatorId, isManualOverride, CheckInFailReason.InvalidSequence);
+                }
+                if (!fee.IsFree)
+                {
+                    bool needPaid = await EnsurePendingChargeAsync(ticket, fee);
+                    if (needPaid)
+                    {
+                        return await LogAndFailAsync(ticketId, CheckInAction.CheckOut, operatorId, isManualOverride, CheckInFailReason.ConfirmOvertimeCharge);
+                    }
+                }
+                ticket.Status = (byte)EntryTicketStatus.Completed;
+            }
             /////////////////////
 
             bool isValid = isInside;
@@ -160,7 +302,7 @@ namespace VenueGo.Services.CheckIn
             {
                 TicketId = ticketId,
                 Action = (byte)CheckInAction.CheckOut,
-                ActionTime = DateTime.Now,
+                ActionTime = _time.Now,
                 IsValid = isValid,
                 IsManualOverride = isManualOverride,
                 OperatorId = operatorId,
@@ -172,6 +314,72 @@ namespace VenueGo.Services.CheckIn
                 await _visitReviewTicketFactory.RecordVisitEndTimeAsync(ticketId);
             }
             return isValid ? CheckInResult.Ok() : CheckInResult.Fail(CheckInFailReason.InvalidSequence);
+        }
+
+        public async Task<OvertimePaymentResult> OvertimeCheckOutAsync(int ticketId, int operatorId, bool isWaived, PaymentMethodOnSite? method, string? remark)
+        {
+            var ticket = await _db.EntryTickets.FirstOrDefaultAsync(t => t.TicketId == ticketId);
+            if (ticket == null)
+            {
+                return OvertimePaymentResult.Fail("找不到這張票券");
+            }
+
+            var lastLog = await GetLastInOutLogAsync(ticketId);
+            bool isInside = lastLog != null && lastLog.Action == (byte)CheckInAction.CheckIn;
+            if (ticket.Status != (byte)EntryTicketStatus.Expired || !isInside)
+            {
+                return OvertimePaymentResult.Fail("這張票券目前不需要結帳（可能已處理過）");
+            }
+
+            if (!isWaived && method == null)
+            {
+                return OvertimePaymentResult.Fail("需選擇付款方式");
+            }
+
+            // 檢查是否已有超時紀錄與付款紀錄
+            var chargelog = await _db.OvertimeCharges.FirstOrDefaultAsync(o => o.OrderId == ticket.OrderId);
+            if (chargelog == null)
+            {
+                return OvertimePaymentResult.Fail("無超時費用紀錄");
+            }
+
+            //檢查待付款
+            if (chargelog.Status == (byte)OvertimeChargeStatus.Pending)
+            {
+                // 員工放行
+                if (isWaived)
+                {
+                    chargelog.Status = (byte)OvertimeChargeStatus.Waived;
+                    chargelog.PaymentMethod = null;
+                }
+                else
+                {
+                    chargelog.Status = (byte)OvertimeChargeStatus.Paid;
+                    chargelog.PaymentMethod = (byte)method!.Value; // 有值
+                }
+                chargelog.OperatorId = operatorId;
+                chargelog.ConfirmedAt = _time.Now;
+                chargelog.Remark = string.IsNullOrWhiteSpace(remark) ? null : remark.Trim();
+            }
+
+            //(一次儲存同一個交易)放行並更改票券, 記錄出場 => 評論也能使用 => 回傳超時付款金額
+            ticket.Status = (byte)EntryTicketStatus.Completed;
+            _db.CheckInLogs.Add(new CheckInLog
+            {
+                TicketId = ticketId,
+                Action = (byte)CheckInAction.CheckOut,
+                ActionTime = _time.Now,
+                IsValid = true,
+                IsManualOverride = true,
+                OperatorId = operatorId,
+                FailReason = null
+            });
+
+            await _db.SaveChangesAsync();
+
+            await _visitReviewTicketFactory.RecordVisitEndTimeAsync(ticketId);
+
+            return OvertimePaymentResult.OK(chargelog.ChargeAmount);
         }
 
         // 專給人工取消(後台) --> 自動取取消功能已同步在取消票券
@@ -291,7 +499,54 @@ namespace VenueGo.Services.CheckIn
                 .FirstOrDefaultAsync();
         }
 
-       // 所有超過預約區間的情況(票券會變失效) -> 終態結算
+        // 計算超時抽程共用方法
+        private async Task<OvertimeFeeResult?> CalculateOvertimeFeeAsync(EntryTicket ticket)
+        {
+            var reservationDatas = await GetReservationTime(ticket.OrderId);
+            if (reservationDatas == null)
+            {
+                return null;
+            }
+
+            DateTime endAt = reservationDatas.Value.BookingDate.ToDateTime(reservationDatas.Value.EndTime);
+            return OvertimeFee.Calculate(endAt, _time.Now);
+        }
+
+        private async Task<bool> EnsurePendingChargeAsync(EntryTicket ticket, OvertimeFeeResult fee)
+        {
+            var overTimeCharge = await _db.OvertimeCharges.FirstOrDefaultAsync(o => o.OrderId == ticket.OrderId);
+
+            if (overTimeCharge?.Status == (byte)OvertimeChargeStatus.Paid || overTimeCharge?.Status == (byte)OvertimeChargeStatus.Waived)
+            {
+                return false;
+            }
+
+            if (overTimeCharge?.Status == (byte)OvertimeChargeStatus.Pending)
+            {
+                return true;
+            }
+
+            _db.OvertimeCharges.Add(new OvertimeCharge
+            {
+                OrderId = ticket.OrderId,
+                TicketId = ticket.TicketId,
+                OverdueMinutes = fee.OverdueMinutes,
+                UnitPrice = fee.UnitPrice,
+                BillingHours = fee.BillingHours,
+                ChargeAmount = fee.ChargeAmount,
+                Status = (byte)OvertimeChargeStatus.Pending,
+                PaymentMethod = null,
+                Remark = null,
+                OperatorId = null,
+                CreatedAt = _time.Now,
+                ConfirmedAt = null
+            });
+
+            return true;
+        }
+
+
+        // 所有超過預約區間的情況(票券會變失效) -> 終態結算
         // 透過現在時間 > EndTime && 現在的票券狀態 && 出入場狀態 
         private async Task<bool> SettleIfPastEndAsync(EntryTicket ticket)
         {
@@ -304,7 +559,7 @@ namespace VenueGo.Services.CheckIn
             if (reservation == null) return false;
 
             var endAt = reservation.Value.BookingDate.ToDateTime(reservation.Value.EndTime);
-            if (DateTime.Now <= endAt) return false;
+            if (_time.Now <= endAt) return false;
 
             var lastLog = await GetLastInOutLogAsync(ticket.TicketId);
             bool isInside = lastLog != null && lastLog.Action == (byte)CheckInAction.CheckIn;
@@ -330,7 +585,7 @@ namespace VenueGo.Services.CheckIn
             {
                 TicketId = ticketId,
                 Action = (byte)action,
-                ActionTime = DateTime.Now,
+                ActionTime = _time.Now,
                 IsValid = false,
                 IsManualOverride = isManualOverride,
                 OperatorId = operatorId,

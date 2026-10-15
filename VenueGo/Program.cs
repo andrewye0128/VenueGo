@@ -10,7 +10,6 @@ using VenueGo.Data;
 using VenueGo.Dtos;
 using VenueGo.Extensions;   // 各子系統的服務註冊、API 文件
 using VenueGo.Helpers;
-using VenueGo.Models;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;

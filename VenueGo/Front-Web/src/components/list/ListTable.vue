@@ -7,6 +7,7 @@
 //              :total="totalCount" v-model:page="page" row-key="reservationId">
 //     <template #reservationStatus-cell="{ row }"> {{ row.original.xxx }} </template>  ← 表格的某一欄
 //     <template #card="{ row }"> {{ row.xxx }} </template>                             ← 手機版一張卡片
+//     <template #empty> <EmptyState title="目前沒有資料" /> </template>                ← 沒有資料時（選填）
 //   </ListTable>
 //
 // ⚠️ 兩種 slot 拿到的 row 不一樣：
@@ -70,35 +71,45 @@ const paginationUi = {
     ref="rootRef"
     class="@container scroll-mt-4 rounded border border-neutral-border bg-neutral-surface"
   >
-    <!-- 寬（≥ 832px）：表格 -->
-    <UTable
-      :data="rows"
-      :columns="columns"
-      :loading="loading"
-      :empty="emptyText"
-      :ui="tableUi"
-      class="hidden @[52rem]:block"
-    >
-      <template v-for="name in tableSlotNames()" :key="name" #[name]="scope">
-        <slot :name="name" v-bind="scope" />
-      </template>
-    </UTable>
-
-    <!-- 窄（< 832px）：卡片 -->
-    <div class="@[52rem]:hidden">
-      <p v-if="loading" class="py-10 text-center text-sm text-neutral-text-secondary">載入中…</p>
-      <p
-        v-else-if="rows.length === 0"
-        class="py-10 text-center text-sm text-neutral-text-secondary"
-      >
-        {{ emptyText }}
-      </p>
-      <ul v-else class="divide-y divide-neutral-border">
-        <li v-for="row in rows" :key="row[rowKey]" class="p-4">
-          <slot name="card" :row="row" />
-        </li>
-      </ul>
+    <!-- 讀取完成、沒有資料：顯示空狀態，表格和表頭都不顯示（設計稿）
+         頁面有傳 #empty 就用頁面的（例如 EmptyState），沒傳就顯示 emptyText 文字
+         讀取中不顯示空狀態，避免資料還沒回來就閃一下「沒有資料」 -->
+    <div v-if="!loading && rows.length === 0">
+      <slot name="empty">
+        <p class="py-10 text-center text-sm text-neutral-text-secondary">{{ emptyText }}</p>
+      </slot>
     </div>
+
+    <template v-else>
+      <!-- 寬（≥ 832px）：表格 -->
+      <UTable
+        :data="rows"
+        :columns="columns"
+        :loading="loading"
+        :empty="emptyText"
+        :ui="tableUi"
+        class="hidden @[52rem]:block"
+      >
+        <template v-for="name in tableSlotNames()" :key="name" #[name]="scope">
+          <slot :name="name" v-bind="scope" />
+        </template>
+      </UTable>
+
+      <!-- 窄（< 832px）：卡片 -->
+      <div class="@[52rem]:hidden">
+        <p
+          v-if="loading && rows.length === 0"
+          class="py-10 text-center text-sm text-neutral-text-secondary"
+        >
+          載入中…
+        </p>
+        <ul v-else class="divide-y divide-neutral-border">
+          <li v-for="row in rows" :key="row[rowKey]" class="p-4">
+            <slot name="card" :row="row" />
+          </li>
+        </ul>
+      </div>
+    </template>
 
     <!-- 分頁：只有 1 頁時不顯示 -->
     <div v-if="showPagination" class="border-t border-neutral-border p-4">

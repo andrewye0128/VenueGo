@@ -31,6 +31,9 @@ export const ErrorCodes = Object.freeze({
   SpamMarked: "SpamMarked", // 評論已下架，不能切換公開
   InvalidSatisfaction: "InvalidSatisfaction", // 表態的值不是 0／1／2
 
+  // ── 場地預約（BookingApiController）──
+  DateOutOfRange: "DateOutOfRange", // 日期不在會員可預約的範圍內（今天～30 天後）
+
   // ── 前台 src/api/http.js 產生（不是後端回傳）──
   ValidationFailed: "ValidationFailed", // [ApiController] 自動產生的輸入驗證錯誤
   PageExpired: "PageExpired", // 防偽 token 驗證失敗，重拿一次也不行（昱）

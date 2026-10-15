@@ -25,6 +25,7 @@ namespace VenueGo.Extensions
             // 報到，以及定時結算票券的背景工作
             services.AddScoped<ICheckInService, CheckInService>();
             services.AddHostedService<TicketSettlementHostedService>();
+            services.AddScoped<COvertimeChargeFactory>();
 
             // ⚠️ 歸屬待確認：場地即時使用狀況（查的是票券資料，所以先放這裡）
             services.AddScoped<VenueMonitorFactory>();

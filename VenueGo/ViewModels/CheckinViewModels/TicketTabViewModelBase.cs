@@ -1,4 +1,4 @@
-﻿using VenueGo.Models.Enums;
+﻿using VenueGo.Enums;
 
 namespace VenueGo.ViewModels.CheckinViewModels
 {
@@ -23,7 +23,7 @@ namespace VenueGo.ViewModels.CheckinViewModels
         public bool HasValidCheckIn { get; set; }
 
         //是否超過預約結束時間
-        public bool IsPastEndTime => DateTime.Now > BookingDate.ToDateTime(EndTime);
+        public bool IsPastEndTime { get; set; }
 
         public string StatusText => ((EntryTicketStatus)Status).GetDisplayName();
 

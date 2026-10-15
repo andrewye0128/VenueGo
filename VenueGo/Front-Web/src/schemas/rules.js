@@ -2,6 +2,7 @@
 // 各表單的 schema 由這裡的規則組合而成；改規則只要改這裡，所有表單一起更新
 // 錯誤訊息盡量與後端 C# 的 DataAnnotations（例如 [Required]、[StringLength]）一致
 import { z } from "zod";
+import { ALL_SPORTS } from "@/constants/sportTypes";
 
 // 姓名：必填、最多 50 字（對應後端 [StringLength(50)]）
 export const nameRule = z.string().trim().min(1, "請輸入姓名").max(50, "姓名長度不能超過 50 個字");
@@ -16,6 +17,15 @@ export const mobileRule = z
   .trim()
   .min(1, "請輸入手機號碼")
   .pipe(z.string().regex(/^09\d{8}$/, "手機號碼格式不正確（例：0912345678）"));
+
+// 運動類型（搭配 SportTypeSelect）：值是 sportTypeId（數字），還沒選是 ""
+export const sportTypeRule = z.number({ error: "請選擇運動類型" });
+
+// 運動類型，可以選「全部運動」（SportTypeSelect 加 include-all 時用）
+// 值是 sportTypeId（數字）或 ALL_SPORTS（"all"）
+export const sportTypeOrAllRule = z.union([z.number(), z.literal(ALL_SPORTS)], {
+  error: "請選擇運動類型",
+});
 
 // 必須勾選（例如同意使用條款）
 export const mustAgreeRule = (message) => z.literal(true, { error: message });

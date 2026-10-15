@@ -1,4 +1,4 @@
-﻿using VenueGo.Models.Enums;
+﻿using VenueGo.Enums;
 using VenueGo.Services.CheckIn;
 
 namespace VenueGo.Services.Ticket
@@ -14,5 +14,6 @@ namespace VenueGo.Services.Ticket
         Task<CheckInResult> CancelAsync(int ticketId, int operatorId, TicketManualLogReasonType reasonType, string? reason);
         Task<CheckInResult> ExpireAsync(int ticketId, int operatorId, TicketManualLogReasonType reasonType, string? reason);
         Task<CheckInResult> ReissueAsync(int ticketId, int operatorId, TicketManualLogReasonType reasonType, string? reason);
+        Task<TicketTransferResult> TransferAsync(int ticketId, int operatorId, string email, TicketManualLogReasonType reasonType, string? reason);
     }
 }

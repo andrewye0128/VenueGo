@@ -7,7 +7,7 @@ using VenueGo.Data;
 using VenueGo.Dtos;
 using VenueGo.Dtos.MemberDtos;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
+using VenueGo.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.Services;
 using VenueGo.Services.Auth;

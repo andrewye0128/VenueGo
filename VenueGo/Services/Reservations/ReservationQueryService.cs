@@ -1,12 +1,14 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+using VenueGo.Constants;
 using VenueGo.Data;
-using VenueGo.Models.Constants;
-using VenueGo.Models.Enums;
+using VenueGo.Dtos;
+using VenueGo.Dtos.ReservationDtos;
+using VenueGo.Enums;
 using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Services.Reservations
@@ -34,6 +36,7 @@ namespace VenueGo.Services.Reservations
             _db = db;
         }
 
+        // 取得預約詳細頁所需的完整資料。查無此預約時回傳 null。
         public async Task<ReservationDetailViewModel?> GetDetailAsync(
             int reservationId, CancellationToken cancellationToken = default)
         {
@@ -56,6 +59,141 @@ namespace VenueGo.Services.Reservations
 
             return Compose(core, order, payment, lines, createdBy, cancelledBy, auditLogs);
         }
+
+        // 取得某位會員的預約列表（篩選、排序、分頁）。
+        // ── 前台：我的預約列表 ──────────────────────────────
+
+        /// <summary>每頁筆數上限，避免一次撈出全部資料。</summary>
+        private const int MaxPageSize = 50;
+
+        public async Task<PagedResult<MyReservationDto>> GetMyReservationsAsync(
+            int userId,
+            MyReservationQuery query,
+            CancellationToken cancellationToken = default)
+        {
+            // 1. 頁碼、每頁筆數超出範圍時自動修正，不回錯誤
+            var page = Math.Max(query.Page, 1);
+            var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
+
+            // 2. 這位會員的預約（此時只是組好查詢，還沒送到資料庫）
+            var reservations = BuildMyReservationsQuery(userId);
+
+            // 3. 套用篩選條件
+            reservations = ApplyMyReservationFilters(reservations, query);
+
+            // 4. 總筆數：篩選後、分頁前（第 1 次送到資料庫）
+            var totalCount = await reservations.CountAsync(cancellationToken);
+
+            // 5. 排序 → 跳過前面幾頁 → 取這一頁（第 2 次送到資料庫）
+            //    最後加 ReservationId，讓順序固定，換頁時不會重複或漏掉
+            var items = await reservations
+                .OrderByDescending(r => r.BookingDate)
+                .ThenByDescending(r => r.StartTime)
+                .ThenByDescending(r => r.ReservationId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(cancellationToken);
+
+            return new PagedResult<MyReservationDto>
+            {
+                Items = items,
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize
+            };
+        }
+
+
+        /// <summary>
+        /// 這位會員的預約（不含已作廢），組成 MyReservationDto。
+        /// <para>
+        /// 訂單、付款用 left join：沒有訂單或付款紀錄的預約也要留下，
+        /// 這時人數、金額、付款欄位是 null。
+        /// </para>
+        /// <para>
+        /// 付款取最新一筆（CreatedAt 最晚）：最新的才代表目前狀態。
+        /// </para>
+        /// </summary>
+        private IQueryable<MyReservationDto> BuildMyReservationsQuery(int userId)
+        {
+            return from r in _db.Reservations.AsNoTracking()
+                   join v in _db.Venues on r.VenueId equals v.VenueId
+                   join st in _db.SportTypes on v.SportTypeId equals st.SportTypeId
+                   join o in _db.Orders on r.ReservationId equals o.ReservationId into orders
+                   from o in orders.DefaultIfEmpty()
+                   let payment = _db.Payments
+                       .Where(p => o != null && p.OrderId == o.OrderId)
+                       .OrderByDescending(p => p.CreatedAt)
+                       .ThenByDescending(p => p.PaymentId)
+                       .FirstOrDefault()
+                   where r.UserId == userId
+                      && r.ReservationStatus != (byte)ReservationStatus.Voided
+                   select new MyReservationDto
+                   {
+                       ReservationId = r.ReservationId,
+                       BookingDate = r.BookingDate,
+                       StartTime = r.StartTime,
+                       EndTime = r.EndTime,
+                       ReservationStatus = r.ReservationStatus,
+                       ReservedAt = r.ReservedAt,
+                       CancelledAt = r.CancelledAt,
+                       CancelReason = r.CancelReason,
+
+                       VenueName = v.VenueName,
+                       SportName = st.SportName,
+
+                       // 沒有訂單時 o 是 null
+                       PersonCount = o == null ? null : (int?)o.PersonMount,
+                       TotalAmount = o == null ? null : (int?)o.TotalAmount,
+
+                       // 沒有付款紀錄時 payment 是 null
+                       PaymentStatus = payment == null ? null : (byte?)payment.PaymentStatus,
+                       PaymentDueAt = payment == null ? null : (DateTime?)payment.PaymentDueAt
+                   };
+        }
+
+        /// <summary>
+        /// 套用篩選條件；條件是 null（前端選「全部」）就不篩選。
+        /// </summary>
+        private static IQueryable<MyReservationDto> ApplyMyReservationFilters(
+            IQueryable<MyReservationDto> reservations, MyReservationQuery query)
+        {
+            // 關鍵字：場地名稱「包含」，或預約編號「完全相同」
+            // "R012"、"r012"、"012"、"12" 都當成預約編號 12
+            var keyword = query.Keyword?.Trim();
+            if (!string.IsNullOrEmpty(keyword))
+            {
+                var isReservationNo = int.TryParse(
+                    keyword.TrimStart('R', 'r'), out var reservationId);
+
+                reservations = reservations.Where(r =>
+                    r.VenueName.Contains(keyword)
+                    || (isReservationNo && r.ReservationId == reservationId));
+            }
+
+            if (query.Date is DateOnly date)
+            {
+                reservations = reservations.Where(r => r.BookingDate == date);
+            }
+
+            if (query.ReservationStatus is byte reservationStatus)
+            {
+                reservations = reservations.Where(r => r.ReservationStatus == reservationStatus);
+            }
+
+            if (query.PaymentStatus is byte paymentStatus)
+            {
+                reservations = reservations.Where(r => r.PaymentStatus == paymentStatus);
+            }
+
+            return reservations;
+        }
+
+
+
+
+
+
 
         // ── 各段查詢 ────────────────────────────────────
 

@@ -1,10 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using VenueGo.Constants;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
 using VenueGo.ViewModels.MemberViewModels;
-
+using VenueGo.Filters;
 namespace VenueGo.Controllers
 {
     /// <summary>

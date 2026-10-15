@@ -54,5 +54,58 @@ namespace VenueGo.Services.TimeSlots
         Task<IReadOnlyDictionary<DateOnly, DayAvailability>> GetRangeAvailabilityAsync(
             int venueId, DateOnly fromDate, DateOnly toDate,
             CancellationToken cancellationToken = default);
+
+
+
+        /// <summary>
+        /// 一次取得多個場地某天的所有時段（前台場地預約頁用）。
+        /// 每個場地的結果跟 <see cref="GetDaySlotsAsync"/> 相同。
+        /// <para>
+        /// 不論幾個場地，資料庫只查 4 次（營業時間、維護、已預約、計價規則），
+        /// 不必對每個場地各呼叫一次 GetDaySlotsAsync。
+        /// </para>
+        /// <para>
+        /// ⚠️ 取資料的條件跟 GetDaySlotsAsync 各寫一份：修改其中一邊的查詢條件時，另一邊也要一起改。
+        /// </para>
+        /// </summary>
+        /// <param name="venueIds">場地 Id 清單。</param>
+        /// <param name="date">要查詢的日期。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
+        /// <returns>key 是 venueId；傳入的每個場地都一定會出現，公休日時是空清單。</returns>
+        Task<IReadOnlyDictionary<int, IReadOnlyList<TimeSlotStatus>>> GetDaySlotsForVenuesAsync(
+            IReadOnlyCollection<int> venueIds,
+            DateOnly date,
+            CancellationToken cancellationToken = default);
+
+
+        /// <summary>
+        /// 一次取得多個場地一段日期內每天的時段統計（前台場地預約頁的日期列用）。
+        /// 每個場地的結果跟 <see cref="GetRangeAvailabilityAsync"/> 相同，另外可以只統計某個時間範圍。
+        /// <para>
+        /// 不論幾個場地，資料庫只查 3 次（營業時間、維護、已預約）。
+        /// </para>
+        /// <para>
+        /// ⚠️ 傳了時間範圍時，TotalSlots 只算範圍內的格子，
+        /// 所以 IsClosed 代表「這個時段沒有格子」，不一定是公休。
+        /// </para>
+        /// <para>
+        /// ⚠️ 取資料的條件跟 GetRangeAvailabilityAsync 各寫一份：修改其中一邊的查詢條件時，另一邊也要一起改。
+        /// </para>
+        /// </summary>
+        /// <param name="venueIds">場地 Id 清單。</param>
+        /// <param name="fromDate">起始日期（含）。</param>
+        /// <param name="toDate">結束日期（含）。</param>
+        /// <param name="fromTime">只統計這個時間（含）之後開始的格子；null 表示不限。</param>
+        /// <param name="toTime">只統計這個時間（不含）之前開始的格子；null 表示不限。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的查詢。</param>
+        /// <returns>外層 key 是 venueId，內層 key 是日期；範圍內的每個場地、每一天都一定會出現。</returns>
+        Task<IReadOnlyDictionary<int, IReadOnlyDictionary<DateOnly, DayAvailability>>>
+            GetRangeAvailabilityForVenuesAsync(
+                IReadOnlyCollection<int> venueIds,
+                DateOnly fromDate,
+                DateOnly toDate,
+                TimeOnly? fromTime = null,
+                TimeOnly? toTime = null,
+                CancellationToken cancellationToken = default);
     }
 }

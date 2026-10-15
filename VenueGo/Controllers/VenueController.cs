@@ -6,12 +6,12 @@ using System.Reflection.Metadata.Ecma335;
 using VenueGo.Data;
 using VenueGo.Extensions;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;
 using VenueGo.Services;
 using VenueGo.ViewModels.VenueViewModels;
 using VenueGo.Services.Auth;
-
+using VenueGo.Constants;
+using VenueGo.Filters;
 namespace VenueGo.Controllers
 {
     [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
@@ -74,6 +74,13 @@ namespace VenueGo.Controllers
                 }
 
             }
+
+            //驗證送回的iconName為SportTypeIconOption範圍內的值
+            if (!SportTypeIconOptions.IsValid(Wrap.IconName))
+            {
+                ModelState.AddModelError("IconName", "請從清單中選擇圖示");
+            }
+
 
 
             //檢查填寫內容是否合規
@@ -146,6 +153,12 @@ namespace VenueGo.Controllers
 
             }
 
+            //驗證送回的iconName為SportTypeIconOption範圍內的值
+            if (!SportTypeIconOptions.IsValid(Wrap.IconName))
+            {
+                ModelState.AddModelError("IconName", "請從清單中選擇圖示");
+            }
+
 
             //驗證送回的資料非null
             if (!ModelState.IsValid)
@@ -154,6 +167,7 @@ namespace VenueGo.Controllers
                 Wrap.PhotoPath = new CSportTypeFactory().QueryById(Wrap.SportTypeId).PhotoPath;
                 return View(Wrap);
             }
+
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
             int? userId = _currentUser.UserId;

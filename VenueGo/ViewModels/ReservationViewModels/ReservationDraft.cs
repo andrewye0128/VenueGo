@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 
 namespace VenueGo.ViewModels.ReservationViewModels
 {

@@ -1,7 +1,11 @@
 ﻿@model VenueGo.ViewModels.DashboardViewModels.DashboardIndexViewModel
+@using VenueGo.Enums
+@using VenueGo.Models.CheckinModels
 @{
     ViewData["Title"] = "場館監控儀表板";
 }
+
+<partial name="~/Views/Reservation/_OperationMessages.cshtml" />
 
 <style>
     .venue-card {
@@ -170,6 +174,7 @@ else
                     <th>會員</th>
                     <th>預約時段</th>
                     <th>逾期時間</th>
+                    <th>費用</th>
                     <th></th>
                 </tr>
             </thead>
@@ -181,10 +186,46 @@ else
                         <td>@item.VenueName</td>
                         <td>@item.UserName</td>
                         <td>@item.StartTime.ToString("HH:mm") - @item.EndTime.ToString("HH:mm")</td>
-                        <td><span class="badge bg-danger">超時 @overdueMinutes 分鐘</span></td>
+                        @* <td><span class="badge bg-danger">超時 @overdueMinutes 分鐘</span></td> *@
                         <td>
-                            <a asp-controller="Ticket" asp-action="Detail" asp-route-id="@item.TicketId"
-                               class="btn btn-sm btn-outline-primary">處理</a>
+                            @if (item.IsFree)
+                            {
+                                <span class="badge bg-secondary">寬限內 @overdueMinutes 分鐘</span>
+                            }
+                            else
+                            {
+                                <span class="badge bg-danger">超時 @overdueMinutes 分鐘</span>
+                            }
+                        </td>
+                         <td>
+                            @if (item.ChargeStatus != null)
+                            {
+                                // 已有紀錄:顯示凍結金額,不顯示預估
+                                <span class="fw-bold">$@item.ChargeAmount</span>
+                                <span class="badge bg-warning text-dark">@CheckinDisplayText.OvertimeStatusText(item.ChargeStatus.Value)</span>
+                            }
+                            else if (item.IsFree)
+                            {
+                                <span class="text-muted">免費</span>
+                            }
+                            else
+                            {
+                                <span>預估 $@item.EstimatedAmount</span>
+                            }
+                        </td>
+                        <td>
+                            @if(item.ChargeStatus == (byte)OvertimeChargeStatus.Pending || (item.ChargeStatus == null && !item.IsFree))
+                            {
+                                <form asp-controller="Ticket" asp-action="StartOvertimeCheckout" asp-route-id="@item.TicketId" method="post" class="d-inline">
+                                    <button type="submit" class="btn btn-sm btn-danger">結帳</button>
+                                </form>
+                            }
+                            else 
+                            {
+                                <a asp-controller="Ticket" asp-action="Detail" asp-route-id="@item.TicketId"
+                                  class="btn btn-sm btn-outline-primary">處理
+                                </a>
+                            }
                         </td>
                     </tr>
                 }

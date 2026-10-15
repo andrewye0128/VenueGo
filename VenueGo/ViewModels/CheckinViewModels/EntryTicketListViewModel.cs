@@ -1,4 +1,5 @@
-﻿using VenueGo.Models.Enums;
+﻿using System.ComponentModel.DataAnnotations.Schema;
+using VenueGo.Enums;
 
 namespace VenueGo.ViewModels.CheckinViewModels
 {
@@ -7,6 +8,9 @@ namespace VenueGo.ViewModels.CheckinViewModels
         public int TicketId { get; set; }
         public string Qrtoken { get; set; } = string.Empty;
         public string UserName { get; set; } = string.Empty;
+
+        [NotMapped]
+        public string Holder {  get; set; } = string.Empty;
         public string? Phone { get; set; }        // ← 新增。用 string? 是因為會員可能沒留電話
         public string VenueName { get; set; } = string.Empty;
         public DateOnly BookingDate { get; set; }

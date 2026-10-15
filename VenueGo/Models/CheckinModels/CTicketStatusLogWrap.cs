@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 
 namespace VenueGo.Models.CheckinModels
 {

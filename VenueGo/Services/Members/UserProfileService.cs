@@ -1,9 +1,9 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using System.Text.RegularExpressions;
+using VenueGo.Constants;
 using VenueGo.Data;
 using VenueGo.Dtos.MemberDtos;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.ViewModels.MemberViewModels;
 

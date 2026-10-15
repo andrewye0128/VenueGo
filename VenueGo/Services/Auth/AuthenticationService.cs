@@ -452,9 +452,9 @@
 //    }
 //}
 using Microsoft.EntityFrameworkCore;
+using VenueGo.Constants;
 using VenueGo.Data;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 
 namespace VenueGo.Services.Auth;

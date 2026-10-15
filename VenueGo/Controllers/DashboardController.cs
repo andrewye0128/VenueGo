@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using VenueGo.Models.Constants;
+using VenueGo.Constants;
 using VenueGo.Models.DashboardModels;
 using VenueGo.ViewModels.DashboardViewModels;
 

@@ -164,21 +164,18 @@ async function onSubmit(event) {
   submitting.value = true;
   submitError.value = "";
   try {
-    const reservation = await createReservation(
-      {
-        venueId: quote.value.venueId,
-        bookingDate: quote.value.bookingDate,
-        slotTimes: quote.value.slots.map((s) => s.slotTime),
-        personAmount: data.personAmount,
-        paymentMethod: data.paymentMethod,
-        invoiceType: data.invoiceType,
-        // 選紙本發票時不送載具（輸入框藏起來時值還在，避免送出客人不想用的載具）
-        carrierNo: data.invoiceType === INVOICE_TYPE.MOBILE_BARCODE ? data.carrierNo : null,
-        termsAccepted: data.agree,
-        termsVersion: quote.value.termsVersion,
-      },
-      quote.value, // 假資料才需要，串接真的 API 後拿掉
-    );
+    const reservation = await createReservation({
+      venueId: quote.value.venueId,
+      bookingDate: quote.value.bookingDate,
+      slotTimes: quote.value.slots.map((s) => s.slotTime),
+      personAmount: data.personAmount,
+      paymentMethod: data.paymentMethod,
+      invoiceType: data.invoiceType,
+      // 選紙本發票時不送載具（輸入框藏起來時值還在，避免送出客人不想用的載具）
+      carrierNo: data.invoiceType === INVOICE_TYPE.MOBILE_BARCODE ? data.carrierNo : null,
+      termsAccepted: data.agree,
+      termsVersion: quote.value.termsVersion,
+    });
     // replace：完成頁按「上一頁」不會回到填寫頁（避免以為還沒送出、又按一次）
     // state：資料存在這一頁的瀏覽紀錄裡，不放網址；重新整理還在，換一台電腦打開網址就沒有
     await router.replace({ name: "booking-complete", state: { reservation } });
@@ -448,8 +445,8 @@ async function handleSubmitError(err) {
         <!-- <div
           class="mt-6 flex flex-col gap-3 border-t border-neutral-border pt-4 sm:flex-row sm:justify-end"
         > -->
-          <!-- loading：送出中轉圈並停用，防止連按兩次訂到兩筆 -->
-          <!-- <UButton
+        <!-- loading：送出中轉圈並停用，防止連按兩次訂到兩筆 -->
+        <!-- <UButton
             type="submit"
             color="action"
             size="lg"

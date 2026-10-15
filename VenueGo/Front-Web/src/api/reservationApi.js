@@ -3,8 +3,6 @@
 // 後端從 token 知道是哪位會員
 import http from "./http";
 import { ALL } from "@/constants/statuses";
-import { buildMockReservation } from "@/mocks/bookingQuote";
-import { delay } from "@/utils/delay";
 
 /**
  * 取得我的預約（篩選＋分頁）：[GET] /api/reservations
@@ -52,9 +50,8 @@ export async function cancelMyReservation(reservationId, reason = null) {
 
 /**
  * 建立預約：[POST] /api/reservations
+ * 需要會員登入（http.js 自動帶 JWT）；預約記在登入的會員名下，不送會員
  * 不送金額：金額由後端依時段重新計算（送了也不會採用）
- * ⚠️ 後端還沒做：先回傳假資料，後端做好後換成：
- *    const { data } = await http.post("/reservations", request);
  * @param {object} request
  * @param {number} request.venueId
  * @param {string} request.bookingDate "2026-10-20"
@@ -65,12 +62,12 @@ export async function cancelMyReservation(reservationId, reason = null) {
  * @param {string|null} request.carrierNo 手機條碼載具；紙本發票時是 null
  * @param {boolean} request.termsAccepted 一定要是 true
  * @param {string} request.termsVersion 客人同意的條款版本（試算回傳的 termsVersion）
- * @param {object} mockQuote 假資料才需要：填寫頁的試算結果（真的 API 不用傳）
  * @returns {Promise<object>} { reservationId, orderNo, venueName, sportName, bookingDate, startTime, endTime,
  *   personAmount, totalAmount, paymentMethod, paymentDueAt, reservationStatus }
- *   錯誤：SlotTaken、SlotUnavailable、PaymentMethodNotAllowed、TermsVersionMismatch、ValidationFailed
+ *   成功是 201；錯誤：SlotTaken（409）、DateOutOfRange、VenueNotBookable、SlotUnavailable、
+ *   PaymentMethodNotAllowed、TermsVersionMismatch、InvalidInput、ValidationFailed（400）、NotLoggedIn（401）
  */
-export async function createReservation(request, mockQuote) {
-  await delay(800); // 模擬網路等待：測試「送出中」按鈕不能重複按
-  return buildMockReservation(mockQuote, request);
+export async function createReservation(request) {
+  const { data } = await http.post("/reservations", request);
+  return data;
 }

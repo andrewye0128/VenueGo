@@ -37,7 +37,7 @@ async function onSubmit() {
   try {
     await memberStore.login(state.email, state.password);
     //console.log(memberStore.member);
-    await router.push({ name: "member" });
+    await router.push({ name: "home" });
   } catch (error) {
     loginError.value = error.message;
   }

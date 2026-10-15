@@ -9,13 +9,6 @@ import { nextTick, onMounted, ref, watch } from "vue";
 const memberStore = useMemberStore();
 const route = useRoute();
 const router = useRouter();
-// const sideMenuItem = [
-//   { label: "個人資料", icon: IconUsers, to: { name: "member-profile" } },
-//   { label: "我的預約", icon: IconUsers, to: { name: "not-found" } },
-//   { label: "訂單與付款", icon: IconUsers, to: { name: "not-found" } },
-//   { label: "我的票券", icon: IconUsers, to: { name: "tickets" } },
-//   { label: "我的評論", icon: IconUsers, to: { name: "not-found" } },
-// ]
 // 網址用路徑字串：頁面還沒做好時會自動顯示 404；組員做好頁面、路由加上同樣的路徑後，這裡不用改
 // 圖示名稱要寫完整，Nuxt UI 打包時才掃描得到
 const sideMenuItems = [
@@ -47,22 +40,6 @@ const logout = async () => {
 
   await router.push({ name: "login" });
 };
-// // 假資料：登入功能完成後，改成讀取登入的會員資料
-// const user = {
-//   name: "王小明",
-//   email: "member@example.com",
-//   avatar: null,
-// };
-// onMounted(async () => {
-//   try {
-//     const member = await getCurrentMember();
-
-//     user.value.name = member.name;
-//     user.value.email = member.email;
-//   } catch (error) {
-//     console.error("取得會員資料失敗：", error);
-//   }
-// });
 
 // ── 手機、平板：把目前頁的分頁捲到分頁列中間 ──
 // 例如進入「我的評論」時，它在分頁列最右邊，可能被擠到畫面外
@@ -94,10 +71,15 @@ watch(
       <aside class="rounded border border-neutral-border bg-neutral-surface lg:w-56 lg:shrink-0">
         <!-- 會員資訊 -->
         <div class="flex items-center gap-3 border-b border-neutral-border p-4 lg:gap-4">
-          <div
+          <!-- <div
             class="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-background text-neutral-text-primary ring ring-neutral-border lg:size-14"
+          > -->
+          <div
+            class="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-primary text-base font-bold text-white ring ring-neutral-border lg:size-14 lg:text-lg"
           >
-            <UIcon name="i-mdi-account-outline" class="size-6 lg:size-8" />
+            <!-- <UIcon name="i-mdi-account-outline" class="size-6 lg:size-8" /> -->
+            <!-- 在圓圈中央顯示中文姓名 -->
+            <span class="text-sm lg:text-base">{{ user.name.charAt(0) }}</span>
           </div>
           <div class="min-w-0">
             <p class="font-semibold text-neutral-text-primary">{{ user.name }}</p>
@@ -128,8 +110,9 @@ watch(
           <button
             type="button"
             @click="logout"
-            class="px-4 py-3 text-left text-sm text-red-600 hover:bg-gray-100"
+            class="flex shrink-0 cursor-pointer items-center gap-3 border-b-2 border-transparent px-4 py-3 text-sm text-red-600 transition-colors hover:bg-red-50 hover:text-red-700 lg:border-b-0 lg:border-l-3 lg:border-l-transparent"
           >
+            <UIcon name="i-mdi-logout" class="hidden size-5 lg:block" />
             登出
           </button>
         </nav>

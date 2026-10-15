@@ -122,6 +122,24 @@ const router = createRouter({
       name: "venues",
       component: () => import("../views/VenueIntroView.vue"),
     },
+    {
+      // 最新消息列表：分類、頁碼放在查詢字串（/news?category=event&page=2）
+      path: "/news",
+      name: "news",
+      component: () => import("../views/news/NewsListView.vue"),
+    },
+    {
+      // 最新消息詳細頁：(\\d+) 限定只接受數字，非數字的網址交給 404
+      path: "/news/:id(\\d+)",
+      name: "news-detail",
+      component: () => import("../views/news/NewsDetailView.vue"),
+    },
+    {
+      // 常見問題：目前的分類放在查詢字串（/faq?category=venue），沒帶時顯示第一個分類
+      path: "/faq",
+      name: "faq",
+      component: () => import("../views/faq/FaqView.vue"),
+    },
     // 顧客端評論（昱）：要放在 404 前面
     ...reviewRoutes,
     {

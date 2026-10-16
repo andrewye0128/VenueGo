@@ -1,7 +1,7 @@
 <!--
   會員中心／我的預約：篩選、列表（電腦表格／手機卡片）、分頁、明細、取消
   資料來自後端 GET /api/reservations（api/reservationApi.js），會員身分由登入的 JWT 決定
-  UFormField、UInput、USelect、UAlert 與 useOverlay、useToast 由 Nuxt UI 自動匯入
+  UFormField、UInput、USelect、UAlert、UButton 與 useOverlay、useToast 由 Nuxt UI 自動匯入
 -->
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
@@ -284,25 +284,34 @@ async function openCancel(reservation) {
         <span v-else>—</span>
       </template>
       <template #actions-cell="{ row }">
-        <div class="flex gap-4">
-          <!-- 每一列都有「查看」，讀屏軟體只唸「查看」會分不出是哪一筆，所以補上 aria-label -->
-          <button
-            type="button"
-            class="cursor-pointer rounded font-medium text-brand-primary underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
+        <div class="flex gap-2">
+          <!-- 每一列都有「查看」，讀屏軟體只唸「查看」會分不出是哪一筆，所以補上 aria-label
+               外框按鈕（outline）：跟「訂單與付款」頁一致；顏色維持原本的藍（查看）、橘（取消）
+               :loading-auto="false"：全站按鈕預設會在 async 的 @click 執行期間轉圈（vite.config.js 的 loadingAuto），
+               openDetail／openCancel 會等視窗關閉才結束，不關掉的話視窗開著時按鈕一直轉圈 -->
+          <UButton
+            color="primary"
+            variant="outline"
+            size="sm"
+            class="whitespace-nowrap"
             :aria-label="`查看 ${formatReservationNo(row.original.reservationId)} 預約明細`"
+            :loading-auto="false"
             @click="openDetail(row.original)"
           >
             查看
-          </button>
-          <button
+          </UButton>
+          <UButton
             v-if="isCancellable(row.original)"
-            type="button"
-            class="cursor-pointer rounded font-medium text-brand-action underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
+            color="action"
+            variant="outline"
+            size="sm"
+            class="whitespace-nowrap"
             :aria-label="`取消 ${formatReservationNo(row.original.reservationId)} 預約`"
+            :loading-auto="false"
             @click="openCancel(row.original)"
           >
             取消
-          </button>
+          </UButton>
         </div>
       </template>
 
@@ -328,24 +337,26 @@ async function openCancel(reservation) {
               :status="PAYMENT_STATUS[row.paymentStatus]"
             />
             <span v-else />
-            <div class="flex gap-4">
-              <button
-                type="button"
-                class="cursor-pointer rounded px-1 py-2 font-medium text-brand-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-primary"
+            <div class="flex gap-2">
+              <UButton
+                color="primary"
+                variant="outline"
                 :aria-label="`查看 ${formatReservationNo(row.reservationId)} 預約明細`"
+                :loading-auto="false"
                 @click="openDetail(row)"
               >
                 查看
-              </button>
-              <button
+              </UButton>
+              <UButton
                 v-if="isCancellable(row)"
-                type="button"
-                class="cursor-pointer rounded px-1 py-2 font-medium text-brand-action underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-primary"
+                color="action"
+                variant="outline"
                 :aria-label="`取消 ${formatReservationNo(row.reservationId)} 預約`"
+                :loading-auto="false"
                 @click="openCancel(row)"
               >
                 取消
-              </button>
+              </UButton>
             </div>
           </div>
         </div>

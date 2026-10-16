@@ -4,8 +4,8 @@ using System.Net.NetworkInformation;
 using System.Security.Cryptography;
 using VenueGo.Data;
 using VenueGo.Models.CheckinModels;
+using VenueGo.Enums;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 
 namespace VenueGo.Services.Ticket
 {

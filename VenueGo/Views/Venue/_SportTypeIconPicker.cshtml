@@ -1,0 +1,31 @@
+@model VenueGo.Models.VenueModels.CSportTypeWrap
+@using VenueGo.Models.VenueModels
+
+@* 運動類型圖示選擇格子(新增、編輯共用)
+   使用頁面要在 @section Styles 載入 @mdi/font,圖示才會顯示
+   每格是一個 radio(btn-check),送出的值是完整 Iconify 名稱,例:i-mdi-basketball
+   asp-for 會依 Model.IconName 自動勾選目前的圖示,驗證失敗回到表單時也會保留剛才的選擇 *@
+
+<h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-grid-3x3-gap me-1"></i>圖示</h6>
+<div class="mb-4">
+    <label class="form-label fw-bold">選擇圖示 <span class="text-danger">*</span></label>
+    <div class="form-text mt-0 mb-2">顯示在前台的運動類型選單</div>
+
+    <div class="row row-cols-3 row-cols-md-6 g-2" role="radiogroup" aria-label="運動類型圖示">
+        @foreach (var icon in SportTypeIconOptions.All)
+        {
+            //每個 radio 要有不同的 id,label 的 for 才對得到;asp-for 預設產生的 id 都是 IconName,會重複
+            string inputId = "icon-" + icon.Key;
+
+            <div class="col">
+                <input type="radio" class="btn-check" asp-for="IconName" value="@icon.Key" id="@inputId" autocomplete="off" />
+                <label class="btn btn-outline-primary w-100 py-2" for="@inputId">
+                    <i class="@SportTypeIconOptions.ToFontClass(icon.Key) fs-3 d-block" aria-hidden="true"></i>
+                    <small>@icon.Value</small>
+                </label>
+            </div>
+        }
+    </div>
+
+    <span asp-validation-for="IconName" class="text-danger small d-block mt-2"></span>
+</div>

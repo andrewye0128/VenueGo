@@ -25,6 +25,21 @@ export const PAYMENT_STATUS = {
   6: { label: "已退款", color: "primary", icon: "i-mdi-history" },
 };
 
+// 時段狀態（後端 Models/Enums/SlotAvailability.cs）：預約頁的時段按鈕用
+export const SLOT_AVAILABILITY = {
+  AVAILABLE: 0, // 可預約
+  BOOKED: 1, // 已預約
+  UNAVAILABLE: 2, // 維護中
+  PAST: 3, // 已過時間（今天已經開始或結束的時段）
+};
+
+export const SLOT_AVAILABILITY_LABEL = {
+  0: "可預約",
+  1: "已預約",
+  2: "維護中",
+  3: "已過時間",
+};
+
 // 篩選用的「全部」：USelect 的值不能是空字串或 null，所以用 "all"
 export const ALL = "all";
 

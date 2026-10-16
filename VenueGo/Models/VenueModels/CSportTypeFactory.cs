@@ -1,4 +1,5 @@
 ﻿using System.Reflection.Metadata.Ecma335;
+using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Dtos.VenueDtos;
 using VenueGo.Models.Entities;
@@ -108,6 +109,7 @@ namespace VenueGo.Models.VenueModels
                 //稽核欄位:記錄最後修改時間與修改者
                 SportTypeDb.UpdatedAt = now;
                 SportTypeDb.UpdatedBy = userId;
+                SportTypeDb.IconName = Wrap.IconName;
             }
 
             db.SaveChanges();
@@ -128,9 +130,12 @@ namespace VenueGo.Models.VenueModels
         }
 
 
+        /*API使用*/
+
         //前台「場館資訊」頁 >> 開放時間 + 各運動類型的代表照片、注意事項、收費標準
-        //給 VenueApiController(GET /api/venues/intro)使用
-        public SportTypeIntroPageDto QueryIntroPage()
+        //給 VenueApiController(GET /api/venues/introduction)使用
+        //非同步:步驟1～3 查資料庫時用 await,等待期間執行緒可以先處理其他請求;步驟4 只在記憶體組合資料
+        public async Task<SportTypeIntroPageDto> QueryIntroPageAsync()
         {
             SportTypeIntroPageDto page = new SportTypeIntroPageDto();
             CSportTypePriceRuleFactory priceRuleFactory = new CSportTypePriceRuleFactory();
@@ -139,7 +144,7 @@ namespace VenueGo.Models.VenueModels
             /***** 步驟1 開放時間 *****/
 
             //資料庫依 DayOfWeek 排序(星期日 = 0 排最前面),畫面要星期一排最前面、星期日排最後面
-            List<CWeekBusinessHourWrap> businessHours = new CWeekBusinessHourFactory().QueryAll();
+            List<CWeekBusinessHourWrap> businessHours = await new CWeekBusinessHourFactory().QueryAllAsync();
             DayOfWeek[] displayOrder = new DayOfWeek[]
             {
                 DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday,
@@ -197,14 +202,14 @@ namespace VenueGo.Models.VenueModels
                             select t;
 
                 //在 using 裡面先取出結果,離開 using 之後 DbContext 就關閉了
-                sportTypes = datas.ToList();
+                sportTypes = await datas.ToListAsync();
             }
 
 
             /***** 步驟3 價格規則 *****/
 
-            //重用後台價格規則列表的查詢:已經算好 IsActive、離峰/尖峰價、HasAnyPeak、尖峰摘要 PeakSummary
-            List<SportTypePriceRuleIndexViewModel> priceRules = priceRuleFactory.QueryAll();
+            //重用後台價格規則列表的查詢(非同步版本):已經算好 IsActive、離峰/尖峰價、HasAnyPeak、尖峰摘要 PeakSummary
+            List<SportTypePriceRuleIndexViewModel> priceRules = await priceRuleFactory.QueryAllAsync();
 
 
             /***** 步驟4 組合 *****/
@@ -260,5 +265,34 @@ namespace VenueGo.Models.VenueModels
 
             return page;
         }
-    }
+
+
+
+        //前台運動類型下拉選單 >> 回傳運動類型清單資料的DTO 給 SportTypeApiController 使用
+        public List<SportTypeOptionDto> QuerySportTypeOptions()
+        {
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var datas = from t in db.SportTypes
+                                //未被軟刪除
+                            where t.IsActive == true &&
+                            // 底下至少有一個未被刪除的場地
+                            (db.Venues.Any(x => x.SportTypeId == t.SportTypeId && x.IsActive == true))
+                            orderby t.SportTypeId
+                            select new SportTypeOptionDto
+                            {
+                                Id = t.SportTypeId,
+                                Name = t.SportName,
+                                Icon = t.IconName ?? SportTypeIconOptions.DefaultIcon, //若icon為null就指定為預設icon
+                                // 有啟用中的價格規則才能預約(跟預約頁 BookingAvailabilityService 的 IsBookable 同一個條件)
+                                IsBookable = db.SportTypePriceRules.Any(r => r.SportTypeId == t.SportTypeId && r.IsActive == true)
+                            };
+
+                return datas.ToList();
+            }
+        }
+
+
+
+}
 }

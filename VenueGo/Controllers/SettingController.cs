@@ -1,10 +1,10 @@
 ﻿using Microsoft.AspNetCore.Mvc;
+using VenueGo.Constants;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
 using VenueGo.ViewModels.MemberViewModels;
-
+using VenueGo.Filters;
 namespace VenueGo.Controllers
 {
     /// <summary>
@@ -20,7 +20,7 @@ namespace VenueGo.Controllers
     /// 新規則一律加進對應的 Service。
     /// </para>
     /// </summary>
-    [EmployeeAuthorize(RoleNames.Admin)] // 僅限管理員存取
+    [EmployeeAuthorizeFilters(RoleNames.Admin)] // 僅限管理員存取
     public class SettingController : Controller
     {
         private readonly IRoleManagementService _roleService;

@@ -6,15 +6,15 @@ using System.Reflection.Metadata.Ecma335;
 using VenueGo.Data;
 using VenueGo.Extensions;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.VenueModels;
 using VenueGo.Services;
 using VenueGo.ViewModels.VenueViewModels;
 using VenueGo.Services.Auth;
-
+using VenueGo.Constants;
+using VenueGo.Filters;
 namespace VenueGo.Controllers
 {
-    [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
+    [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     public class VenueController : Controller
     {
         //類別常數
@@ -47,7 +47,7 @@ namespace VenueGo.Controllers
             return View(datas);
         }
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //新增運動類型 >> 頁面產生
         public IActionResult SportTypeCreate()
         {
@@ -55,7 +55,7 @@ namespace VenueGo.Controllers
         }
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //新增運動類型 >> 資料回傳存入DB
         [HttpPost]
         public async Task<IActionResult> SportTypeCreate(CSportTypeWrap Wrap, IFormFile? PhotoFile)
@@ -74,6 +74,13 @@ namespace VenueGo.Controllers
                 }
 
             }
+
+            //驗證送回的iconName為SportTypeIconOption範圍內的值
+            if (!SportTypeIconOptions.IsValid(Wrap.IconName))
+            {
+                ModelState.AddModelError("IconName", "請從清單中選擇圖示");
+            }
+
 
 
             //檢查填寫內容是否合規
@@ -107,7 +114,7 @@ namespace VenueGo.Controllers
         }
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //運動類型編輯 >> 頁面產生
         public IActionResult SportTypeEdit(int? id)
         {
@@ -126,7 +133,7 @@ namespace VenueGo.Controllers
 
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //運動類型編輯 >> 參數送回
         [HttpPost]
         public async Task<IActionResult> SportTypeEdit(CSportTypeWrap Wrap, IFormFile? PhotoFile)
@@ -146,6 +153,12 @@ namespace VenueGo.Controllers
 
             }
 
+            //驗證送回的iconName為SportTypeIconOption範圍內的值
+            if (!SportTypeIconOptions.IsValid(Wrap.IconName))
+            {
+                ModelState.AddModelError("IconName", "請從清單中選擇圖示");
+            }
+
 
             //驗證送回的資料非null
             if (!ModelState.IsValid)
@@ -154,6 +167,7 @@ namespace VenueGo.Controllers
                 Wrap.PhotoPath = new CSportTypeFactory().QueryById(Wrap.SportTypeId).PhotoPath;
                 return View(Wrap);
             }
+
 
             //取得登入者 UserId(從登入 Cookie 讀取,不從表單傳入,避免被竄改)
             int? userId = _currentUser.UserId;
@@ -174,7 +188,7 @@ namespace VenueGo.Controllers
         }
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //運動類型刪除(軟刪除) >> 刪除前必須確認沒有任何資料還在使用這個運動類型
         //刪除順序:先刪場地 >> 再刪價格規則 >> 最後才能刪運動類型
         //(價格規則的刪除本身也會檢查底下有沒有場地,所以三者的刪除順序是一致的)
@@ -236,7 +250,7 @@ namespace VenueGo.Controllers
         }
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //場地新增>> 頁面產生 
         public IActionResult VenueCreate()
         {
@@ -249,7 +263,7 @@ namespace VenueGo.Controllers
 
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //場地新增 >> 資料回傳存入DB
         [HttpPost]
         public async Task<IActionResult> VenueCreate(VenueCreateViewModel vm)
@@ -336,7 +350,7 @@ namespace VenueGo.Controllers
 
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //場地編輯 >> 畫面產生
         public IActionResult VenueEdit(int? id)
         {
@@ -369,7 +383,7 @@ namespace VenueGo.Controllers
         }
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //場地編輯 >> 資料傳回
         [HttpPost]
         public async Task<IActionResult> VenueEdit(VenueEditViewModel vm)
@@ -444,7 +458,7 @@ namespace VenueGo.Controllers
         }
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //場地刪除
         public IActionResult VenueDelete(int? id)
         {
@@ -483,7 +497,7 @@ namespace VenueGo.Controllers
         }
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //價格規則新增 >> 頁面產生
         public IActionResult SportTypePriceRuleCreate()
         {
@@ -502,7 +516,7 @@ namespace VenueGo.Controllers
         }
 
 
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         //價格規則新增 >> 資料回傳存入DB
         [HttpPost]
         public IActionResult SportTypePriceRuleCreate(SportTypePriceRuleCreateViewModel vm)
@@ -576,7 +590,7 @@ namespace VenueGo.Controllers
 
 
         //價格規則編輯 >> 頁面產生
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         public IActionResult SportTypePriceRuleEdit(int? id)
         {
             //驗證id非null
@@ -595,7 +609,7 @@ namespace VenueGo.Controllers
         }
 
         //價格規則編輯 >> 參數送回
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         [HttpPost]
         public IActionResult SportTypePriceRuleEdit(SportTypePriceRuleEditViewModel vm)
         {
@@ -661,7 +675,7 @@ namespace VenueGo.Controllers
         }
 
         //價格規則刪除 >> 真正的硬刪除,刪除前必須確認該運動類型底下沒有場地正在連動
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         public IActionResult SportTypePriceRuleDelete(int? id)
         {
             //驗證id非null
@@ -694,7 +708,7 @@ namespace VenueGo.Controllers
 
         //場館營業時間管理 >> 頁面產生,一次顯示7天,星期一排最前面、星期日排最後面
         //不管資料表有幾筆,永遠顯示7列;沒有資料的那天標示「本日尚未設定」,預設不營業、時間空白
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         public IActionResult WeekBusinessHourIndex()
         {
             CWeekBusinessHourFactory WeekBusinessHourFactory = new CWeekBusinessHourFactory();
@@ -710,7 +724,7 @@ namespace VenueGo.Controllers
         }
 
         //場館營業時間管理 >> 參數送回,一次驗證/儲存7天
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager)]
         [HttpPost]
         public IActionResult WeekBusinessHourIndex(WeekBusinessHourEditViewModel vm)
         {
@@ -895,7 +909,7 @@ namespace VenueGo.Controllers
         /*VenueUnavailableSlot*/
 
         //場地不開放時段管理 >> 頁面產生,顯示某場地某天的所有時段按鈕
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
         public IActionResult VenueUnavailableSlotManage(int venueId, DateOnly? date)
         {
             //今天跟現在時間都從同一個校時後的時間拆出來,避免跨午夜時兩者對不上
@@ -996,7 +1010,7 @@ namespace VenueGo.Controllers
 
         //場地不開放時段切換 >> 開放變不開放就新增一筆,不開放變開放就刪除那一筆
         //完全不信任前端傳來的「目前是開放還是不開放」,每次都自己用FindByKey重新查一次DB決定
-        [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
         [HttpPost]
         public IActionResult VenueUnavailableSlotToggle(int venueId, DateOnly date, TimeOnly time, string? reason)
         {

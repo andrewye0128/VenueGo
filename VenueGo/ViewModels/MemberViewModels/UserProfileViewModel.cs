@@ -24,6 +24,9 @@ namespace VenueGo.ViewModels.MemberViewModels
         [Display(Name = "連絡電話")]
         public string Phone { get; set; } = string.Empty;
 
+        [Display(Name = "載具")]
+        public string? CarrierNo { get; set; }
+
         [Display(Name = "職稱")]
         public string? JobTitle { get; set; }
 

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 
 namespace VenueGo.ViewModels.ReservationViewModels
 {
@@ -57,9 +57,9 @@ namespace VenueGo.ViewModels.ReservationViewModels
         /// </summary>
         public string PaymentStatusBadgeClass => PaymentStatus switch
         {
-            VenueGo.Models.Enums.PaymentStatus.Unpaid => "text-bg-danger-subtle text-danger-emphasis",
-            VenueGo.Models.Enums.PaymentStatus.Paid => "text-bg-success-subtle text-success-emphasis",
-            VenueGo.Models.Enums.PaymentStatus.Refunding or VenueGo.Models.Enums.PaymentStatus.Processing
+            Enums.PaymentStatus.Unpaid => "text-bg-danger-subtle text-danger-emphasis",
+            Enums.PaymentStatus.Paid => "text-bg-success-subtle text-success-emphasis",
+            Enums.PaymentStatus.Refunding or Enums.PaymentStatus.Processing
                 => "text-bg-primary-subtle text-primary-emphasis",
             _ => "text-bg-secondary-subtle text-secondary-emphasis"
         };
@@ -76,7 +76,7 @@ namespace VenueGo.ViewModels.ReservationViewModels
         public bool CanCancel => ReservationStatus.IsActive();
 
         /// <summary>取消時是否需要處理退款：已收款者取消後款項要退回，彈窗要提醒櫃檯。</summary>
-        public bool RequiresRefund => PaymentStatus == VenueGo.Models.Enums.PaymentStatus.Paid;
+        public bool RequiresRefund => PaymentStatus == Enums.PaymentStatus.Paid;
 
         /// <summary>預約日期顯示文字，含星期。</summary>
         public string BookingDateText

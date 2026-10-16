@@ -7,10 +7,10 @@ using VenueGo.Data;
 using VenueGo.Helpers;
 using VenueGo.Models.CheckinModels;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 using VenueGo.Services.CheckIn;
 using VenueGo.ViewModels.CheckinViewModels;
 using VenueGo.Services.Ticket;
+using VenueGo.Enums;
 
 namespace VenueGo.Controllers
 {

@@ -39,12 +39,13 @@ function clear() {
   <!-- 清除按鈕不能放在選日期的按鈕裡面（HTML 規定按鈕裡不能再放按鈕），所以疊在外層的右側 -->
   <div class="relative">
     <UPopover v-model:open="open">
-      <!-- 用 <button>：鍵盤 Tab 到這裡按 Enter／空白鍵就能打開月曆 -->
+      <!-- 用 <button>：鍵盤 Tab 到這裡按 Enter／空白鍵就能打開月曆
+           字體：手機 16px、平板以上 14px，跟 UInput 一致（vite.config.js 的設定） -->
       <button
         :id="id"
         type="button"
         v-bind="ariaAttrs"
-        class="flex h-10 w-full cursor-pointer items-center gap-2 rounded bg-neutral-surface ps-3 pe-10 text-start text-sm ring ring-neutral-border transition-colors ring-inset hover:ring-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary data-[state=open]:ring-brand-primary"
+        class="flex h-10 w-full cursor-pointer items-center gap-2 rounded bg-neutral-surface ps-3 pe-10 text-start text-base ring ring-neutral-border transition-colors ring-inset hover:ring-brand-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary data-[state=open]:ring-brand-primary md:text-sm"
       >
         <UIcon
           name="i-mdi-calendar-blank-outline"

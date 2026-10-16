@@ -30,6 +30,10 @@
 
             <hr class="my-4" />
 
+            <partial name="_SportTypeIconPicker" model="Model" />
+
+            <hr class="my-4" />
+
             @* 代表照片:前台「場館資訊」頁使用,跟個別場地的照片不同 *@
             <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-image me-1"></i>代表照片</h6>
             <div class="row g-3 mb-4">
@@ -70,6 +74,11 @@
         </form>
     </div>
 </div>
+
+@section Styles {
+    @* 圖示格子使用 Material Design Icons 字型(跟前台 Iconify 的 mdi 是同一套圖示);@@ 是 Razor 的 @ 跳脫寫法 *@
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@@mdi/font@7.4.47/css/materialdesignicons.min.css" />
+}
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />

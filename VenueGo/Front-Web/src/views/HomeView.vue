@@ -2,6 +2,7 @@
 import BannerCarousel from "@/components/banner/BannerCarousel.vue";
 import BookingSearchCard from "@/components/booking/BookingSearchCard.vue";
 import VenueCarousel from "@/components/venues/VenueCarousel.vue";
+import HomeNewsSection from "@/components/news/HomeNewsSection.vue";
 </script>
 
 <template>
@@ -19,7 +20,9 @@ import VenueCarousel from "@/components/venues/VenueCarousel.vue";
     </div>
 
     <!-- 區塊三 : 最新消息 -->
-    <div class="news"></div>
+    <div class="mx-auto max-w-6xl px-4 pb-16 md:px-6">
+      <HomeNewsSection />
+    </div>
 
     <!-- 區塊四 : 場地介紹 -->
     <div class="mx-auto max-w-6xl px-4 pb-16 md:px-6">

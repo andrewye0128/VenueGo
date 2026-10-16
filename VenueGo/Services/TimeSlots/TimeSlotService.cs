@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using VenueGo.Data;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 using VenueGo.Models.Options;
 using VenueGo.Models.ReservationModels;
 
@@ -34,13 +34,25 @@ namespace VenueGo.Services.TimeSlots
     {
         private readonly dbVenueContext _db;
         private readonly ReservationRulesOptions _rules;
+        private readonly ITimeService _timeService;
 
-        public TimeSlotService(dbVenueContext db, IOptionsSnapshot<ReservationRulesOptions> rules)
+        /// <param name="db">資料庫。</param>
+        /// <param name="rules">預約規則（是否允許預約進行中的時段等）。</param>
+        /// <param name="timeService">
+        /// 網站時間。判斷「今天」「已過時間」要用它，不用 DateTime.Now：
+        /// 開發時的時光機會調整網站時間，前台、後台、這裡才會是同一個「現在」。
+        /// </param>
+        public TimeSlotService(
+            dbVenueContext db,
+            IOptionsSnapshot<ReservationRulesOptions> rules,
+            ITimeService timeService)
         {
             _db = db;
             _rules = rules.Value;
+            _timeService = timeService;
         }
 
+        // ⚠️ GetDaySlotsAsync 和 前台用的 GetDaySlotsForVenuesAsync 是同樣的取資料邏輯（一次查多個場地），修改查詢條件時要一起改
         public async Task<IReadOnlyList<TimeSlotStatus>> GetDaySlotsAsync(
             int venueId, DateOnly date, CancellationToken cancellationToken = default)
         {
@@ -69,7 +81,7 @@ namespace VenueGo.Services.TimeSlots
             // 計價規則。整天共用同一組規則，所以只查一次。
             var priceRule = await GetPriceRuleAsync(venueId, cancellationToken);
 
-            var now = DateTime.Now;
+            var now = _timeService.Now;
             var today = DateOnly.FromDateTime(now);
             var currentTime = TimeOnly.FromDateTime(now);
 
@@ -79,6 +91,7 @@ namespace VenueGo.Services.TimeSlots
                 .ToList();
         }
 
+        // ⚠️ GetRangeAvailabilityAsync 和 前台用的 GetRangeAvailabilityForVenuesAsync 是同樣的取資料邏輯（一次查多個場地），修改查詢條件時要一起改
         public async Task<IReadOnlyDictionary<DateOnly, DayAvailability>> GetRangeAvailabilityAsync(
             int venueId, DateOnly fromDate, DateOnly toDate,
             CancellationToken cancellationToken = default)
@@ -116,7 +129,7 @@ namespace VenueGo.Services.TimeSlots
                 .GroupBy(x => x.BookingDate)
                 .ToDictionary(g => g.Key, g => g.Select(x => x.SlotTime).ToHashSet());
 
-            var now = DateTime.Now;
+            var now = _timeService.Now;
             var today = DateOnly.FromDateTime(now);
             var currentTime = TimeOnly.FromDateTime(now);
 
@@ -145,6 +158,152 @@ namespace VenueGo.Services.TimeSlots
                     TotalSlots = slotTimes.Count,
                     AvailableSlots = availableCount
                 };
+            }
+
+            return result;
+        }
+
+        // ── 批次查詢：一次查多個場地（前台場地預約頁用）─────────────
+        // ⚠️ 取資料的條件跟上面的 GetDaySlotsAsync／GetRangeAvailabilityAsync 各寫一份，
+        //    修改查詢條件時兩邊都要改；每一格怎麼判斷則共用下面的私有方法，結果一定一致。
+
+        public async Task<IReadOnlyDictionary<int, IReadOnlyList<TimeSlotStatus>>> GetDaySlotsForVenuesAsync(
+           IReadOnlyCollection<int> venueIds, DateOnly date, CancellationToken cancellationToken = default)
+        {
+            // 先替每個場地放空清單：公休、查無資料時，呼叫端也不用處理「找不到這個場地」
+            var ids = venueIds.Distinct().ToList();
+            var result = ids.ToDictionary(
+                id => id, _ => (IReadOnlyList<TimeSlotStatus>)Array.Empty<TimeSlotStatus>());
+            if (ids.Count == 0) return result;
+
+            // 第 1 次：營業時間。全館共用、不分場地，查一次就好
+            var businessHours = await GetBusinessHoursAsync(date, cancellationToken);
+            if (businessHours is null) return result;
+
+            var slotTimes = ExpandToSlots(businessHours.Value.Open, businessHours.Value.Close);
+            if (slotTimes.Count == 0) return result;
+
+            // 第 2 次：這些場地這天的維護時段（ids.Contains 會翻譯成 SQL 的 WHERE VenueId IN (...)）
+            var unavailable = await _db.VenueUnavailableSlots.AsNoTracking()
+                .Where(u => ids.Contains(u.VenueId) && u.UnavailableDate == date)
+                .Select(u => new { u.VenueId, u.UnavailableTime })
+                .ToListAsync(cancellationToken);
+
+            // 第 3 次：這些場地這天已被預約的時段
+            var booked = await _db.ReservationSlots.AsNoTracking()
+                .Where(s => ids.Contains(s.VenueId) && s.BookingDate == date)
+                .Select(s => new { s.VenueId, s.SlotTime })
+                .ToListAsync(cancellationToken);
+
+            // 第 4 次：這些場地各自的計價規則
+            var priceRules = await GetPriceRulesAsync(ids, cancellationToken);
+
+            // 查回來之後，在記憶體裡依場地分組
+            var unavailableByVenue = unavailable
+                .GroupBy(x => x.VenueId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.UnavailableTime).ToHashSet());
+            var bookedByVenue = booked
+                .GroupBy(x => x.VenueId)
+                .ToDictionary(g => g.Key, g => g.Select(x => x.SlotTime).ToHashSet());
+
+            var now = _timeService.Now;
+            var today = DateOnly.FromDateTime(now);
+            var currentTime = TimeOnly.FromDateTime(now);
+
+            foreach (var id in ids)
+            {
+                var dayUnavailable = unavailableByVenue.GetValueOrDefault(id) ?? new HashSet<TimeOnly>();
+                var dayBooked = bookedByVenue.GetValueOrDefault(id) ?? new HashSet<TimeOnly>();
+                PriceRule? priceRule = priceRules.TryGetValue(id, out var rule) ? rule : null;
+
+                result[id] = slotTimes
+                    .Select(slotTime => BuildSlotStatus(
+                        slotTime, date, today, currentTime, dayUnavailable, dayBooked, priceRule))
+                    .ToList();
+            }
+
+            return result;
+        }
+
+        public async Task<IReadOnlyDictionary<int, IReadOnlyDictionary<DateOnly, DayAvailability>>>
+            GetRangeAvailabilityForVenuesAsync(
+                IReadOnlyCollection<int> venueIds,
+                DateOnly fromDate,
+                DateOnly toDate,
+                TimeOnly? fromTime = null,
+                TimeOnly? toTime = null,
+                CancellationToken cancellationToken = default)
+        {
+            var ids = venueIds.Distinct().ToList();
+            var result = new Dictionary<int, IReadOnlyDictionary<DateOnly, DayAvailability>>();
+            if (ids.Count == 0) return result;
+            if (toDate < fromDate)
+            {
+                foreach (var id in ids) result[id] = new Dictionary<DateOnly, DayAvailability>();
+                return result;
+            }
+
+            // 第 1 次：七天的營業時間
+            var weeklyHours = await GetWeeklyBusinessHoursAsync(cancellationToken);
+
+            // 第 2 次：這些場地、這段日期的維護時段
+            var unavailable = await _db.VenueUnavailableSlots.AsNoTracking()
+                .Where(u => ids.Contains(u.VenueId)
+                            && u.UnavailableDate >= fromDate
+                            && u.UnavailableDate <= toDate)
+                .Select(u => new { u.VenueId, u.UnavailableDate, u.UnavailableTime })
+                .ToListAsync(cancellationToken);
+
+            // 第 3 次：這些場地、這段日期已被預約的時段
+            var booked = await _db.ReservationSlots.AsNoTracking()
+                .Where(s => ids.Contains(s.VenueId)
+                            && s.BookingDate >= fromDate
+                            && s.BookingDate <= toDate)
+                .Select(s => new { s.VenueId, s.BookingDate, s.SlotTime })
+                .ToListAsync(cancellationToken);
+
+            // 依「場地＋日期」分組
+            var unavailableMap = unavailable
+                .GroupBy(x => (x.VenueId, x.UnavailableDate))
+                .ToDictionary(g => g.Key, g => g.Select(x => x.UnavailableTime).ToHashSet());
+            var bookedMap = booked
+                .GroupBy(x => (x.VenueId, x.BookingDate))
+                .ToDictionary(g => g.Key, g => g.Select(x => x.SlotTime).ToHashSet());
+
+            var now = _timeService.Now;
+            var today = DateOnly.FromDateTime(now);
+            var currentTime = TimeOnly.FromDateTime(now);
+
+            foreach (var id in ids)
+            {
+                var days = new Dictionary<DateOnly, DayAvailability>();
+                for (var date = fromDate; date <= toDate; date = date.AddDays(1))
+                {
+                    if (!weeklyHours.TryGetValue((byte)date.DayOfWeek, out var hours))
+                    {
+                        // 該星期未設定營業時間，視為公休
+                        days[date] = new DayAvailability { Date = date, TotalSlots = 0, AvailableSlots = 0 };
+                        continue;
+                    }
+
+                    // 展開營業時間，只留時間範圍內的格子
+                    var slotTimes = ExpandToSlots(hours.Open, hours.Close)
+                        .Where(t => (fromTime is null || t >= fromTime)
+                                    && (toTime is null || t < toTime))
+                        .ToList();
+
+                    unavailableMap.TryGetValue((id, date), out var dayUnavailable);
+                    bookedMap.TryGetValue((id, date), out var dayBooked);
+
+                    days[date] = new DayAvailability
+                    {
+                        Date = date,
+                        TotalSlots = slotTimes.Count,
+                        AvailableSlots = slotTimes.Count(slotTime => IsAvailable(
+                            slotTime, date, today, currentTime, dayUnavailable, dayBooked))
+                    };
+                }
+                result[id] = days;
             }
 
             return result;
@@ -315,6 +474,35 @@ namespace VenueGo.Services.TimeSlots
                 PeakPrice = rule.PeakPrice,
                 OffPeakPrice = rule.OffPeakPrice
             };
+        }
+
+        /// <summary>
+        /// 多個場地各自的計價規則（批次查詢用）。沒有計價規則的場地不會出現在結果裡。
+        /// </summary>
+        private async Task<Dictionary<int, PriceRule>> GetPriceRulesAsync(
+            List<int> venueIds, CancellationToken cancellationToken)
+        {
+            var rows = await (from v in _db.Venues.AsNoTracking()
+                              join r in _db.SportTypePriceRules
+                                  on v.SportTypeId equals r.SportTypeId
+                              where venueIds.Contains(v.VenueId) && r.IsActive
+                              select new
+                              {
+                                  v.VenueId,
+                                  r.PeakStartTime,
+                                  r.PeakPrice,
+                                  r.OffPeakPrice
+                              })
+                             .ToListAsync(cancellationToken);
+
+            return rows.ToDictionary(
+                x => x.VenueId,
+                x => new PriceRule
+                {
+                    PeakStartTime = x.PeakStartTime,
+                    PeakPrice = x.PeakPrice,
+                    OffPeakPrice = x.OffPeakPrice
+                });
         }
 
         /// <summary>

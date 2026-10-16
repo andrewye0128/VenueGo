@@ -1,4 +1,4 @@
-﻿using VenueGo.Models.Enums;
+﻿using VenueGo.Enums;
 using VenueGo.Services.CheckIn;
 
 namespace VenueGo.Services.Ticket

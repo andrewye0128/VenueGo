@@ -1,14 +1,15 @@
 @model VenueGo.ViewModels.VenueViewModels.WeekBusinessHourEditViewModel
 @using VenueGo.Helpers
-@using VenueGo.Models.Constants
+@using VenueGo.Constants
 @using VenueGo.Data
+@using VenueGo.Filters;
 @inject dbVenueContext Db
 
 @{
     ViewData["Title"] = "營業時間管理";
 
     //是否有新增/編輯/刪除的權限,只有Admin跟Manager可以(這個頁面本身就只開放給他們,這裡是讓頁籤邏輯跟其他3個頁面一致)
-    bool canManage = await AuthHelper.HasRoleAsync(User, Db, RoleNames.Admin, RoleNames.Manager);
+    bool canManage = await AuthFilters.HasRoleAsync(User, Db, RoleNames.Admin, RoleNames.Manager);
 }
 
 <!-- 功能頁籤 -->

@@ -1,0 +1,42 @@
+@model VenueGo.Models.ContentModels.CFaqWrap
+
+@{
+    ViewData["Title"] = "資訊刊登";
+    //從哪個分類頁籤進來,送出或取消後就回到那個頁籤
+    string? returnCategory = ViewData["ReturnCategory"] as string;
+}
+
+<div class="mb-3">
+    <a asp-action="FaqIndex" asp-route-category="@returnCategory" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-pencil-square me-2 text-primary"></i>常見問題編輯</h5>
+    </div>
+    <div class="card-body">
+        <form asp-action="FaqEdit" method="post">
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4" role="alert"></div>
+            @* 要修改哪一筆 >> 送回 Controller 時綁定到 Wrap.FaqId *@
+            <input type="hidden" asp-for="FaqId" />
+            <input type="hidden" name="returnCategory" value="@returnCategory" />
+
+            <partial name="_FaqFormFields" model="Model" />
+
+            <div class="mt-4 pt-3 border-top text-end">
+                <a asp-action="FaqIndex" asp-route-category="@returnCategory" class="btn btn-light me-2">取消</a>
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-check-lg me-1"></i>儲存修改
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/char-counter.js" asp-append-version="true"></script>
+    <script src="~/js/faq-preview.js" asp-append-version="true"></script>
+}

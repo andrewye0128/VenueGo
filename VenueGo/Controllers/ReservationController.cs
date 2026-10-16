@@ -5,17 +5,17 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 using VenueGo.Models.ReservationModels;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Reservations;
 using VenueGo.ViewModels.ReservationViewModels;
-
+using VenueGo.Constants;
+using VenueGo.Enums;
+using VenueGo.Filters;
 namespace VenueGo.Controllers
 {
-    [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
+    [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     public class ReservationController : Controller
     {
         private readonly dbVenueContext _db;

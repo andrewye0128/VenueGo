@@ -5,12 +5,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
 using VenueGo.ViewModels.ReservationViewModels;
 using VenueGo.ViewModels.Shared;
 using VenueGo.Services.Members;
+using VenueGo.Constants;
+using VenueGo.Enums;
 
 namespace VenueGo.Services.Members
 {

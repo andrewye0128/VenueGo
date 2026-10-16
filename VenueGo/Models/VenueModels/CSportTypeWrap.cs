@@ -40,6 +40,9 @@ namespace VenueGo.Models.VenueModels
         [StringLength(3000, ErrorMessage = "注意事項最多 3000 字")]
         [Display(Name = "注意事項")]
         public string? Notice { get { return _sportType.Notice; } set { _sportType.Notice = value; } }
-    }
 
+        [Display(Name = "圖示")]
+        [Required(ErrorMessage = "請選擇前台圖示")]
+        public string? IconName { get { return _sportType.IconName; } set { _sportType.IconName = value; } }
+    }
 }

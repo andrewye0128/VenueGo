@@ -14,5 +14,12 @@
             string email,
             string rawToken,
             string newPassword);
+        Task<bool> ConfirmResetEmailSentAsync(
+            string email,
+            string rawToken);
+
+        Task<bool> CancelResetTokenAsync(
+            string email,
+            string rawToken);
     }
 }

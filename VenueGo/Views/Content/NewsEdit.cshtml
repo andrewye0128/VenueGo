@@ -1,0 +1,164 @@
+@model VenueGo.Models.ContentModels.CNewsWrap
+@using VenueGo.Models.ContentModels
+@* 注入校時後的系統時間 >> 送出前比較發布時間用,不使用瀏覽器的時鐘 *@
+@inject VenueGo.Services.ITimeService TimeService
+
+@{
+    ViewData["Title"] = "資訊刊登";
+}
+
+<div class="mb-3">
+    <a asp-action="NewsIndex" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>返回列表
+    </a>
+</div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0 fw-bold"><i class="bi bi-pencil-square me-2 text-primary"></i>最新消息編輯</h5>
+    </div>
+    <div class="card-body">
+        @* 有上傳檔案的表單一定要加 enctype="multipart/form-data",否則 ImageFile 永遠收不到檔案 *@
+        @* data-only-when-changed:已發布的消息發布時間本來就是過去,只有改過發布時間才跳確認 *@
+        <form asp-action="NewsEdit" method="post" enctype="multipart/form-data"
+              data-server-now="@TimeService.Now.ToString("yyyy-MM-ddTHH:mm:ss")" data-only-when-changed>
+            <div asp-validation-summary="ModelOnly" class="alert alert-danger mb-4" role="alert"></div>
+
+            @* 要修改哪一筆 >> 送回 Controller 時綁定到 Wrap.NewsId *@
+            <input type="hidden" asp-for="NewsId" />
+
+            <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-card-heading me-1"></i>基本資料</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <label asp-for="Category" class="form-label fw-bold">分類 <span class="text-danger">*</span></label>
+                    @* asp-for 會自動選中目前的分類 *@
+                    <select asp-for="Category" class="form-select">
+                        <option value="">請選擇分類</option>
+                        @foreach (var category in NewsCategoryOptions.All)
+                        {
+                            <option value="@category.Key">@category.Value</option>
+                        }
+                    </select>
+                    <span asp-validation-for="Category" class="text-danger small"></span>
+                </div>
+                <div class="col-md-8">
+                    <label asp-for="Title" class="form-label fw-bold">標題 <span class="text-danger">*</span></label>
+                    <input asp-for="Title" class="form-control" maxlength="100" />
+                    <span asp-validation-for="Title" class="text-danger small"></span>
+                </div>
+            </div>
+
+            <div class="mb-4">
+                <label asp-for="Content" class="form-label fw-bold">內容 <span class="text-danger">*</span></label>
+                <textarea asp-for="Content" class="form-control" rows="10" maxlength="4000"></textarea>
+                <div class="form-text">最多 4000 字;換行會保留,前台會照樣分段顯示</div>
+                <span asp-validation-for="Content" class="text-danger small"></span>
+            </div>
+
+            <hr class="my-4" />
+
+            @* 封面:保留目前封面／上傳圖片／公版底稿三選一,切換由 news-cover-editor.js 處理 *@
+            @* 公版底稿目前只有編輯與預覽,還不會存檔 *@
+            <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-image me-1"></i>封面圖片</h6>
+            @{
+                //資料有誤退回時保留原本選的封面來源;圖片有錯時停在「上傳圖片」
+                string coverSource = Context.Request.HasFormContentType ? Context.Request.Form["CoverSource"].ToString() : "";
+                if (ViewData.ModelState["ImageFile"]?.Errors.Count > 0) coverSource = "upload";
+                if (coverSource != "upload" && coverSource != "template") coverSource = "keep";
+            }
+            <div id="newsCoverSource" class="mb-3">
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="CoverSource" id="coverSourceKeep" value="keep" checked="@(coverSource == "keep")" />
+                    <label class="form-check-label" for="coverSourceKeep">保留目前封面</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="CoverSource" id="coverSourceUpload" value="upload" checked="@(coverSource == "upload")" />
+                    <label class="form-check-label" for="coverSourceUpload">上傳圖片</label>
+                </div>
+                <div class="form-check form-check-inline">
+                    <input class="form-check-input" type="radio" name="CoverSource" id="coverSourceTemplate" value="template" checked="@(coverSource == "template")" />
+                    <label class="form-check-label" for="coverSourceTemplate">公版底稿</label>
+                </div>
+            </div>
+
+            <div data-cover-panel="keep" class="mb-4" hidden="@(coverSource != "keep")">
+                <img src="@Model.ImagePath" alt="目前的封面"
+                     class="rounded border" style="width: 180px; height: 225px; object-fit: cover;" />
+                <div class="form-text">目前使用分類預設圖時,更換分類會自動換成新分類的預設圖</div>
+                @* 目前封面是公版底稿 >> 分類名稱已畫進圖裡,換分類後不會跟著變,由 JS 在分類改變時顯示提醒 *@
+                @if (Model.CoverTitle != null)
+                {
+                    <div id="newsCoverCategoryWarning" class="alert alert-warning py-2 small mt-2 mb-0"
+                         data-original-category="@ViewData["OriginalCategory"]" hidden>
+                        封面上的分類名稱是「@Model.CoverTitle」,換分類後不會自動更新;請改選「公版底稿」重新產生封面(原本的內文與樣式會保留)
+                    </div>
+                }
+            </div>
+
+            <div data-cover-panel="template" class="mb-4" hidden="@(coverSource != "template")">
+                <partial name="_NewsCoverEditor" />
+            </div>
+
+            <div data-cover-panel="upload" class="row g-3 mb-4" hidden="@(coverSource != "upload")">
+                <div class="col-md-6">
+                    @* CNewsWrap 沒有 ImageFile 屬性,不能用 asp-for;name 要跟 Controller 參數 ImageFile 一致 *@
+                    <label for="ImageFile" class="form-label fw-bold">更換圖片</label>
+                    <input id="ImageFile" name="ImageFile" type="file" class="form-control"
+                           accept=".jpg,.jpeg,.png,.webp" data-preview-target="imagePreview" />
+                    <div class="form-text">接受 jpg、png、webp,5MB 以內,建議使用 1200 × 1500 的直式圖片(4:5),其他比例會被裁切</div>
+                    <div class="form-text">資料有誤退回時,需要重新選擇圖片</div>
+                    @* 圖片的錯誤由 Controller 加進 ModelState("ImageFile"),不是 Wrap 的屬性,所以用 ValidationMessage 顯示 *@
+                    @Html.ValidationMessage("ImageFile", null, new { @class = "text-danger small" })
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label fw-bold">圖片預覽</label>
+                    <div>
+                        @* 一開始顯示目前的封面;選了新圖就換成新圖,取消選擇會還原 *@
+                        <img id="imagePreview" src="@Model.ImagePath" alt="封面圖片預覽"
+                             class="rounded border" style="width: 180px; height: 225px; object-fit: cover;" />
+                    </div>
+                </div>
+            </div>
+
+            <hr class="my-4" />
+
+            <h6 class="fw-bold mb-3 text-secondary"><i class="bi bi-calendar-event me-1"></i>發布設定</h6>
+            <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                    <label asp-for="PublishedAt" class="form-label fw-bold">發布時間 <span class="text-danger">*</span></label>
+                    <input asp-for="PublishedAt" asp-format="{0:yyyy-MM-ddTHH:mm}" type="datetime-local" class="form-control" />
+                    @* 選完時間後即時顯示設定結果(瀏覽器的日期選擇器沒有確定按鈕),內容由 news-publish-confirm.js 產生 *@
+                    <div id="publishedAtSummary" class="small mt-1" aria-live="polite"></div>
+                    <span asp-validation-for="PublishedAt" class="text-danger small"></span>
+                </div>
+                <div class="col-md-8">
+                    <div class="form-check form-switch mb-2">
+                        <input asp-for="IsPublished" class="form-check-input" role="switch" />
+                        <label asp-for="IsPublished" class="form-check-label">上架</label>
+                        <div class="form-text">未開啟則設置為草稿</div>
+                    </div>
+                    <div class="form-check form-switch">
+                        <input asp-for="IsPinned" class="form-check-input" role="switch" />
+                        <label asp-for="IsPinned" class="form-check-label">置頂</label>
+                        <div class="form-text">發布後將置頂顯示</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pt-3 border-top text-end">
+                <a asp-action="NewsIndex" class="btn btn-light me-2">取消</a>
+                <button type="submit" class="btn btn-primary px-4">
+                    <i class="bi bi-check-lg me-1"></i>儲存修改
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    <script src="~/js/photo-preview.js" asp-append-version="true"></script>
+    <script src="~/js/news-publish-confirm.js" asp-append-version="true"></script>
+    <script src="https://cdn.jsdelivr.net/npm/fabric@@6.7.1/dist/index.min.js"></script>
+    <script src="~/js/news-cover-editor.js" asp-append-version="true"></script>
+}

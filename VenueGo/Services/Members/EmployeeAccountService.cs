@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using VenueGo.Constants;
 using VenueGo.Data;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
 using VenueGo.Models.Entities;
 using VenueGo.ViewModels.MemberViewModels;
 
@@ -240,6 +240,13 @@ namespace VenueGo.Services.Members
                 {
                     errors.Add((string.Empty, "選擇的角色中包含不存在、已停用或不可指派的角色。"));
                 }
+            }
+
+            // [新增] 檢查生日是否為未來日期
+            // 假設 model.Birth 是 DateOnly? 或 DateOnly (如果是 DateTime，型別請自行調整)
+            if (model.Birth > DateOnly.FromDateTime(_time.Now))
+            {
+                errors.Add((nameof(model.Birth), "出生日期不可大於今天。"));
             }
 
             // Trim 之後再比對與寫入：前後多一個空白就能繞過重複檢查，最後才在資料庫撞唯一索引

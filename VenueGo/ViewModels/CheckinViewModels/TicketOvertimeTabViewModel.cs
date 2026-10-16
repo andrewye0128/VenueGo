@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
+using VenueGo.Enums;
 using VenueGo.Models.CheckinModels;
-using VenueGo.Models.Enums;
 
 namespace VenueGo.ViewModels.CheckinViewModels
 {

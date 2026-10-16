@@ -2,7 +2,7 @@
 using System.Net.Sockets;
 using VenueGo.Data;
 using VenueGo.Models.Entities;
-using VenueGo.Models.Enums;
+using VenueGo.Enums;
 using VenueGo.Services.Ticket;
 using VenueGo.ViewModels.CheckinViewModels;
 

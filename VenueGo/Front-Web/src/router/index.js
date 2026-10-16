@@ -26,9 +26,38 @@ const router = createRouter({
       component: () => import("../views/BookingView.vue"),
     },
     {
+      // 場地預約 ② 填寫資料：/booking/confirm?venueId=7&date=2026-10-20&slots=17:00,18:00
+      path: "/booking/confirm",
+      name: "booking-confirm",
+      component: () => import("../views/BookingConfirmView.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
+      // 場地預約 ③ 預約完成：資料由填寫頁透過 history state 帶過來（不放網址）
+      path: "/booking/complete",
+      name: "booking-complete",
+      component: () => import("../views/BookingCompleteView.vue"),
+      meta: { requiresAuth: true },
+    },
+    {
       path: "/login",
       name: "login",
       component: () => import("../views/LoginView.vue"),
+    },
+    {
+      path: "/register",
+      name: "register",
+      component: () => import("../views/RegisterView.vue"),
+    },
+    {
+      path: "/forgot-password",
+      name: "forgot-password",
+      component: () => import("../views/ForgotPasswordView.vue"),
+    },
+    {
+      path: "/reset-password",
+      name: "reset-password",
+      component: () => import("../views/ResetPasswordView.vue"),
     },
     {
       // SportTypeSelect 元件使用說明頁
@@ -58,7 +87,14 @@ const router = createRouter({
       path: "/member",
       name: "member",
       component: () => import("../layouts/member/MemberLayout.vue"),
+      // 需要登入：底下的子頁面（我的預約、個人資料…）也一起適用
+      meta: { requiresAuth: true },
       children: [
+        // 進入會員中心時，預設顯示個人資料
+        {
+          path: "member-home",
+          redirect: { name: "profile" },
+        },
         // 我的預約
         {
           path: "reservations",
@@ -86,6 +122,24 @@ const router = createRouter({
       name: "venues",
       component: () => import("../views/VenueIntroView.vue"),
     },
+    {
+      // 最新消息列表：分類、頁碼放在查詢字串（/news?category=event&page=2）
+      path: "/news",
+      name: "news",
+      component: () => import("../views/news/NewsListView.vue"),
+    },
+    {
+      // 最新消息詳細頁：(\\d+) 限定只接受數字，非數字的網址交給 404
+      path: "/news/:id(\\d+)",
+      name: "news-detail",
+      component: () => import("../views/news/NewsDetailView.vue"),
+    },
+    {
+      // 常見問題：目前的分類放在查詢字串（/faq?category=venue），沒帶時顯示第一個分類
+      path: "/faq",
+      name: "faq",
+      component: () => import("../views/faq/FaqView.vue"),
+    },
     // 顧客端評論（昱）：要放在 404 前面
     ...reviewRoutes,
     {
@@ -106,25 +160,31 @@ const router = createRouter({
     return { top: 0 };
   },
 });
-// 路由守衛：未登入或 Token 無效時，禁止進入會員中心。
-// router.beforeEach(async (to) => {
-//   const token = localStorage.getItem("token");
-//   const memberStore = useMemberStore();
+// 路由守衛：未登入或 Token 無效時，禁止進入需要登入的頁面。
+// 哪些頁面要登入：路由設定加上 meta: { requiresAuth: true }（子頁面會跟著父頁面）
+//   目前有：會員中心 /member/...、場地預約的填寫資料、預約完成
+// 帶去登入頁時，把原本要去的網址放在 ?redirect=，登入成功後 LoginView 會帶回來
+router.beforeEach(async (to) => {
+  // to.matched：這個網址對應到的所有路由（含父路由），任一個要求登入就算
+  if (!to.matched.some((record) => record.meta.requiresAuth)) return;
 
-//   if (to.path.startsWith("/member")) {
-//     if (!token) {
-//       return { name: "login" };
-//     }
+  const token = localStorage.getItem("token");
+  const memberStore = useMemberStore();
+  // fullPath 含查詢字串，例如 /booking/confirm?venueId=7&date=...，選擇才不會遺失
+  const toLogin = { name: "login", query: { redirect: to.fullPath } };
 
-//     if (!memberStore.member) {
-//       try {
-//         await memberStore.fetchCurrentMember();
-//       } catch (error) {
-//         memberStore.logout();
-//         return { name: "login" };
-//       }
-//     }
-//   }
-// });
+  if (!token) {
+    return toLogin;
+  }
+
+  if (!memberStore.member) {
+    try {
+      await memberStore.fetchCurrentMember();
+    } catch (error) {
+      memberStore.logout();
+      return toLogin;
+    }
+  }
+});
 
 export default router;

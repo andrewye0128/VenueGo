@@ -3,12 +3,13 @@ using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Services.Ticket;
 using VenueGo.Helpers;
-using VenueGo.Models.Constants;
+using VenueGo.Filters;
 using VenueGo.Services;
+using VenueGo.Constants;
 
 namespace VenueGo.Controllers
 {
-    [EmployeeAuthorize(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
+    [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     public class OrderController : Controller
     {
         private readonly dbVenueContext _db;

@@ -1,5 +1,5 @@
-﻿using VenueGo.Models.CheckinModels;
-using VenueGo.Models.Enums;
+﻿using VenueGo.Enums;
+using VenueGo.Models.CheckinModels;
 
 namespace VenueGo.ViewModels.CheckinViewModels
 {

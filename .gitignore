@@ -501,6 +501,7 @@ VenueGo-HungYu.md
 # 場地上傳圖片
 /VenueGo/wwwroot/images/venues/ 
 /VenueGo/wwwroot/images/sporttypes/ 
+/VenueGo/wwwroot/images/news/uploads/
 
 
 # 發佈測試輸出
@@ -511,3 +512,7 @@ VenueGo/wwwroot/app/
 
 # Qodo（AI 程式助理）的本機設定
 .qodo/
+
+# HungYu 個人資料夾（私人 SQL 指令碼、參考資料，不進 git）
+VenueGo/PrivateFile/
+VenueGo/參考資料/

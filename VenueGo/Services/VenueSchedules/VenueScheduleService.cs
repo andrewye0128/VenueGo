@@ -451,7 +451,7 @@ namespace VenueGo.Services.VenueSchedules
 
 
         //把內部查詢結果轉成對外的回傳類別
-        private UsableVenueInfo ToUsableVenueInfo(UsableVenueRow venue, VenuePriceSummary price)
+        private static UsableVenueInfo ToUsableVenueInfo(UsableVenueRow venue, VenuePriceSummary price)
         {
             UsableVenueInfo info = new UsableVenueInfo();
             info.VenueId = venue.VenueId;

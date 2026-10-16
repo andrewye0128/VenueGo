@@ -1,0 +1,62 @@
+@model VenueGo.Models.ContentModels.CFaqWrap
+@using VenueGo.Models.ContentModels
+@* 常見問題新增、編輯共用的表單欄位(不含 <form> 與送出按鈕) *@
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <label asp-for="Category" class="form-label fw-bold">分類 <span class="text-danger">*</span></label>
+        @* 在「全部」頁籤新增時沒有預設分類 >> 第一個選項是空值,沒選就會被 [Required] 擋下 *@
+        <select asp-for="Category" class="form-select">
+            <option value="">請選擇分類</option>
+            @foreach (var category in FaqCategoryOptions.All)
+            {
+                <option value="@category.Key">@category.Value</option>
+            }
+        </select>
+        <span asp-validation-for="Category" class="text-danger small"></span>
+        @* 編輯時(已經有 Id)才提示換分類的規則 *@
+        @if (Model.FaqId > 0)
+        {
+            <div class="form-text">更換分類時,這則問題會排到新分類的最後</div>
+        }
+    </div>
+    <div class="col-md-8 d-flex align-items-end">
+        <div class="form-check form-switch mb-2">
+            <input asp-for="IsPublished" class="form-check-input" role="switch" />
+            <label asp-for="IsPublished" class="form-check-label">顯示在前台</label>
+            <div class="form-text">關閉就是暫時隱藏,保留原本的順序,重新開啟時回到原位</div>
+        </div>
+    </div>
+</div>
+
+<div class="mb-4">
+    <label asp-for="Question" class="form-label fw-bold">問題 <span class="text-danger">*</span></label>
+    <input asp-for="Question" class="form-control" maxlength="200" data-char-counter="questionCount" />
+    <div class="form-text text-end"><span id="questionCount"></span></div>
+    <span asp-validation-for="Question" class="text-danger small"></span>
+</div>
+
+<div class="mb-4">
+    <label asp-for="Answer" class="form-label fw-bold">回答 <span class="text-danger">*</span></label>
+    <textarea asp-for="Answer" class="form-control" rows="10" maxlength="1500" data-char-counter="answerCount"></textarea>
+    <div class="d-flex justify-content-between">
+        <div class="form-text">
+            換行會保留,前台會照樣分段顯示<br />
+            加入連結:<code>[連結文字](網址)</code>,網址要用 <code>/</code> 或 <code>https://</code> 開頭,括號請用半形<br />
+            例:<code>[預約說明](/booking)</code>、<code>[交通方式](https://example.com/map)</code>
+        </div>
+        <div class="form-text text-nowrap ms-3"><span id="answerCount"></span></div>
+    </div>
+    <span asp-validation-for="Answer" class="text-danger small"></span>
+</div>
+
+@* 預覽:模擬前台的樣子,輸入時自動更新(faq-preview.js);連結解析由後端 FaqPreview 處理 *@
+<h6 class="fw-bold mb-2 text-secondary"><i class="bi bi-eye me-1"></i>前台預覽</h6>
+<div id="faqPreview" data-preview-url="@Url.Action("FaqPreview", "Content")" class="mb-4">
+    <div id="faqPreviewMessages"></div>
+    <div class="border rounded bg-light p-3">
+        <div id="faqPreviewQuestion" class="fw-bold mb-2"></div>
+        <div id="faqPreviewAnswer"></div>
+    </div>
+    <div class="form-text">預覽裡的連結不能點,滑鼠移上去可以看到完整網址</div>
+</div>

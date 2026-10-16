@@ -1,4 +1,5 @@
 ﻿using System.Reflection.Metadata.Ecma335;
+using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Dtos.VenueDtos;
 using VenueGo.Models.Entities;
@@ -132,8 +133,9 @@ namespace VenueGo.Models.VenueModels
         /*API使用*/
 
         //前台「場館資訊」頁 >> 開放時間 + 各運動類型的代表照片、注意事項、收費標準
-        //給 VenueApiController(GET /api/venues/intro)使用
-        public SportTypeIntroPageDto QueryIntroPage()
+        //給 VenueApiController(GET /api/venues/introduction)使用
+        //非同步:步驟1～3 查資料庫時用 await,等待期間執行緒可以先處理其他請求;步驟4 只在記憶體組合資料
+        public async Task<SportTypeIntroPageDto> QueryIntroPageAsync()
         {
             SportTypeIntroPageDto page = new SportTypeIntroPageDto();
             CSportTypePriceRuleFactory priceRuleFactory = new CSportTypePriceRuleFactory();
@@ -142,7 +144,7 @@ namespace VenueGo.Models.VenueModels
             /***** 步驟1 開放時間 *****/
 
             //資料庫依 DayOfWeek 排序(星期日 = 0 排最前面),畫面要星期一排最前面、星期日排最後面
-            List<CWeekBusinessHourWrap> businessHours = new CWeekBusinessHourFactory().QueryAll();
+            List<CWeekBusinessHourWrap> businessHours = await new CWeekBusinessHourFactory().QueryAllAsync();
             DayOfWeek[] displayOrder = new DayOfWeek[]
             {
                 DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday,
@@ -200,14 +202,14 @@ namespace VenueGo.Models.VenueModels
                             select t;
 
                 //在 using 裡面先取出結果,離開 using 之後 DbContext 就關閉了
-                sportTypes = datas.ToList();
+                sportTypes = await datas.ToListAsync();
             }
 
 
             /***** 步驟3 價格規則 *****/
 
-            //重用後台價格規則列表的查詢:已經算好 IsActive、離峰/尖峰價、HasAnyPeak、尖峰摘要 PeakSummary
-            List<SportTypePriceRuleIndexViewModel> priceRules = priceRuleFactory.QueryAll();
+            //重用後台價格規則列表的查詢(非同步版本):已經算好 IsActive、離峰/尖峰價、HasAnyPeak、尖峰摘要 PeakSummary
+            List<SportTypePriceRuleIndexViewModel> priceRules = await priceRuleFactory.QueryAllAsync();
 
 
             /***** 步驟4 組合 *****/

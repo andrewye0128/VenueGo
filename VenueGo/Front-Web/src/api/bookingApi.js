@@ -1,4 +1,4 @@
-// 場地預約 API（前台預約頁用，都不需要登入）
+// 場地預約 API（前台預約頁、填寫資料頁用；這個檔案的 API 都不需要登入）
 import http from "./http";
 import { DEFAULT_TIME_PERIOD } from "@/constants/booking";
 
@@ -42,5 +42,25 @@ export async function getAvailabilitySummary({
   if (period !== DEFAULT_TIME_PERIOD) params.period = period;
 
   const { data } = await http.get("/booking/availability/summary", { params });
+  return data;
+}
+
+/**
+ * 試算（填寫資料頁一打開就呼叫）：[GET] /api/booking/quote
+ * 後端重新檢查時段還能不能訂、計算金額、回傳能用的付款方式與期限（付款規則只在後端，前端不再算一次）
+ * 不需要登入：只回答場地、價格、付款規則，不會用到會員資料
+ * @param {object} params
+ * @param {number} params.venueId 場地
+ * @param {string} params.date "2026-10-20"
+ * @param {string[]} params.slots 時段 ["17:00", "18:00"]（已排序）
+ * @returns {Promise<object>} { venueId, venueName, sportTypeId, sportName, capacity, bookingDate, startTime, endTime,
+ *   slots: [{ slotTime, unitPrice, isPeak }], totalAmount,
+ *   paymentOptions: [{ paymentMethod, isAvailable, dueAt, unavailableReason }], termsVersion }
+ *   錯誤：DateOutOfRange、SlotUnavailable、VenueNotBookable、InvalidInput（400）
+ */
+export async function getBookingQuote({ venueId, date, slots }) {
+  // slots 用逗號串起來送（"17:00,18:00"），跟填寫頁網址的格式一樣，後端自己拆
+  const params = { venueId, date, slots: slots.join(",") };
+  const { data } = await http.get("/booking/quote", { params });
   return data;
 }

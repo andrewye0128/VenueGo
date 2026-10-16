@@ -3,13 +3,13 @@ using System.Security.Claims;
 using VenueGo.Data;
 using VenueGo.Models.Entities;
 
-namespace VenueGo.Helpers
+namespace VenueGo.Filters
 {
     /// <summary>
     /// 身分認證與權限檢查輔助工具類別
     /// 提供 Controller、Filter 與 View (.cshtml) 快速查詢使用者資訊與角色權限
     /// </summary>
-    public static class AuthHelper
+    public static class AuthFilters
     {
         /// <summary>
         /// 從目前登入者的 Claims 中取得 UserId

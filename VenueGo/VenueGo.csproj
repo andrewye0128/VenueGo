@@ -84,10 +84,8 @@
     <Folder Include="Models\MemberModels\" />
     <Folder Include="Models\Wraps\" />
     <Folder Include="Models\OperationModels\" />
-    <Folder Include="Models\ReservationModels\" />
     <Folder Include="Mappers\" />
     <Folder Include="Models\TimeSlots\" />
-    <Folder Include="Filters\" />
     <Folder Include="ViewModels\VenueViewModels\" />
     <Folder Include="wwwroot\images\icons\" />
     <Folder Include="wwwroot\images\logo\" />

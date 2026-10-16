@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
@@ -16,6 +15,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Models.Options;
 using VenueGo.Models.ReservationModels;
 using VenueGo.Services.Orders;
+using VenueGo.Services.Time;
 using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Services.Reservations
@@ -28,14 +28,11 @@ namespace VenueGo.Services.Reservations
         /// <summary>訂單編號撞號時的重試次數。</summary>
         private const int MaxOrderNoAttempts = 3;
 
-        /// <summary>手機條碼載具的格式：斜線加 7 碼大寫英數字或 + - . 三個符號。</summary>
-        private static readonly Regex CarrierNoPattern =
-            new(@"^/[0-9A-Z+\-.]{7}$", RegexOptions.Compiled);
-
         private readonly dbVenueContext _db;
         private readonly ISlotSelectionValidator _slotValidator;
         private readonly IReservationPricingService _pricingService;
         private readonly IOrderNoGenerator _orderNoGenerator;
+        private readonly ITimeService _timeService;
         private readonly ReservationRulesOptions _rules;
         private readonly ILogger<ReservationCreationService> _logger;
 
@@ -44,6 +41,7 @@ namespace VenueGo.Services.Reservations
             ISlotSelectionValidator slotValidator,
             IReservationPricingService pricingService,
             IOrderNoGenerator orderNoGenerator,
+            ITimeService timeService,
             IOptionsSnapshot<ReservationRulesOptions> rules,
             ILogger<ReservationCreationService> logger)
         {
@@ -51,9 +49,12 @@ namespace VenueGo.Services.Reservations
             _slotValidator = slotValidator;
             _pricingService = pricingService;
             _orderNoGenerator = orderNoGenerator;
+            _timeService = timeService;
             _rules = rules.Value;
             _logger = logger;
         }
+
+        // ══ 後台代客建立 ═══════════════════════════════════
 
         public async Task<ReservationCreationResult> CreateAsync(
             ReservationDraft draft,
@@ -106,33 +107,77 @@ namespace VenueGo.Services.Reservations
                     "所選時段尚未設定價格，請先於場地管理設定該運動類型的計價規則。");
             }
 
-            return await WriteWithRetryAsync(
-                draft, input, pricing, operatorUserId, cancellationToken);
+            // ── 依後台的規則決定狀態、付款方式、期限，整理成寫入單 ──
+            // 現在時間用網站時間（ITimeService），開發時才會跟著時光機；同一筆預約的時間欄位都用這一個值
+            var now = _timeService.Now;
+            var bookingDate = draft.BookingDate.Value;
+
+            // 情境一（做法 B 開關）：開關開啟時，付款期限 = 建立時間 + 緩衝分鐘，
+            // 代表員工代客收款時，最晚要在下單後這段時間內收到錢。
+            // 開關關閉（組員預設情況）維持原本「使用時段開始時間」的算法，
+            // BookingDate 是 date、StartTime 是 time，必須組成 datetime。
+            var paymentDueAt = _rules.UseScenario1PaymentRule
+                ? now.AddMinutes(_rules.PaymentCreationBufferMinutes)
+                : bookingDate.ToDateTime(pricing.StartTime!.Value);
+
+            // 已收款時預約直接進入已確認、訂單已付款；否則停在待確認、待付款
+            var model = new ReservationWriteModel
+            {
+                UserId = draft.UserId!.Value,
+                VenueId = draft.VenueId.Value,
+                BookingDate = bookingDate,
+                Pricing = pricing,
+
+                PersonAmount = input.PersonAmount,
+                InvoiceType = input.InvoiceType,
+                // 選紙本發票時載具必須為 NULL，不可把使用者先前輸入的值留下
+                CarrierNo = input.InvoiceType == InvoiceType.MobileBarcode
+                    ? input.CarrierNo?.Trim()
+                    : null,
+
+                // 後台代客建立固定為現場付款 + 現場櫃台
+                PaymentMethod = PaymentMethod.OnSite,
+                PaymentChannel = PaymentChannel.Counter,
+                PaymentDueAt = paymentDueAt,
+                PaidAt = input.MarkAsPaid ? now : null,
+
+                ReservationStatus = input.MarkAsPaid
+                    ? ReservationStatus.Confirmed
+                    : ReservationStatus.Pending,
+                OrderStatus = input.MarkAsPaid ? OrderStatus.Paid : OrderStatus.AwaitingPayment,
+                PaymentStatus = input.MarkAsPaid ? PaymentStatus.Paid : PaymentStatus.Unpaid,
+
+                // 稽核：UserId 是來打球的會員，OperatorUserId（CreatedBy）是操作系統的管理員
+                Source = ReservationSource.Admin,
+                OperatorUserId = operatorUserId,
+
+                // 條款：後台代客建立時，代表管理員已向會員說明並確認同意
+                TermsVersion = _rules.TermsVersion,
+                Now = now
+            };
+
+            return await WriteAsync(model, cancellationToken);
         }
 
-        // ══ 寫入 ═══════════════════════════════════════
+        // ══ 寫入（後台、前台共用）═══════════════════════════
 
         /// <summary>
         /// 寫入五張表，並在訂單編號撞號時重試。
         /// <para>
         /// 兩種唯一鍵衝突的處理方式完全不同：
         /// 訂單編號撞號可自動修復（換一個號再試，使用者不必知道）；
-        /// 時段撞號無法修復（場地只有一個），必須讓使用者回步驟 4 重新選擇。
+        /// 時段撞號無法修復（場地只有一個），必須讓使用者回去重新選擇時段。
         /// </para>
         /// </summary>
-        private async Task<ReservationCreationResult> WriteWithRetryAsync(
-            ReservationDraft draft,
-            ConfirmReservationInputModel input,
-            PricingResult pricing,
-            int operatorUserId,
-            CancellationToken cancellationToken)
+        public async Task<ReservationCreationResult> WriteAsync(
+            ReservationWriteModel model,
+            CancellationToken cancellationToken = default)
         {
             for (var attempt = 1; attempt <= MaxOrderNoAttempts; attempt++)
             {
                 try
                 {
-                    return await WriteOnceAsync(
-                        draft, input, pricing, operatorUserId, cancellationToken);
+                    return await WriteOnceAsync(model, cancellationToken);
                 }
                 catch (DbUpdateException ex) when (IsConflictOn(ex, "UQ_Orders_OrderNo"))
                 {
@@ -154,7 +199,8 @@ namespace VenueGo.Services.Reservations
                     // 走到這裡表示撞的不是訂單編號，而是時段的佔位唯一鍵。
                     _db.ChangeTracker.Clear();
 
-                    var message = await BuildSlotConflictMessageAsync(draft, cancellationToken);
+                    var message = await BuildSlotConflictMessageAsync(
+                        model.VenueId, model.BookingDate, model.SlotTimes, cancellationToken);
                     return ReservationCreationResult.SlotConflict(message);
                 }
             }
@@ -175,46 +221,30 @@ namespace VenueGo.Services.Reservations
         /// </para>
         /// </summary>
         private async Task<ReservationCreationResult> WriteOnceAsync(
-            ReservationDraft draft,
-            ConfirmReservationInputModel input,
-            PricingResult pricing,
-            int operatorUserId,
+            ReservationWriteModel model,
             CancellationToken cancellationToken)
         {
-            var now = DateTime.Now;
-            var bookingDate = draft.BookingDate!.Value;
-            var startTime = pricing.StartTime!.Value;
-
-            // 情境一（做法 B 開關）：開關開啟時，付款期限 = 建立時間 + 緩衝分鐘，
-            // 代表員工代客收款時，最晚要在下單後這段時間內收到錢。
-            // 開關關閉（組員預設情況）維持原本「使用時段開始時間」的算法，
-            // BookingDate 是 date、StartTime 是 time，必須組成 datetime。
-            var paymentDueAt = _rules.UseScenario1PaymentRule
-                ? now.AddMinutes(_rules.PaymentCreationBufferMinutes)
-                : bookingDate.ToDateTime(startTime);
-
             var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             await using (transaction)
             {
                 // ── 1. 預約主檔 ──
-                var reservation = BuildReservation(draft, pricing, input, operatorUserId, now);
+                var reservation = BuildReservation(model);
                 _db.Reservations.Add(reservation);
                 await _db.SaveChangesAsync(cancellationToken);
 
                 // ── 2. 佔位。唯一鍵 UQ_ReservationSlots_Occupancy 在此擋下併發 ──
-                AddReservationSlots(reservation, draft, pricing);
+                AddReservationSlots(reservation, model);
                 await _db.SaveChangesAsync(cancellationToken);
 
                 // ── 3. 訂單。唯一鍵 UQ_Orders_OrderNo 在此擋下撞號 ──
-                var order = await BuildOrderAsync(
-                    reservation, draft, input, pricing, now, cancellationToken);
+                var order = await BuildOrderAsync(reservation, model, cancellationToken);
                 _db.Orders.Add(order);
                 await _db.SaveChangesAsync(cancellationToken);
 
                 // ── 4. 明細、付款、稽核紀錄 ──
-                AddOrderDetails(order, reservation, pricing);
-                AddPayment(order, input, pricing, paymentDueAt, now);
-                AddAuditLog(reservation, order, operatorUserId, now);
+                AddOrderDetails(order, reservation, model.Pricing);
+                AddPayment(order, model);
+                AddAuditLog(reservation, order, model);
                 await _db.SaveChangesAsync(cancellationToken);
 
                 await transaction.CommitAsync(cancellationToken);
@@ -223,58 +253,42 @@ namespace VenueGo.Services.Reservations
             }
         }
 
-        // ── 各表的組裝 ──────────────────────────────────
+        // ── 各表的組裝：照寫入單填值，不做任何判斷 ─────────────
 
         /// <summary>組出預約主檔。</summary>
-        private Reservation BuildReservation(
-            ReservationDraft draft,
-            PricingResult pricing,
-            ConfirmReservationInputModel input,
-            int operatorUserId,
-            DateTime now)
+        private static Reservation BuildReservation(ReservationWriteModel model) => new()
         {
-            // 已收款時預約直接進入已確認；否則停在待確認等候付款。
-            var reservationStatus = input.MarkAsPaid
-                ? ReservationStatus.Confirmed
-                : ReservationStatus.Pending;
+            UserId = model.UserId,
+            VenueId = model.VenueId,
+            BookingDate = model.BookingDate,
 
-            return new Reservation
-            {
-                UserId = draft.UserId!.Value,
-                VenueId = draft.VenueId!.Value,
-                BookingDate = draft.BookingDate!.Value,
+            // StartTime / EndTime 由計價結果的頭尾得出。
+            // EndTime 是最後一格的起始時間加一小時：
+            // 選了 17:00、18:00 兩格，結束時間是 19:00 而不是 18:00。
+            StartTime = model.Pricing.StartTime!.Value,
+            EndTime = model.Pricing.EndTime!.Value,
 
-                // StartTime / EndTime 由計價結果的頭尾得出。
-                // EndTime 是最後一格的起始時間加一小時：
-                // 選了 17:00、18:00 兩格，結束時間是 19:00 而不是 18:00。
-                StartTime = pricing.StartTime!.Value,
-                EndTime = pricing.EndTime!.Value,
+            ReservedAt = model.Now,
+            ReservationStatus = (byte)model.ReservationStatus,
 
-                ReservedAt = now,
-                ReservationStatus = (byte)reservationStatus,
+            TermsAcceptedAt = model.Now,
+            TermsVersion = model.TermsVersion,
 
-                // 條款：後台代客建立時，代表管理員已向會員說明並確認同意
-                TermsAcceptedAt = now,
-                TermsVersion = _rules.TermsVersion,
-
-                // 稽核：UserId 是來打球的會員，CreatedBy 是操作系統的管理員
-                CreatedBy = operatorUserId,
-                Source = (byte)ReservationSource.Admin
-            };
-        }
+            CreatedBy = model.OperatorUserId,
+            Source = (byte)model.Source
+        };
 
         /// <summary>
         /// 組出佔位資料，一格時段一列。
         /// 這張表是時段是否被佔用的唯一依據，取消預約時必須刪除。
         /// </summary>
-        private void AddReservationSlots(
-            Reservation reservation, ReservationDraft draft, PricingResult pricing)
+        private void AddReservationSlots(Reservation reservation, ReservationWriteModel model)
         {
-            var slots = pricing.Details.Select(line => new ReservationSlot
+            var slots = model.Pricing.Details.Select(line => new ReservationSlot
             {
                 ReservationId = reservation.ReservationId,
-                VenueId = draft.VenueId!.Value,
-                BookingDate = draft.BookingDate!.Value,
+                VenueId = model.VenueId,
+                BookingDate = model.BookingDate,
                 SlotTime = line.SlotTime
             });
 
@@ -284,35 +298,25 @@ namespace VenueGo.Services.Reservations
         /// <summary>組出訂單。</summary>
         private async Task<Order> BuildOrderAsync(
             Reservation reservation,
-            ReservationDraft draft,
-            ConfirmReservationInputModel input,
-            PricingResult pricing,
-            DateTime now,
+            ReservationWriteModel model,
             CancellationToken cancellationToken)
         {
-            var orderStatus = input.MarkAsPaid ? OrderStatus.Paid : OrderStatus.AwaitingPayment;
-
-            // 選紙本發票時載具必須為 NULL，不可把使用者先前輸入的值留下
-            var carrierNo = input.InvoiceType == InvoiceType.MobileBarcode
-                ? input.CarrierNo?.Trim()
-                : null;
-
             return new Order
             {
                 ReservationId = reservation.ReservationId,
-                UserId = draft.UserId!.Value,
+                UserId = model.UserId,
                 OrderNo = await _orderNoGenerator.GenerateAsync(cancellationToken),
-                InvoiceType = (byte)input.InvoiceType,
-                CarrierNo = carrierNo,
-                OrderCreatedAt = now,
-                OrderStatus = (byte)orderStatus,
+                InvoiceType = (byte)model.InvoiceType,
+                CarrierNo = model.CarrierNo,
+                OrderCreatedAt = model.Now,
+                OrderStatus = (byte)model.OrderStatus,
 
                 // 欄位目前仍是 PersonMount（錯字），改名後這一行改為 PersonAmount
-                PersonMount = input.PersonAmount,
+                PersonMount = model.PersonAmount,
 
                 // 總金額由計價結果提供，不在此另外相加，
                 // 確保與 OrdersDetails 的小計總和必然一致
-                TotalAmount = pricing.TotalAmount
+                TotalAmount = model.Pricing.TotalAmount
             };
         }
 
@@ -342,35 +346,26 @@ namespace VenueGo.Services.Reservations
         /// 沒有它，那筆預約的付款狀態會顯示空白。
         /// </para>
         /// </summary>
-        private void AddPayment(
-            Order order,
-            ConfirmReservationInputModel input,
-            PricingResult pricing,
-            DateTime paymentDueAt,
-            DateTime now)
+        private void AddPayment(Order order, ReservationWriteModel model)
         {
-            var paymentStatus = input.MarkAsPaid ? PaymentStatus.Paid : PaymentStatus.Unpaid;
-
             _db.Payments.Add(new Payment
             {
                 OrderId = order.OrderId,
-                Amount = pricing.TotalAmount,
+                Amount = model.Pricing.TotalAmount,
 
-                // 後台代客建立固定為現場付款 + 現場櫃台。
-                // 期末線上付款會是 Online + CreditCard / LinePay。
-                PaymentMethod = (byte)PaymentMethod.OnSite,
-                PaymentChannel = (byte)PaymentChannel.Counter,
+                // 後台：現場付款 + 現場櫃台；前台：現場 + 櫃台，或線上 + 信用卡
+                PaymentMethod = (byte)model.PaymentMethod,
+                PaymentChannel = (byte)model.PaymentChannel,
 
-                PaymentStatus = (byte)paymentStatus,
-                PaymentDueAt = paymentDueAt,
-                PaidAt = input.MarkAsPaid ? now : null,
-                CreatedAt = now
+                PaymentStatus = (byte)model.PaymentStatus,
+                PaymentDueAt = model.PaymentDueAt,
+                PaidAt = model.PaidAt,
+                CreatedAt = model.Now
             });
         }
 
         /// <summary>新增一筆稽核紀錄，記錄是誰建立了這筆預約。</summary>
-        private void AddAuditLog(
-            Reservation reservation, Order order, int operatorUserId, DateTime now)
+        private void AddAuditLog(Reservation reservation, Order order, ReservationWriteModel model)
         {
             var newValue = JsonSerializer.Serialize(new
             {
@@ -382,7 +377,7 @@ namespace VenueGo.Services.Reservations
 
             _db.AuditLogs.Add(new AuditLog
             {
-                UserId = operatorUserId,
+                UserId = model.OperatorUserId,
                 Action = AuditActions.CreateReservation,
                 EntityType = AuditEntityTypes.Reservations,
                 EntityId = reservation.ReservationId.ToString(),
@@ -390,7 +385,7 @@ namespace VenueGo.Services.Reservations
                 // 建立動作沒有「變更前」的狀態
                 OldValue = null,
                 NewValue = newValue,
-                CreatedAt = now
+                CreatedAt = model.Now
             });
         }
 
@@ -401,7 +396,7 @@ namespace VenueGo.Services.Reservations
         /// 一次收集所有錯誤再回傳，讓使用者一次看到全部問題，
         /// 而不是改一個、送出、再被擋一次。
         /// </summary>
-        private List<string> ValidateInput(
+        private static List<string> ValidateInput(
             ConfirmReservationInputModel input, int? venueCapacity)
         {
             var errors = new List<string>();
@@ -423,7 +418,7 @@ namespace VenueGo.Services.Reservations
                 {
                     errors.Add("選擇手機條碼載具時，載具號碼為必填。");
                 }
-                else if (!CarrierNoPattern.IsMatch(carrierNo))
+                else if (!InvoiceRules.IsValidCarrierNo(carrierNo))   // 格式改用共用的 InvoiceRules
                 {
                     errors.Add("載具號碼格式不正確，應為斜線加 7 碼大寫英數字，例如 /AB12345。");
                 }
@@ -447,10 +442,11 @@ namespace VenueGo.Services.Reservations
         /// 只說「時段衝突」使用者不知道該改哪一格。
         /// </summary>
         private async Task<string> BuildSlotConflictMessageAsync(
-            ReservationDraft draft, CancellationToken cancellationToken)
+            int venueId, DateOnly bookingDate, IReadOnlyList<TimeOnly> slotTimes,   // 不再依賴後台的草稿
+            CancellationToken cancellationToken)
         {
             var validation = await _slotValidator.ValidateAsync(
-                draft.VenueId!.Value, draft.BookingDate!.Value, draft.SlotTimes, cancellationToken);
+                venueId, bookingDate, slotTimes, cancellationToken);
 
             if (validation.Errors.Count > 0)
             {

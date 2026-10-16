@@ -1,11 +1,16 @@
 using Microsoft.AspNetCore.Authentication.Cookies; // Cookie 認證
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using System.Text;
+using System.Threading.RateLimiting;
 using VenueGo.Data;
+using VenueGo.Dtos;
 using VenueGo.Extensions;   // 各子系統的服務註冊、API 文件
 using VenueGo.Helpers;
+using VenueGo.Services;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
 using VenueGo.Services.Time;
@@ -20,6 +25,41 @@ builder.Configuration.AddJsonFile(
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
+// 忘記密碼 API 限流：每個來源 IP 每 15 分鐘最多 5 次。
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("ForgotPassword", httpContext =>
+    {
+        var ipAddress =
+            httpContext.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ipAddress,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(15),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            });
+    });
+
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.StatusCode =
+            StatusCodes.Status429TooManyRequests;
+
+        await context.HttpContext.Response.WriteAsJsonAsync(
+            ApiResult.Fail(
+                "申請次數過多，請稍後再試。",
+                "TooManyRequests"),
+            cancellationToken);
+    };
+});
 
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>
     o.InvalidModelStateResponseFactory = ApiResponses.InvalidModelState);
@@ -113,6 +153,10 @@ builder.Services.AddScoped<IEmployeeAccountService, EmployeeAccountService>();
 builder.Services.AddScoped<IMemberAccountService, MemberAccountService>();
 
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+//Email 寄送服務
+builder.Services.Configure<SmtpSettings>(
+    builder.Configuration.GetSection("SmtpSettings"));
+builder.Services.AddScoped<IEmailService, EmailService>();
 
 // Service 層要讀寫 Session，需要透過 IHttpContextAccessor 取得 HttpContext
 builder.Services.AddHttpContextAccessor();
@@ -210,7 +254,8 @@ app.UseHttpsRedirection();
 app.UseRouting();
 //啟動 Sesion
 app.UseSession();
-
+// 啟用速率限制
+app.UseRateLimiter();
 // ==========================================
 // 2. [新增] 啟用身份驗證 Middleware (必須放在 UseAuthorization 之前)
 // ==========================================

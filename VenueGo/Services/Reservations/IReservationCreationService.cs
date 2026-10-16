@@ -36,5 +36,23 @@ namespace VenueGo.Services.Reservations
             ConfirmReservationInputModel input,
             int operatorUserId,
             CancellationToken cancellationToken = default);
+
+
+        /// <summary>
+        /// 把整理好的寫入單寫進資料庫：五張表加一筆稽核紀錄，同一個交易內完成。
+        /// <para>
+        /// 後台的 <see cref="CreateAsync"/> 與前台的會員預約都呼叫這個方法，
+        /// 交易、訂單編號撞號重試、時段被搶走的處理只有這一份。
+        /// </para>
+        /// <para>
+        /// 這個方法不做任何商業規則的檢查（時段、人數、付款規則…），
+        /// 呼叫前請先檢查完畢；只有「寫入當下時段被搶走」會回傳 IsSlotConflict。
+        /// </para>
+        /// </summary>
+        /// <param name="model">寫入單：狀態、付款方式、期限由呼叫的人決定。</param>
+        /// <param name="cancellationToken">使用者中斷請求時，取消進行中的資料庫操作。</param>
+        Task<ReservationCreationResult> WriteAsync(
+            ReservationWriteModel model,
+            CancellationToken cancellationToken = default);
     }
 }

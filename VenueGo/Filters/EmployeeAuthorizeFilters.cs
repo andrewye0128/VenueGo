@@ -5,16 +5,16 @@ using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
 using VenueGo.Data;
 
-namespace VenueGo.Helpers
+namespace VenueGo.Filters
 {
     /// <summary>
     /// 驗證是否為在職員工，可指定特定角色權限 (例如 Admin)
     /// 使用範例：[EmployeeAuthorize] 或 [EmployeeAuthorize("Admin", "SystemAdmin")]
     /// </summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method, AllowMultiple = true, Inherited = true)]
-    public class EmployeeAuthorizeAttribute : TypeFilterAttribute
+    public class EmployeeAuthorizeFilters : TypeFilterAttribute
     {
-        public EmployeeAuthorizeAttribute(params string[] roles) : base(typeof(EmployeeAuthorizeFilter))
+        public EmployeeAuthorizeFilters(params string[] roles) : base(typeof(EmployeeAuthorizeFilter))
         {
             Arguments = new object[] { roles };
         }
@@ -136,7 +136,7 @@ namespace VenueGo.Helpers
         /// <summary>
         /// 統一處理解決未登入/無權限時，彈出訊息並導向登入頁
         /// </summary>
-        private void RedirectToLogin(ActionExecutingContext context, string message)
+        private static void RedirectToLogin(ActionExecutingContext context, string message)
         {
             var controller = context.Controller as Controller;
             if (controller != null)

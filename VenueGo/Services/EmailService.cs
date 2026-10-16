@@ -1,7 +1,7 @@
 ﻿using System.Net;
 using System.Net.Mail;
 using Microsoft.Extensions.Options;
-using VenueGo.Models;
+using VenueGo.Dtos;
 using VenueGo.Services;
 namespace VenueGo.Services
 {

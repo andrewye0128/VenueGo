@@ -1,6 +1,6 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using VenueGo.Constants;
-using VenueGo.Helpers;
+using VenueGo.Filters;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
@@ -22,7 +22,7 @@ namespace VenueGo.Controllers
     /// 不要再把資料庫查詢或業務規則寫回來。
     /// </para>
     /// </summary>
-    [EmployeeAuthorize()]
+    [EmployeeAuthorizeFilters()]
     public class MemberController : Controller
     {
         private readonly IMemberAccountService _memberService;
@@ -65,7 +65,7 @@ namespace VenueGo.Controllers
         }
 
         // POST: Member/UpdateMemberStatus (變更會員狀態，如停權/啟用)
-        [EmployeeAuthorize(RoleNames.Admin)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin)]
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UpdateMemberStatus(int userId, string status)
@@ -85,7 +85,7 @@ namespace VenueGo.Controllers
         }
 
         // POST: Member/ResetMemberPassword
-        [EmployeeAuthorize(RoleNames.Admin)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin)]
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ResetMemberPassword(int userId)
@@ -106,7 +106,7 @@ namespace VenueGo.Controllers
         }
 
         // POST: Member/UnlockAccount
-        [EmployeeAuthorize(RoleNames.Admin)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin)]
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UnlockAccount(int userId)
@@ -140,7 +140,7 @@ namespace VenueGo.Controllers
         #region 2. 會員升格為員工
 
         // GET: Member/ConvertToEmployee/5
-        [EmployeeAuthorize(RoleNames.Admin)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin)]
         public async Task<IActionResult> ConvertToEmployee(int id)
         {
             var result = await _employeeService.GetConvertToEmployeeFormAsync(id);
@@ -160,7 +160,7 @@ namespace VenueGo.Controllers
         }
 
         // POST: Member/ConvertToEmployee
-        [EmployeeAuthorize(RoleNames.Admin)]
+        [EmployeeAuthorizeFilters(RoleNames.Admin)]
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> ConvertToEmployee(ConvertEmployeeViewModel model)

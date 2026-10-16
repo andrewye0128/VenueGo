@@ -28,7 +28,6 @@ namespace VenueGo.Services.Auth
             string ipAddress)
         {
             var normalizedEmail = email.Trim().ToLowerInvariant();
-
             var user = await _db.Users
                 .FirstOrDefaultAsync(u =>
                     u.Email.ToLower() == normalizedEmail &&
@@ -37,6 +36,23 @@ namespace VenueGo.Services.Auth
             // 帳號不存在時，不回傳 Token
             if (user == null)
             {
+                return null;
+            }
+
+            // 使用統一的時間來源，避免同一個方法內時間不一致
+            var now = _time.Now;
+
+            // 同一個會員帳號 2 分鐘內只能申請一次
+            var cooldownStart = now.AddMinutes(-2);
+
+            var hasRecentRequest = await _db.PasswordResetTokens
+                .AnyAsync(t =>
+                    t.UserId == user.UserId &&
+                    t.CreatedAt > cooldownStart);
+
+            if (hasRecentRequest)
+            {
+                // 回傳 null，不建立新 Token，也不影響原本的重設連結
                 return null;
             }
 
@@ -57,19 +73,19 @@ namespace VenueGo.Services.Auth
                 UserId = user.UserId,
                 TokenHash = tokenHash,
                 IpAddress = ipAddress.Length > MaxIpAddressLength ? ipAddress[..MaxIpAddressLength] : ipAddress,
-                ExpiresAt = _time.Now.AddMinutes(30),
+                ExpiresAt = now.AddMinutes(30),
                 UsedAt = null,
-                CreatedAt = _time.Now
+                CreatedAt = now
             };
 
             // [補強] 同一個帳號重複申請時，讓先前還沒用過的連結全部失效，同一時間只有「最新一封」有效。
             // 原本每申請一次就多一組 30 分鐘內都能用的連結，被盜用的風險面也跟著放大。
             // （沒有「已撤銷」欄位，所以沿用 UsedAt 標記為已失效。）
-            var now = _time.Now;
-            var staleTokens = await _db.PasswordResetTokens
-                .Where(t => t.UserId == user.UserId && t.UsedAt == null && t.ExpiresAt > now)
-                .ToListAsync();
-            foreach (var stale in staleTokens) stale.UsedAt = now;
+          
+            //var staleTokens = await _db.PasswordResetTokens
+            //    .Where(t => t.UserId == user.UserId && t.UsedAt == null && t.ExpiresAt > now)
+            //    .ToListAsync();
+            //foreach (var stale in staleTokens) stale.UsedAt = now;
 
             _db.PasswordResetTokens.Add(resetToken);
 
@@ -188,6 +204,104 @@ namespace VenueGo.Services.Auth
                 .Where(t => t.UserId == user.UserId && t.UsedAt == null && t.TokenId != tokenRecord.TokenId)
                 .ToListAsync();
             foreach (var other in otherTokens) other.UsedAt = _time.Now;
+
+            await _db.SaveChangesAsync();
+
+            return true;
+        }
+
+        // 郵件寄送成功後，確認 Token 並使其他未使用的 Token 失效
+        public async Task<bool> ConfirmResetEmailSentAsync(
+            string email,
+            string rawToken)
+        {
+            var normalizedEmail = email.Trim().ToLowerInvariant();
+
+            var user = await _db.Users
+                .FirstOrDefaultAsync(u =>
+                    u.Email.ToLower() == normalizedEmail &&
+                    u.Status == UserStatuses.Active);
+
+            if (user == null)
+            {
+                return false;
+            }
+
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+
+            var hashBytes = sha256.ComputeHash(
+                System.Text.Encoding.UTF8.GetBytes(rawToken));
+
+            var tokenHash = Convert.ToBase64String(hashBytes);
+
+            var now = _time.Now;
+
+            var currentToken = await _db.PasswordResetTokens
+                .FirstOrDefaultAsync(t =>
+                    t.UserId == user.UserId &&
+                    t.TokenHash == tokenHash &&
+                    t.UsedAt == null &&
+                    t.ExpiresAt > now);
+
+            if (currentToken == null)
+            {
+                return false;
+            }
+
+            var otherTokens = await _db.PasswordResetTokens
+                .Where(t =>
+                    t.UserId == user.UserId &&
+                    t.TokenHash != tokenHash &&
+                    t.UsedAt == null)
+                .ToListAsync();
+
+            foreach (var token in otherTokens)
+            {
+                token.UsedAt = now;
+            }
+
+            await _db.SaveChangesAsync();
+
+            return true;
+        }
+
+
+        // 郵件寄送失敗時，取消本次新建立的 Token
+        public async Task<bool> CancelResetTokenAsync(
+            string email,
+            string rawToken)
+        {
+            var normalizedEmail = email.Trim().ToLowerInvariant();
+
+            var user = await _db.Users
+                .FirstOrDefaultAsync(u =>
+                    u.Email.ToLower() == normalizedEmail &&
+                    u.Status == UserStatuses.Active);
+
+            if (user == null)
+            {
+                return false;
+            }
+
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+
+            var hashBytes = sha256.ComputeHash(
+                System.Text.Encoding.UTF8.GetBytes(rawToken));
+
+            var tokenHash = Convert.ToBase64String(hashBytes);
+
+            var token = await _db.PasswordResetTokens
+                .FirstOrDefaultAsync(t =>
+                    t.UserId == user.UserId &&
+                    t.TokenHash == tokenHash &&
+                    t.UsedAt == null);
+
+            if (token == null)
+            {
+                return false;
+            }
+
+            token.UsedAt = _time.Now;
 
             await _db.SaveChangesAsync();
 

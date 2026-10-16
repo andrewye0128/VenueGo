@@ -15,7 +15,8 @@ const props = defineProps({
   summary: { type: Object, default: null },
 });
 
-const emit = defineEmits(["clear"]);
+// clear：清除選擇；next：按「下一步：填寫資料」（換頁由頁面處理，這個元件不知道要帶哪些參數）
+const emit = defineEmits(["clear", "next"]);
 
 // 底部那一條要用的簡短資訊
 const total = computed(() => props.summary?.slots.reduce((sum, s) => sum + s.unitPrice, 0) ?? 0);
@@ -25,9 +26,6 @@ const timeRange = computed(() => {
   if (!slots?.length) return "";
   return `${slots[0].slotTime}–${slotEndTime(slots[slots.length - 1].slotTime)}`;
 });
-
-// 階段 1：還不能填資料，「下一步」先停用（階段 2 再開放）
-const NEXT_DISABLED_HINT = "填寫資料功能製作中";
 
 // ── 手機抽屜 ──
 const drawerOpen = ref(false);
@@ -61,12 +59,18 @@ function clearAndClose() {
   drawerOpen.value = false;
   emit("clear");
 }
+
+function nextAndClose() {
+  drawerOpen.value = false;
+  emit("next");
+}
 </script>
 
 <template>
-  <!-- ── 電腦：右側欄 ── -->
+  <!-- ── 電腦：右側欄 ──
+       top-32（128px）：頁首 AppHeader 也是 sticky（約 117px 高），要固定在頁首下方，不然會被蓋住 -->
   <div
-    class="hidden rounded border border-neutral-border bg-neutral-surface p-4 lg:sticky lg:top-4 lg:block"
+    class="hidden rounded border border-neutral-border bg-neutral-surface p-4 lg:sticky lg:top-32 lg:block"
   >
     <h2 class="mb-3 font-semibold text-neutral-text-primary">已選時段</h2>
 
@@ -75,8 +79,10 @@ function clearAndClose() {
     </p>
     <BookingSummaryDetails v-else :summary="summary" />
 
-    <UButton color="action" block disabled class="mt-4">下一步：填寫資料</UButton>
-    <p class="mt-1 text-center text-xs text-neutral-text-secondary">{{ NEXT_DISABLED_HINT }}</p>
+    <!-- 還沒選時段時停用：上面已經寫了「尚未選擇時段」，不用另外說明原因 -->
+    <UButton color="action" block :disabled="!summary" class="mt-4" @click="emit('next')">
+      下一步：填寫資料
+    </UButton>
     <UButton
       v-if="summary"
       color="primary"
@@ -118,7 +124,7 @@ function clearAndClose() {
         <UIcon name="i-mdi-chevron-up" class="size-5 shrink-0 text-brand-primary" />
       </button>
       <UButton color="primary" variant="ghost" @click="emit('clear')">清除</UButton>
-      <UButton color="action" disabled :title="NEXT_DISABLED_HINT">下一步</UButton>
+      <UButton color="action" @click="emit('next')">下一步</UButton>
     </div>
   </div>
 
@@ -139,9 +145,9 @@ function clearAndClose() {
     <template #footer>
       <div class="grid grid-cols-2 gap-3">
         <UButton color="primary" variant="outline" block @click="clearAndClose">清除選擇</UButton>
-        <UButton color="action" block disabled>下一步：填寫資料</UButton>
+        <!-- 先關抽屜再換頁：抽屜關閉動畫還沒跑完就換頁，下一頁可能還鎖著捲動 -->
+        <UButton color="action" block @click="nextAndClose">下一步：填寫資料</UButton>
       </div>
-      <p class="mt-1 text-center text-xs text-neutral-text-secondary">{{ NEXT_DISABLED_HINT }}</p>
     </template>
   </UDrawer>
 </template>

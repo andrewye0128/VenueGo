@@ -28,12 +28,20 @@ namespace VenueGo.Controllers.Api.ReservationApi
     [AllowAnonymous]   // 刻意不用登入（寫出來，避免被誤以為是忘了加 [Authorize]）
     public class BookingApiController : ControllerBase
     {
+        // 
         private readonly IBookingAvailabilityService _booking;
 
+        // 
+        private readonly IMemberBookingService _memberBooking;
+
         /// <param name="booking">前台場地預約頁的查詢服務。</param>
-        public BookingApiController(IBookingAvailabilityService booking)
+        /// <param name="memberBooking">會員預約服務（試算）。</param>   
+        public BookingApiController(
+            IBookingAvailabilityService booking,
+            IMemberBookingService memberBooking)                       
         {
             _booking = booking;
+            _memberBooking = memberBooking;                             
         }
 
         /// <summary>某天各場地的時段</summary>
@@ -101,6 +109,43 @@ namespace VenueGo.Controllers.Api.ReservationApi
             var data = await _booking.GetDaySummariesAsync(
                 from, to, sportTypeId, period, cancellationToken);
             return Ok(ApiResult<IReadOnlyList<DayAvailabilitySummaryDto>>.Ok(data));
+        }
+
+
+        /// <summary>試算：時段還能不能訂、金額、能用哪些付款方式</summary>
+        /// <remarks>
+        /// 前台「填寫資料」頁一打開就呼叫。不寫入任何資料。
+        ///
+        /// 不需要登入：試算只回答場地、價格、付款規則，不會用到會員資料
+        /// （這個 Controller 整個是 [AllowAnonymous]，真正寫入的 POST /api/reservations 才需要登入）。
+        ///
+        /// slots 用逗號分隔，例如 17:00,18:00（跟填寫頁網址的格式一樣）。
+        /// paymentOptions 的 dueAt 是「如果現在送出」的期限，只是參考；建立預約時會重新計算。
+        /// </remarks>
+        /// <param name="venueId">場地</param>
+        /// <param name="date">使用日期（yyyy-MM-dd），必須在今天～30 天後</param>
+        /// <param name="slots">時段的開始時間，用逗號分隔，例如 17:00,18:00</param>
+        /// <param name="cancellationToken">使用者離開頁面時取消查詢</param>
+        /// <response code="200">可以預約，回傳金額與付款方式</response>
+        /// <response code="400">DateOutOfRange、VenueNotBookable、SlotUnavailable、InvalidInput、ValidationFailed（缺少參數）</response>
+        [HttpGet("quote")]
+        [ProducesResponseType<ApiResult<BookingQuoteDto>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status400BadRequest)]
+        public async Task<IActionResult> GetQuote(
+            [FromQuery, BindRequired] int venueId,
+            [FromQuery, BindRequired] DateOnly date,
+            [FromQuery, BindRequired] string slots,
+            CancellationToken cancellationToken)
+        {
+            // "17:00,18:00" → ["17:00", "18:00"]；空白、多打的逗號都去掉，格式檢查交給 Service
+            var slotTexts = slots.Split(',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            var result = await _memberBooking.GetQuoteAsync(venueId, date, slotTexts, cancellationToken);
+
+            return result.IsSuccess
+                ? Ok(ApiResult<BookingQuoteDto>.Ok(result.Data!))
+                : BadRequest(ApiResult.Fail(result.Message!, result.ErrorCode));
         }
     }
 }

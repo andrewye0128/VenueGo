@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Models.Entities;
 
@@ -30,25 +31,43 @@ namespace VenueGo.Models.VenueModels
 
 
         //回傳全部7天的營業時間設定 >> List,依DayOfWeek排序(星期日排最前面,對應System.DayOfWeek的0)
+        //後台(營業時間、價格規則、場地頁)使用
         public List<CWeekBusinessHourWrap> QueryAll()
         {
-            List<CWeekBusinessHourWrap> list = new List<CWeekBusinessHourWrap>();
-
             using (dbVenueContext db = new dbVenueContext())
             {
                 var datas = from t in db.WeekBusinessHours
                             orderby t.DayOfWeek
                             select t;
 
-                //將撈取資料放回 list
-                foreach (var data in datas)
-                {
-                    CWeekBusinessHourWrap wrap = new CWeekBusinessHourWrap();
-                    wrap.weekBusinessHour = data;
-                    list.Add(wrap);
-                }
+                return ToWrapList(datas.ToList());
             }
+        }
 
+        //QueryAll 的非同步版本 >> 前台 API(場館資訊)使用,查詢內容與排序跟 QueryAll 相同
+        public async Task<List<CWeekBusinessHourWrap>> QueryAllAsync()
+        {
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var datas = from t in db.WeekBusinessHours
+                            orderby t.DayOfWeek
+                            select t;
+
+                //await:等資料庫回應的期間,執行緒可以先去處理其他請求
+                return ToWrapList(await datas.ToListAsync());
+            }
+        }
+
+        //查詢結果逐筆包成 Wrap(同步、非同步版本共用)
+        private static List<CWeekBusinessHourWrap> ToWrapList(List<WeekBusinessHour> datas)
+        {
+            List<CWeekBusinessHourWrap> list = new List<CWeekBusinessHourWrap>();
+            foreach (WeekBusinessHour data in datas)
+            {
+                CWeekBusinessHourWrap wrap = new CWeekBusinessHourWrap();
+                wrap.weekBusinessHour = data;
+                list.Add(wrap);
+            }
             return list;
         }
 

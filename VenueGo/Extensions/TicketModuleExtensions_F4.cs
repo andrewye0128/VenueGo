@@ -18,6 +18,7 @@ namespace VenueGo.Extensions
             services.AddScoped<IEntryTicketService, EntryTicketService>();
             services.AddScoped<ITicketManualService, TicketManualService>();
             services.AddScoped<IMemberTicketQueryService, MemberTicketQueryService>();
+            services.AddScoped<CEntryTicketFactory>();
             services.AddScoped<CCheckInLogFactory>();
             services.AddScoped<CTicketStatusLogFactory>();
             services.AddScoped<CTicketViewModelFactory>();

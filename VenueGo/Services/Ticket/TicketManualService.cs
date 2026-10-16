@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Models.CheckinModels;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Enums;
 using VenueGo.Services.CheckIn;
@@ -11,12 +12,13 @@ namespace VenueGo.Services.Ticket
     {
         private readonly dbVenueContext _db;
         private readonly ITimeService _time;
+        private readonly CEntryTicketFactory _entryticket;
 
-
-        public TicketManualService(dbVenueContext db, ITimeService time)
+        public TicketManualService(dbVenueContext db, ITimeService time, CEntryTicketFactory entryticket)
         {
             _time = time;
             _db = db;
+            _entryticket = entryticket;
         }
 
         public async Task<CheckInResult> CancelAsync(int ticketId, int operatorId, TicketManualLogReasonType reasonType, string? reason)
@@ -125,13 +127,14 @@ namespace VenueGo.Services.Ticket
 
         public async Task<TicketTransferResult> TransferAsync(int ticketId, int operatorId, string email, TicketManualLogReasonType reasonType, string? reason)
         {
+
             var ticket = await _db.EntryTickets.FirstOrDefaultAsync(t => t.TicketId == ticketId);
             if(ticket == null)
             {
                 return TicketTransferResult.Fail("找不到這張票券");
             }
 
-            if(ticket.Status != (byte)EntryTicketStatus.Valid)
+            if (ticket.Status != (byte)EntryTicketStatus.Valid)
             {
                 return TicketTransferResult.Fail("只有[有效]的票券可以轉讓");
             }
@@ -142,20 +145,20 @@ namespace VenueGo.Services.Ticket
                 return TicketTransferResult.Fail("找不到這個 Email 的會員");
             }
 
-            if(ticket.UserId == newUser.UserId)
+            if (ticket.UserId == newUser.UserId)
             {
                 return TicketTransferResult.Fail("對方已是這張票券的持有人");
             }
 
             //同訂單一人只能認領一張
             bool alreadyReceived = await _db.EntryTickets.AnyAsync(t => t.OrderId == ticket.OrderId && t.ReceivedUserId == newUser.UserId);
-            if(alreadyReceived)
+            if (alreadyReceived)
             {
                 return TicketTransferResult.Fail("對方已在這筆訂單認領過票券");
             }
 
             byte status = ticket.Status;
-            TicketHolderChange.Apply(ticket, newUser.UserId);
+            _entryticket.ChangeHolder(ticket, newUser.UserId);
 
             //將轉讓結果 -> 新持有人寫到備註
             string logReason = $"轉讓給 {email.Trim()}";

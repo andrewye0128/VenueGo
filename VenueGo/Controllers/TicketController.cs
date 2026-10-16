@@ -20,24 +20,23 @@ namespace VenueGo.Controllers
         //private readonly dbVenueContext _db;
         private readonly ICheckInService _checkInService;
         private readonly ITicketManualService _ticketManualService;
-        private readonly CTicketViewModelFactory _ticketFactory;
-
+        private readonly CEntryTicketFactory _ticketFactory;
+        private readonly CTicketViewModelFactory _viewFactory;
         private readonly CTicketStatusLogFactory _ticketStatusLogFactory;
-
         private readonly COvertimeChargeFactory _overtimeChargeFactory;
-
         private int? GetCurrentUserId()
         {
             var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
             return int.TryParse(value, out var id) ? id : null;
         }
 
-        public TicketController(ICheckInService checkInService, ITicketManualService ticketManualService, 
-            CTicketViewModelFactory ticketFactory, CTicketStatusLogFactory ticketStatusLogFactory, COvertimeChargeFactory overtimeChargeFactory)
+        public TicketController(ICheckInService checkInService, ITicketManualService ticketManualService, CEntryTicketFactory ticketFactory,
+            CTicketViewModelFactory viewFactory, CTicketStatusLogFactory ticketStatusLogFactory, COvertimeChargeFactory overtimeChargeFactory)
         {
             _checkInService = checkInService;
             _ticketManualService = ticketManualService;
             _ticketFactory = ticketFactory;
+            _viewFactory = viewFactory;
             _ticketStatusLogFactory = ticketStatusLogFactory;
             _overtimeChargeFactory = overtimeChargeFactory;
         }
@@ -57,17 +56,17 @@ namespace VenueGo.Controllers
             }
 
             //防呆
-            DateOnly targetDate = selectedDate ?? _ticketFactory.GetToday();
+            DateOnly targetDate = selectedDate ?? _viewFactory.GetToday();
 
             var vm = new TicketIndexViewModel
             {
-                Today = _ticketFactory.GetToday(),
+                Today = _viewFactory.GetToday(),
                 SelectedDate = targetDate,
                 Keyword = txtKeyword,
                 SelectedVenueId = venueId,
                 SelectedStatus = status,
                 // 使用<SelectListItem>接收下拉選單內容並用asp-items綁定了CTicketViewModelFactory裡搜尋場地的結果
-                AvailableVenues = _ticketFactory.GetVenueOptions(),
+                AvailableVenues = _viewFactory.GetVenueOptions(),
                 Tickets = _ticketFactory.SearchTickets(targetDate, txtKeyword, venueId, status)
             };
 
@@ -79,7 +78,7 @@ namespace VenueGo.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> QuickCheckIn(int id)
         {
-            bool isSuccess = await _ticketFactory.UpdateTicketInStatus(id);
+            bool isSuccess = await _viewFactory.UpdateTicketInStatus(id);
 
             if (isSuccess)
             {
@@ -96,7 +95,7 @@ namespace VenueGo.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> QuickCheckOut(int id)
         {
-            bool isSuccess = await _ticketFactory.UpdateTicketOutStatus(id);
+            bool isSuccess = await _viewFactory.UpdateTicketOutStatus(id);
 
             if (isSuccess)
             {
@@ -115,14 +114,14 @@ namespace VenueGo.Controllers
         {
             //await _checkInService.SettleTicketAsync(id);
             // 進頁面先結算，狀態才是最新的, 改為自動排程
-            var vm = _ticketFactory.GetDetailTab(id);
+            var vm = _viewFactory.GetDetailTab(id);
             if (vm == null) return NotFound();
             return View(vm);
         }
 
         public IActionResult ScanLog(int id)
         {
-            var vm = _ticketFactory.GetScanTab(id);
+            var vm = _viewFactory.GetScanTab(id);
             if (vm == null) return NotFound();
             return View(vm);
         }
@@ -130,7 +129,7 @@ namespace VenueGo.Controllers
         // 分頁 3:異動紀錄(取消/轉失效 + 異動紀錄)
         public IActionResult ManualLog(int id)
         {
-            var vm = _ticketFactory.GetManualTab(id);
+            var vm = _viewFactory.GetManualTab(id);
             if (vm == null) return NotFound();
             return View(vm);
         }
@@ -315,7 +314,7 @@ namespace VenueGo.Controllers
 
         public async Task<IActionResult> OvertimeCheckout(int id)
         {
-            var vm = _ticketFactory.GetOvertimeTab(id);
+            var vm = _viewFactory.GetOvertimeTab(id);
             if (vm == null) return NotFound();
             return View(vm);
         }
@@ -364,7 +363,7 @@ namespace VenueGo.Controllers
 
         public async Task<IActionResult> QrImage(int id)
         {
-            var qrtoken = await _ticketFactory.GetQrtokenAsync(id);
+            var qrtoken = await _viewFactory.GetQrtokenAsync(id);
             if (qrtoken == null) return NotFound();
 
             var pngBytes = QrCodeHelper.GeneratePng(qrtoken);

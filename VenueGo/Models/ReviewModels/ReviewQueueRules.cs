@@ -29,15 +29,18 @@ namespace VenueGo.Models.ReviewModels
         //  不會出現「清單改了、數量忘了改」的情況。
 
         /// <summary>未讀：還沒有員工展開過。</summary>
-        public static readonly Expression<Func<ReviewMain, bool>> UnreadRule =
+        // 10/15 Reviews 重構，原本：public static readonly Expression<Func<ReviewMain, bool>> UnreadRule =
+        public static readonly Expression<Func<Review, bool>> UnreadRule =
             r => r.ReadAt == null;
 
         /// <summary>待回覆：讀過了，但還沒回覆、也沒標成垃圾。</summary>
-        public static readonly Expression<Func<ReviewMain, bool>> PendingRule =
+        // 10/15 Reviews 重構，原本：public static readonly Expression<Func<ReviewMain, bool>> PendingRule =
+        public static readonly Expression<Func<Review, bool>> PendingRule =
             r => r.ReadAt != null && r.RepliedAt == null && r.SpamMarkedAt == null;
 
         /// <summary>垃圾：被員工標記過。</summary>
-        public static readonly Expression<Func<ReviewMain, bool>> SpamRule =
+        // 10/15 Reviews 重構，原本：public static readonly Expression<Func<ReviewMain, bool>> SpamRule =
+        public static readonly Expression<Func<Review, bool>> SpamRule =
             r => r.SpamMarkedAt != null;
 
         /// <summary>
@@ -48,17 +51,20 @@ namespace VenueGo.Models.ReviewModels
         /// 編譯有成本，所以只在類別載入時做一次。
         /// </para>
         /// </summary>
-        private static readonly Func<ReviewMain, bool> IsPending = PendingRule.Compile();
+        // 10/15 Reviews 重構，原本：private static readonly Func<ReviewMain, bool> IsPending = PendingRule.Compile();
+        private static readonly Func<Review, bool> IsPending = PendingRule.Compile();
 
         // ════════════════════════════════════════════════════════
         //  單筆操作的前置條件（已經從資料庫拿出來的物件用這兩個）
         // ════════════════════════════════════════════════════════
 
         /// <summary>還沒讀過才能標記已讀。</summary>
-        public static bool CanMarkRead(ReviewMain r) => r.ReadAt == null;
+        // 10/15 Reviews 重構，原本：public static bool CanMarkRead(ReviewMain r) => r.ReadAt == null;
+        public static bool CanMarkRead(Review r) => r.ReadAt == null;
 
         /// <summary>在「待回覆」清單裡的才能回覆、標記垃圾、置頂。</summary>
-        public static bool CanHandle(ReviewMain r) => IsPending(r);
+        // 10/15 Reviews 重構，原本：public static bool CanHandle(ReviewMain r) => IsPending(r);
+        public static bool CanHandle(Review r) => IsPending(r);
 
         // ════════════════════════════════════════════════════════
         //  查詢字串的值不可信任，不認得的一律改回預設
@@ -126,7 +132,8 @@ namespace VenueGo.Models.ReviewModels
         /// 還沒處理的評論放了多久。已回覆或已標垃圾的不提醒。
         /// <para>剛好滿 OverdueWarnDays 天就算「快逾期」，剛好滿 PublicBufferDays 天就算「已逾期」。</para>
         /// </summary>
-        public static OverdueLevel GetOverdueLevel(ReviewMain r, DateTime now)
+        // 10/15 Reviews 重構，原本：public static OverdueLevel GetOverdueLevel(ReviewMain r, DateTime now)
+        public static OverdueLevel GetOverdueLevel(Review r, DateTime now)
         {
             if (r.RepliedAt != null || r.SpamMarkedAt != null) return OverdueLevel.None;
 
@@ -140,13 +147,15 @@ namespace VenueGo.Models.ReviewModels
         //  寫入：只改實體的值，SaveChanges 由 Action 呼叫
         // ════════════════════════════════════════════════════════
 
-        public static void ApplyRead(ReviewMain r, int employeeId, DateTime now)
+        // 10/15 Reviews 重構，原本：public static void ApplyRead(ReviewMain r, int employeeId, DateTime now)
+        public static void ApplyRead(Review r, int employeeId, DateTime now)
         {
             r.ReadAt = now;
             r.ReadByEmployeeId = employeeId;
         }
 
-        public static void ApplyReply(ReviewMain r, string content, int employeeId, DateTime now)
+        // 10/15 Reviews 重構，原本：public static void ApplyReply(ReviewMain r, string content, int employeeId, DateTime now)
+        public static void ApplyReply(Review r, string content, int employeeId, DateTime now)
         {
             r.ReplyContent = content;
             r.RepliedAt = now;
@@ -154,7 +163,8 @@ namespace VenueGo.Models.ReviewModels
             r.IsPinned = false;     // 回覆後就離開待回覆清單，置頂沒有意義了
         }
 
-        public static void ApplySpam(ReviewMain r, byte reason, int employeeId, DateTime now)
+        // 10/15 Reviews 重構，原本：public static void ApplySpam(ReviewMain r, byte reason, int employeeId, DateTime now)
+        public static void ApplySpam(Review r, byte reason, int employeeId, DateTime now)
         {
             r.SpamMarkedAt = now;
             r.SpamMarkedByEmployeeId = employeeId;

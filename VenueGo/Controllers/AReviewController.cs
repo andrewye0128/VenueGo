@@ -43,7 +43,8 @@ namespace VenueGo.Controllers
         /// 回傳 null 代表「找得到、狀態也對，繼續」。
         /// rule 傳入上面的 CanMarkRead 或 CanHandle（把方法當參數傳進來）。
         /// </summary>
-        private IActionResult? RejectIfCannot(ReviewMain? review, Func<ReviewMain, bool> rule)
+        // 10/15 Reviews 重構，原本：private IActionResult? RejectIfCannot(ReviewMain? review, Func<ReviewMain, bool> rule)
+        private IActionResult? RejectIfCannot(Review? review, Func<Review, bool> rule)
         {
             if (review == null)
                 return NotFound(ApiResult.Fail("找不到這則評論", "NotFound"));
@@ -60,10 +61,13 @@ namespace VenueGo.Controllers
         //  第二區：組 ViewModel
         // ════════════════════════════════════════════════════════
 
-        private static IQueryable<ReviewMain> ApplySource(IQueryable<ReviewMain> q, string source) => source switch
+        // 10/15 Reviews 重構，原本：private static IQueryable<ReviewMain> ApplySource(IQueryable<ReviewMain> q, string source) => source switch
+        private static IQueryable<Review> ApplySource(IQueryable<Review> q, string source) => source switch
         {
-            QueueSource.Visit   => q.Where(r => r.ReviewPerVisitId != null),
-            QueueSource.Booking => q.Where(r => r.ReviewPerBookingId != null),
+            // 10/15 Reviews 重構，原本：QueueSource.Visit   => q.Where(r => r.ReviewPerVisitId != null),
+            QueueSource.Visit   => q.Where(r => r.ReviewKind == (byte)ReviewKindCode.Visit),
+            // 10/15 Reviews 重構，原本：QueueSource.Booking => q.Where(r => r.ReviewPerBookingId != null),
+            QueueSource.Booking => q.Where(r => r.ReviewKind == (byte)ReviewKindCode.Booking),
             _                   => q
         };
 
@@ -76,16 +80,32 @@ namespace VenueGo.Controllers
         /// 用 Any(...) 而不是先把 id 查出來再 Contains：
         /// EF Core 會把它翻成 SQL 的 EXISTS 子查詢，一次查完，不必先把一堆 id 拉回記憶體。
         /// </summary>
-        private IQueryable<ReviewMain> ApplyVenue(IQueryable<ReviewMain> q, int? sportTypeId, int? venueId)
+        // 10/15 Reviews 重構，原本：private IQueryable<ReviewMain> ApplyVenue(IQueryable<ReviewMain> q, int? sportTypeId, int? venueId)
+        private IQueryable<Review> ApplyVenue(IQueryable<Review> q, int? sportTypeId, int? venueId)
         {
+            // 10/15 Reviews 重構，原本：
+            // if (venueId != null)
+            //     return q.Where(r => r.ReviewPerVisitId != null
+            //                      && _db.ReviewPerVisits.Any(v => v.ReviewPerVisitId == r.ReviewPerVisitId
+            //                                                   && v.VenueId == venueId));
+            // if (sportTypeId != null)
+            //     return q.Where(r => r.ReviewPerVisitId != null
+            //                      && _db.ReviewPerVisits.Any(v => v.ReviewPerVisitId == r.ReviewPerVisitId
+            //                                                   && v.SportTypeId == sportTypeId));
+            // return q;   // 兩個都沒選：不篩
+            // 10/15：評論身上就有 OrderId，經「訂單 → 預約 → 場地」篩。
+            //   仍然只篩現場評論，維持原本的行為（畫面上那行說明不用改）；預約評論其實也查得到場地，之後想一起篩，拿掉 ReviewKind 那個條件就好。
             if (venueId != null)
-                return q.Where(r => r.ReviewPerVisitId != null
-                                 && _db.ReviewPerVisits.Any(v => v.ReviewPerVisitId == r.ReviewPerVisitId
-                                                              && v.VenueId == venueId));
+                return q.Where(r => r.ReviewKind == (byte)ReviewKindCode.Visit
+                                 && _db.Orders.Any(o => o.OrderId == r.OrderId
+                                                     && _db.Reservations.Any(rs => rs.ReservationId == o.ReservationId
+                                                                                && rs.VenueId == venueId)));
             if (sportTypeId != null)
-                return q.Where(r => r.ReviewPerVisitId != null
-                                 && _db.ReviewPerVisits.Any(v => v.ReviewPerVisitId == r.ReviewPerVisitId
-                                                              && v.SportTypeId == sportTypeId));
+                return q.Where(r => r.ReviewKind == (byte)ReviewKindCode.Visit
+                                 && _db.Orders.Any(o => o.OrderId == r.OrderId
+                                                     && _db.Reservations.Any(rs => rs.ReservationId == o.ReservationId
+                                                                                && _db.Venues.Any(v => v.VenueId == rs.VenueId
+                                                                                                    && v.SportTypeId == sportTypeId))));
             return q;   // 兩個都沒選：不篩
         }
 
@@ -102,8 +122,10 @@ namespace VenueGo.Controllers
         /// 順帶一提，這個篩選也是搜尋的效能保險：先用 CreatedAt 的索引把範圍
         /// 縮小，後面的 LIKE 就只需要比對範圍內那些列，而不是整張表。
         /// </summary>
-        private static IQueryable<ReviewMain> ApplyRange(
-            IQueryable<ReviewMain> q, string range, bool byRepliedAt, DateTime todayStart)
+        // 10/15 Reviews 重構，原本：private static IQueryable<ReviewMain> ApplyRange(
+        private static IQueryable<Review> ApplyRange(
+            // 10/15 Reviews 重構，原本：IQueryable<ReviewMain> q, string range, bool byRepliedAt, DateTime todayStart)
+            IQueryable<Review> q, string range, bool byRepliedAt, DateTime todayStart)
         {
             int? days = QueueRange.DaysOf(range);
             if (days == null) return q;          // 全部：不篩
@@ -126,8 +148,10 @@ namespace VenueGo.Controllers
         ///    所以直接在 Lambda 裡用 kw 不會發生「所有條件都變成最後一個關鍵字」
         ///    的閉包陷阱，不需要另外複製一份。
         /// </summary>
-        private IQueryable<ReviewMain> ApplySearch(
-            IQueryable<ReviewMain> q, string field, List<string> keywords)
+        // 10/15 Reviews 重構，原本：private IQueryable<ReviewMain> ApplySearch(
+        private IQueryable<Review> ApplySearch(
+            // 10/15 Reviews 重構，原本：IQueryable<ReviewMain> q, string field, List<string> keywords)
+            IQueryable<Review> q, string field, List<string> keywords)
         {
             if (keywords.Count == 0) return q;
 
@@ -146,19 +170,22 @@ namespace VenueGo.Controllers
 
                         var orderIds = orderQuery.Select(o => o.OrderId).ToList();
 
-                        var bookingIds = _db.ReviewPerBookings
-                                            .Where(b => orderIds.Contains(b.OrderId))
-                                            .Select(b => b.ReviewPerBookingId)
-                                            .ToList();
+                        // 10/15 Reviews 重構，原本：
+                        // var bookingIds = _db.ReviewPerBookings
+                        //                     .Where(b => orderIds.Contains(b.OrderId))
+                        //                     .Select(b => b.ReviewPerBookingId)
+                        //                     .ToList();
 
-                        // 10/9：現場憑證本身就有 OrderId，不用再透過票券的 QRToken 轉一手
-                        var visitIds = _db.ReviewPerVisits
-                                          .Where(v => orderIds.Contains(v.OrderId))
-                                          .Select(v => v.ReviewPerVisitId)
-                                          .ToList();
-                        return q.Where(r =>
-                            (r.ReviewPerBookingId != null && bookingIds.Contains(r.ReviewPerBookingId.Value))
-                         || (r.ReviewPerVisitId   != null && visitIds.Contains(r.ReviewPerVisitId.Value)));
+                        // // 10/9：現場憑證本身就有 OrderId，不用再透過票券的 QRToken 轉一手
+                        // var visitIds = _db.ReviewPerVisits
+                        //                   .Where(v => orderIds.Contains(v.OrderId))
+                        //                   .Select(v => v.ReviewPerVisitId)
+                        //                   .ToList();
+                        // return q.Where(r =>
+                        //     (r.ReviewPerBookingId != null && bookingIds.Contains(r.ReviewPerBookingId.Value))
+                        //  || (r.ReviewPerVisitId   != null && visitIds.Contains(r.ReviewPerVisitId.Value)));
+                        // 10/15：評論身上就有 OrderId，不用再繞兩種憑證
+                        return q.Where(r => orderIds.Contains(r.OrderId));
                     }
 
                 // ── 處理人員姓名 ──────────────────────────────
@@ -196,7 +223,8 @@ namespace VenueGo.Controllers
         ///   已完成 RepliedAt DESC              回頭查用，最近處理的在上面
         ///   垃圾桶 SpamMarkedAt DESC           最近標記的在上面，方便複查
         /// </summary>
-        private static IQueryable<ReviewMain> ApplyTab(IQueryable<ReviewMain> q, string tab) => tab switch
+        // 10/15 Reviews 重構，原本：private static IQueryable<ReviewMain> ApplyTab(IQueryable<ReviewMain> q, string tab) => tab switch
+        private static IQueryable<Review> ApplyTab(IQueryable<Review> q, string tab) => tab switch
         {
             QueueTab.All     => q.OrderByDescending(r => r.IsPinned)
                                  .ThenBy(r => r.CreatedAt),
@@ -322,7 +350,8 @@ namespace VenueGo.Controllers
         /// ⚠️ SELECT 的欄位必須跟 ReviewRefRow 的屬性一一對應，
         ///    少一個或多一個都是執行期才會爆，不是編譯期。
         /// </summary>
-        private Dictionary<int, ReviewRefRow> LoadRefs(List<ReviewMain> reviews)
+        // 10/15 Reviews 重構，原本：private Dictionary<int, ReviewRefRow> LoadRefs(List<ReviewMain> reviews)
+        private Dictionary<int, ReviewRefRow> LoadRefs(List<Review> reviews)
         {
             if (reviews.Count == 0) return new Dictionary<int, ReviewRefRow>();
 
@@ -331,14 +360,33 @@ namespace VenueGo.Controllers
             // SqlQuery 回傳的是 IQueryable，可以接著用 LINQ 疊條件——
             // EF 會把這段 SQL 當成子查詢包起來，再把 Contains 翻成 IN。
             // 所以 ids 是以參數送出去的，不是字串拼接。
-            return _db.Database
-                      .SqlQuery<ReviewRefRow>($@"
-                          SELECT [ReviewId], [OrderId], [OrderNo], [VenueName], [VenueId],
-[RentStartTime], [UserName],
-                                 [ReadByEmployeeName], [RepliedByEmployeeName],
-                                 [SpamMarkedByEmployeeName]
-                          FROM   dbo.v_ReviewFullInfo")
+            // 10/15 Reviews 重構，原本：
+            // return _db.Database
+            //           .SqlQuery<ReviewRefRow>($@"
+            //               SELECT [ReviewId], [OrderId], [OrderNo], [VenueName], [VenueId],
+            // [RentStartTime], [UserName],
+            //                      [ReadByEmployeeName], [RepliedByEmployeeName],
+            //                      [SpamMarkedByEmployeeName]
+            //               FROM   dbo.v_ReviewFullInfo")
+            //           .Where(x => ids.Contains(x.ReviewId))
+            //           .ToList()
+            //           .ToDictionary(x => x.ReviewId);
+            // 10/15：改讀檢視表 v_ReviewAdmin（Scaffold 進來的實體），欄位對不起來會在編譯期就發現，不用等到執行期。
+            return _db.VReviewAdmins
                       .Where(x => ids.Contains(x.ReviewId))
+                      .Select(x => new ReviewRefRow
+                      {
+                          ReviewId = x.ReviewId,
+                          OrderId = x.OrderId,
+                          OrderNo = x.OrderNo,
+                          VenueName = x.VenueName,
+                          VenueId = x.VenueId,
+                          RentStartTime = x.RentStartTime,
+                          UserName = x.MemberName,
+                          ReadByEmployeeName = x.ReadByEmployeeName,
+                          RepliedByEmployeeName = x.RepliedByEmployeeName,
+                          SpamMarkedByEmployeeName = x.SpamMarkedByEmployeeName,
+                      })
                       .ToList()
                       .ToDictionary(x => x.ReviewId);
 
@@ -361,7 +409,8 @@ namespace VenueGo.Controllers
             //    （STRING_SPLIT 需要 SQL Server 2016 以上，且資料庫相容性層級 130 以上。）
         }
 
-        private static ReviewQueueItemVM BuildItem(ReviewMain r, Dictionary<int, ReviewRefRow> refs, DateTime now)
+        // 10/15 Reviews 重構，原本：private static ReviewQueueItemVM BuildItem(ReviewMain r, Dictionary<int, ReviewRefRow> refs, DateTime now)
+        private static ReviewQueueItemVM BuildItem(Review r, Dictionary<int, ReviewRefRow> refs, DateTime now)
         {
             // 周邊資料全在這一列裡。理論上一定找得到（它就是從 ReviewMain 長出來的），
             // 但用 GetValueOrDefault 比較安全——真的漏掉時是欄位空白，不是整頁 500。
@@ -387,7 +436,8 @@ namespace VenueGo.Controllers
                 MentionsVenue = r.MentionsVenue,
                 MentionsStaff = r.MentionsStaff,
 
-                IsBookingReview = r.ReviewPerBookingId != null,
+                // 10/15 Reviews 重構，原本：IsBookingReview = r.ReviewPerBookingId != null,
+                IsBookingReview = r.ReviewKind == (byte)ReviewKindCode.Booking,
                 VenueName       = x?.VenueName,
                 VenueId         = x?.VenueId,
                 RentStartTime   = x?.RentStartTime,
@@ -544,7 +594,8 @@ namespace VenueGo.Controllers
             DateTime now = _timeService.Now;
 
             // 10/12：時間在未來的評論（時光機撥回來之後）不列出來。員工一點開就會寫入早於建立時間的已讀時間，撞 CHK_ReviewMain_HandleTime_Logic
-            var bySource = ApplyVenue(ApplySource(_db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(now)), s), sport, venue);
+            // 10/15 Reviews 重構，原本：var bySource = ApplyVenue(ApplySource(_db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(now)), s), sport, venue);
+            var bySource = ApplyVenue(ApplySource(_db.Reviews.Where(ReviewTimeline.ReviewHappenedBy(now)), s), sport, venue);
 
             // 分頁上的數字：套用來源、時間、搜尋，但不套用 tab
             //（因為它們本來就是「各個 tab 各有幾則」）。
@@ -644,7 +695,8 @@ namespace VenueGo.Controllers
             if (deny != null) return deny;
 
             // 10/12：時間在未來的評論當成找不到（回 404），不讓它寫入時間錯亂的資料
-            var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
+            // 10/15 Reviews 重構，原本：var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
+            var review = _db.Reviews.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
             if (review != null && review.ReadAt != null)
                 return Ok(ApiResult<bool>.Ok(false));
 
@@ -667,7 +719,8 @@ namespace VenueGo.Controllers
             if (deny != null) return deny;
 
             // 10/12：時間在未來的評論當成找不到（回 404），不讓它寫入時間錯亂的資料
-            var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
+            // 10/15 Reviews 重構，原本：var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
+            var review = _db.Reviews.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
             var reject = RejectIfCannot(review, CanHandle);
             if (reject != null) return reject;
 
@@ -692,7 +745,8 @@ namespace VenueGo.Controllers
                 return BadRequest(ApiResult.Fail($"回覆不可超過 {ReviewPolicy.ReplyMaxLength} 字", "TooLong"));
 
             // 10/12：時間在未來的評論當成找不到（回 404），不讓它寫入時間錯亂的資料
-            var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
+            // 10/15 Reviews 重構，原本：var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
+            var review = _db.Reviews.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
             var reject = RejectIfCannot(review, CanHandle);
             if (reject != null) return reject;
 
@@ -711,7 +765,8 @@ namespace VenueGo.Controllers
                 return BadRequest(ApiResult.Fail("請選擇標記理由", "InvalidReason"));
 
             // 10/12：時間在未來的評論當成找不到（回 404），不讓它寫入時間錯亂的資料
-            var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
+            // 10/15 Reviews 重構，原本：var review = _db.ReviewMains.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
+            var review = _db.Reviews.Where(ReviewTimeline.ReviewHappenedBy(_timeService.Now)).FirstOrDefault(r => r.ReviewId == id);
             var reject = RejectIfCannot(review, CanHandle);
             if (reject != null) return reject;
 

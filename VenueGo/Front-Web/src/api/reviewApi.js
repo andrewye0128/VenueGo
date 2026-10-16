@@ -1,8 +1,9 @@
 // 顧客端評論的 API（規格：《API規格_CReview.md》）
 // 每個函式對應一支端點；頁面只呼叫這裡的函式，不自己拼網址——網址規則只寫在這一個檔案。
 //
-// kind   = "visit"（現場評論，ticket 是憑證 Id＝ReviewPerVisitId）
-//        | "booking"（預約評論，ticket 是 OrderId）
+// kind   = "visit"（現場評論）| "booking"（預約評論）
+// ticket = 訂單 Id（OrderId）。10/15 Reviews 重構起兩種都是訂單 Id（以前現場評論是憑證 Id），
+//          變數名稱沿用，呼叫的頁面不用改。
 // 10/9 起兩種都要會員本人登入（http.js 會自動帶上 JWT）。
 //
 // 共用的 http.js 會自動取出 ApiResult 的 data，所以這裡的函式回傳的就是真正的資料。
@@ -16,6 +17,21 @@ import http from "./http";
 // 萬一哪天格式改了、出現 / 或 ? 之類的字元，網址才不會斷掉。
 function base(kind, ticket) {
   return `/reviews/${kind}/${encodeURIComponent(ticket)}`;
+}
+
+// 首頁顧客評價輪播：[GET] /api/reviews/featured（規格 2-11，10/15）
+// 回傳 { summary, items }：items 最多 12 則，後端已經挑好、打亂順序，照順序顯示就好。
+export async function getFeaturedReviews() {
+  const { data } = await http.get("/reviews/featured");
+  return data;
+}
+
+// 我的預約、我的票券的評論按鈕：[GET] /api/reviews/mine/status（規格 2-12，10/15）
+// 回傳陣列，每筆 { orderId, reservationId, visitAction, visitTicketId, bookingAction }，
+// action 是 "write"（立刻評論）／"view"（查看評論）／null（不顯示）。
+export async function listMyReviewStatuses() {
+  const { data } = await http.get("/reviews/mine/status");
+  return data;
 }
 
 // 評論專區（公開卡片）：[GET] /api/reviews

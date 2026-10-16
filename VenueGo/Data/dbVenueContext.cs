@@ -44,6 +44,8 @@ public partial class dbVenueContext : DbContext
 
     public virtual DbSet<ReservationSlot> ReservationSlots { get; set; }
 
+    public virtual DbSet<Review> Reviews { get; set; }
+
     public virtual DbSet<ReviewMain> ReviewMains { get; set; }
 
     public virtual DbSet<ReviewPerBooking> ReviewPerBookings { get; set; }
@@ -76,7 +78,13 @@ public partial class dbVenueContext : DbContext
 
     public virtual DbSet<VReservationSummary> VReservationSummaries { get; set; }
 
+    public virtual DbSet<VReviewAdmin> VReviewAdmins { get; set; }
+
+    public virtual DbSet<VReviewDetail> VReviewDetails { get; set; }
+
     public virtual DbSet<VReviewFullInfo> VReviewFullInfos { get; set; }
+
+    public virtual DbSet<VReviewPublicCard> VReviewPublicCards { get; set; }
 
     public virtual DbSet<Venue> Venues { get; set; }
 
@@ -105,6 +113,8 @@ public partial class dbVenueContext : DbContext
             entity.HasKey(e => e.LogId);
 
             entity.ToTable("CheckInLog");
+
+            entity.HasIndex(e => new { e.TicketId, e.Action, e.IsValid }, "IX_CheckInLog_Ticket_Action");
 
             entity.Property(e => e.ActionTime)
                 .HasPrecision(0)
@@ -320,6 +330,48 @@ public partial class dbVenueContext : DbContext
             entity.HasIndex(e => new { e.VenueId, e.BookingDate, e.SlotTime }, "UQ_ReservationSlots_Occupancy").IsUnique();
 
             entity.Property(e => e.SlotTime).HasPrecision(0);
+        });
+
+        modelBuilder.Entity<Review>(entity =>
+        {
+            entity.HasIndex(e => e.CreatedAt, "IX_Reviews_CreatedAt");
+
+            entity.HasIndex(e => new { e.IsPinned, e.CreatedAt }, "IX_Reviews_PendingReply")
+                .IsDescending(true, false)
+                .HasFilter("([ReadAt] IS NOT NULL AND [RepliedAt] IS NULL AND [SpamMarkedAt] IS NULL)");
+
+            entity.HasIndex(e => e.CreatedAt, "IX_Reviews_Public")
+                .IsDescending()
+                .HasFilter("([IsPublic]=(1) AND [SpamMarkedAt] IS NULL)");
+
+            entity.HasIndex(e => new { e.StarRating, e.CreatedAt }, "IX_Reviews_Rating").IsDescending(false, true);
+
+            entity.HasIndex(e => e.RepliedAt, "IX_Reviews_RepliedAt")
+                .IsDescending()
+                .HasFilter("([RepliedAt] IS NOT NULL)");
+
+            entity.HasIndex(e => e.SpamMarkedAt, "IX_Reviews_Spam")
+                .IsDescending()
+                .HasFilter("([SpamMarkedAt] IS NOT NULL)");
+
+            entity.HasIndex(e => e.CreatedAt, "IX_Reviews_Unread").HasFilter("([ReadAt] IS NULL)");
+
+            entity.HasIndex(e => e.TicketId, "UQ_Reviews_TicketId")
+                .IsUnique()
+                .HasFilter("([TicketId] IS NOT NULL)");
+
+            entity.HasIndex(e => new { e.UserId, e.OrderId, e.ReviewKind }, "UQ_Reviews_User_Order_Kind").IsUnique();
+
+            entity.Property(e => e.AnonymousNickname).HasMaxLength(50);
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_Reviews_CreatedAt");
+            entity.Property(e => e.ReadAt).HasPrecision(0);
+            entity.Property(e => e.RepliedAt).HasPrecision(0);
+            entity.Property(e => e.ReplyContent).HasMaxLength(1000);
+            entity.Property(e => e.ReplyViewedAt).HasPrecision(0);
+            entity.Property(e => e.ReviewContent).HasMaxLength(1000);
+            entity.Property(e => e.SpamMarkedAt).HasPrecision(0);
         });
 
         modelBuilder.Entity<ReviewMain>(entity =>
@@ -608,6 +660,59 @@ public partial class dbVenueContext : DbContext
             entity.Property(e => e.VenueName).HasMaxLength(40);
         });
 
+        modelBuilder.Entity<VReviewAdmin>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("v_ReviewAdmin");
+
+            entity.Property(e => e.AnonymousNickname).HasMaxLength(50);
+            entity.Property(e => e.CheckInAt).HasPrecision(0);
+            entity.Property(e => e.CheckOutAt).HasPrecision(0);
+            entity.Property(e => e.CreatedAt).HasPrecision(0);
+            entity.Property(e => e.MemberName).HasMaxLength(100);
+            entity.Property(e => e.OrderNo).HasMaxLength(30);
+            entity.Property(e => e.PaidAt).HasPrecision(0);
+            entity.Property(e => e.ReadAt).HasPrecision(0);
+            entity.Property(e => e.ReadByEmployeeName).HasMaxLength(100);
+            entity.Property(e => e.RentEndTime).HasPrecision(0);
+            entity.Property(e => e.RentStartTime).HasPrecision(0);
+            entity.Property(e => e.RepliedAt).HasPrecision(0);
+            entity.Property(e => e.RepliedByEmployeeName).HasMaxLength(100);
+            entity.Property(e => e.ReplyContent).HasMaxLength(1000);
+            entity.Property(e => e.ReplyViewedAt).HasPrecision(0);
+            entity.Property(e => e.ReviewContent).HasMaxLength(1000);
+            entity.Property(e => e.SpamMarkedAt).HasPrecision(0);
+            entity.Property(e => e.SpamMarkedByEmployeeName).HasMaxLength(100);
+            entity.Property(e => e.SportName).HasMaxLength(20);
+            entity.Property(e => e.VenueName).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<VReviewDetail>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("v_ReviewDetail");
+
+            entity.Property(e => e.AnonymousNickname).HasMaxLength(50);
+            entity.Property(e => e.CheckInAt).HasPrecision(0);
+            entity.Property(e => e.CheckOutAt).HasPrecision(0);
+            entity.Property(e => e.CreatedAt).HasPrecision(0);
+            entity.Property(e => e.MemberName).HasMaxLength(100);
+            entity.Property(e => e.OrderNo).HasMaxLength(30);
+            entity.Property(e => e.PaidAt).HasPrecision(0);
+            entity.Property(e => e.ReadAt).HasPrecision(0);
+            entity.Property(e => e.RentEndTime).HasPrecision(0);
+            entity.Property(e => e.RentStartTime).HasPrecision(0);
+            entity.Property(e => e.RepliedAt).HasPrecision(0);
+            entity.Property(e => e.ReplyContent).HasMaxLength(1000);
+            entity.Property(e => e.ReplyViewedAt).HasPrecision(0);
+            entity.Property(e => e.ReviewContent).HasMaxLength(1000);
+            entity.Property(e => e.SpamMarkedAt).HasPrecision(0);
+            entity.Property(e => e.SportName).HasMaxLength(20);
+            entity.Property(e => e.VenueName).HasMaxLength(40);
+        });
+
         modelBuilder.Entity<VReviewFullInfo>(entity =>
         {
             entity
@@ -625,6 +730,25 @@ public partial class dbVenueContext : DbContext
             entity.Property(e => e.SpamMarkedByEmployeeName).HasMaxLength(100);
             entity.Property(e => e.SportName).HasMaxLength(20);
             entity.Property(e => e.UserName).HasMaxLength(100);
+            entity.Property(e => e.VenueName).HasMaxLength(40);
+        });
+
+        modelBuilder.Entity<VReviewPublicCard>(entity =>
+        {
+            entity
+                .HasNoKey()
+                .ToView("v_ReviewPublicCard");
+
+            entity.Property(e => e.AnonymousNickname).HasMaxLength(50);
+            entity.Property(e => e.CheckInAt).HasPrecision(0);
+            entity.Property(e => e.CreatedAt).HasPrecision(0);
+            entity.Property(e => e.MemberName).HasMaxLength(100);
+            entity.Property(e => e.ReadAt).HasPrecision(0);
+            entity.Property(e => e.RepliedAt).HasPrecision(0);
+            entity.Property(e => e.ReplyContent).HasMaxLength(1000);
+            entity.Property(e => e.ReplyViewedAt).HasPrecision(0);
+            entity.Property(e => e.ReviewContent).HasMaxLength(1000);
+            entity.Property(e => e.SportName).HasMaxLength(20);
             entity.Property(e => e.VenueName).HasMaxLength(40);
         });
 

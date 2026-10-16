@@ -15,7 +15,8 @@ namespace VenueGo.Dtos.ReviewDtos.PublicReviews
         TimeView CreatedAt,
         bool MentionsVenue,
         bool MentionsStaff,
-        string? VenueName,           // 場地名稱；查不到時是 null，版面要能處理
+        string? VenueName,           // 場地名稱。10/15 起來自 v_ReviewPublicCard（INNER JOIN），實際上不會是 null
         string DisplayName,          // 匿名時是隨機暱稱，實名時是會員姓名
-        PublicReplyDto? Reply);      // 沒有回覆是 null
+        PublicReplyDto? Reply,       // 沒有回覆是 null
+        DateOnly? VisitedOn);        // 10/15：到館日期（第一次有效入場的那天），JSON 是 "2026-10-12"。只有日期，不給幾點
 }

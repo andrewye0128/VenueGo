@@ -30,14 +30,19 @@ namespace VenueGo.Mappers
         // ── 確認區塊 ─────────────────────────────────────────
 
         /// <summary>現場評論的確認區塊：場地名稱／「M/d HH:mm 使用」。</summary>
-        public static ReviewContextDto VisitContext(string? venueName, DateTime rentStartTime)
-            => new(venueName, rentStartTime.ToString("M/d HH:mm") + " 使用");
+        /// <remarks>
+        /// 10/15：場地、時段改從檢視表（v_ReviewDetail）或訂單查，可能查不到（組員刪了預約、場地）。
+        /// 查不到時顯示「⋯載入失敗」，不讓整則評論消失（我的評論的清單一定要完整）。
+        /// </remarks>
+        public static ReviewContextDto VisitContext(string? venueName, DateTime? rentStartTime)
+            => new(venueName ?? "場地資料載入失敗",
+                   rentStartTime is DateTime at ? at.ToString("M/d HH:mm") + " 使用" : "使用時段載入失敗");
 
         /// <summary>
         /// 預約評論撰寫頁的確認區塊：訂單編號／付款方式。
         /// 沒有訂單編號字串時退回「訂單 #Id」。
         /// </summary>
-        
+
         // 10/12：「用什麼付的」存在 Payments.PaymentChannel（現場櫃台／信用卡／LINE Pay），
         //   PaymentMethod 只是由它推導出來的大分類（現場／線上）。顯示文字用列舉上的 [Display(Name)]。
         //   查不到付款紀錄時是 null，第二行就不顯示。
@@ -58,20 +63,23 @@ namespace VenueGo.Mappers
 
         /// <summary>
         /// 公開卡片。⚠️ 不帶 ReviewId。
-        /// venueName、memberName 由呼叫端一次查好（不要在這裡一則一則查資料庫）。
+        /// 10/15：改從檢視表 v_ReviewPublicCard 轉換。場地、會員名稱、入場時間都在檢視表裡，不用另外查；
+        /// 檢視表是 INNER JOIN，查不到任何一項的評論根本不會出現，所以這裡不用處理「查無」。
         /// </summary>
-        public static PublicReviewCardDto ToPublicCard(ReviewMain r, string? venueName, string? memberName) => new(
+        public static PublicReviewCardDto ToPublicCard(VReviewPublicCard r) => new(
             StarRating:    r.StarRating,
             Content:       r.ReviewContent == null ? null : ReviewTextGuard.MaskForPublic(r.ReviewContent),   // 公開時一律遮蔽個資、連結、不雅字詞
             IsRatingOnly:  string.IsNullOrWhiteSpace(r.ReviewContent),
             CreatedAt:     TimeView.From(r.CreatedAt),
             MentionsVenue: r.MentionsVenue,
             MentionsStaff: r.MentionsStaff,
-            VenueName:     venueName,
-            DisplayName:   PublicDisplayName(r.IsAnonymous, r.AnonymousNickname, memberName),
+            VenueName:     r.VenueName,
+            DisplayName:   PublicDisplayName(r.IsAnonymous, r.AnonymousNickname, r.MemberName),
             Reply:         r.RepliedAt is DateTime at
                                ? new PublicReplyDto(r.ReplyContent ?? "", TimeView.From(at))
-                               : null);
+                               : null,
+            // 10/15：到館日期（第一次有效入場的那一天）。公開卡只給日期，不給幾點：公開掛名「某人幾點在場館」算個人行蹤
+            VisitedOn:     r.CheckInAt is DateTime inAt ? DateOnly.FromDateTime(inAt) : null);
 
         /// <summary>
         /// 星等分布 → 平均分數、總則數、五條長條（5 星在最上面）。
@@ -100,8 +108,11 @@ namespace VenueGo.Mappers
         // ── 我的評論 ─────────────────────────────────────────
 
         /// <summary>「我的評論」（規格 2-4），員工預覽（2-8）也用同一個。</summary>
-        public static MyReviewDto ToMyReview(ReviewMain review, string kind, ReviewContextDto context, string displayName)
+        /// <remarks>10/15：改從檢視表 v_ReviewDetail 轉換（評論本身的欄位都在裡面，種類也從那裡來）。</remarks>
+        public static MyReviewDto ToMyReview(VReviewDetail review, ReviewContextDto context, string displayName)
         {
+            string kind = ReviewKindCodeExtensions.ToRouteKind(review.ReviewKind);
+
             MyReplyDto? reply = review.RepliedAt is DateTime repliedAt
                 ? new MyReplyDto(
                     Content: review.ReplyContent ?? "",

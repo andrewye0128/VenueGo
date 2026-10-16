@@ -19,5 +19,16 @@ namespace VenueGo.Services.Reviews
         /// </summary>
         Task<PublicReviewListDto> GetPublicReviewsAsync(
             int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort, int? take = null);
+
+        /// <summary>
+        /// 首頁「顧客評價」輪播（規格 2-11，10/15）：只挑有文字、星等夠高的評價，最多 12 則，隨機順序。
+        /// <para>
+        /// 依序找：近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星 → 全部 3 星以上。
+        /// 前面階段找到的全部保留；某一階段湊滿會超過 12 則時，只從「這一階段」隨機抽補滿 12 則，後面的階段不看。
+        /// 最後全部打亂順序。「近 3 個月、近 1 年」看評論的建立時間。
+        /// </para>
+        /// <para>每次呼叫結果都不一樣，所以這支 API 不能被快取。</para>
+        /// </summary>
+        Task<FeaturedReviewsDto> GetFeaturedReviewsAsync();
     }
 }

@@ -7,7 +7,7 @@
     這個檔案只剩外框：標題、預覽提示、返回按鈕。下面的說明仍然適用，只是程式碼在 MyReviewDetail 裡。
     返回按鈕：顧客改回「我的評論」（會員中心現在是唯一的入口）；員工預覽維持「返回評論專區」。
 
-    路由：/reviews/visit/:id           → kind='visit'（id ＝ 現場評論憑證 ReviewPerVisitId）
+    路由：/reviews/visit/:id           → kind='visit'（id ＝ 訂單 Id；10/15 以前是現場評論憑證 Id）
           /reviews/booking/:orderId    → kind='booking'
           /reviews/preview/:reviewId   → previewId（員工預覽，從館方清單開過來）
 

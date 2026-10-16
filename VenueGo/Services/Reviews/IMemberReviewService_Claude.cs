@@ -16,7 +16,7 @@ namespace VenueGo.Services.Reviews
     /// 不丟例外、不回 IActionResult。
     /// </para>
     /// <para>
-    /// 【參數】reviewPerVisitId：現場評論憑證 Id；orderId：預約評論的訂單 Id；
+    /// 【參數】orderId：訂單 Id（10/15 Reviews 重構起，現場、預約評論都用訂單 Id；以前現場評論用憑證 Id）；
     /// userId：目前登入的會員，null（沒登入）一律當成 NotFound。
     /// </para>
     /// </summary>
@@ -25,7 +25,7 @@ namespace VenueGo.Services.Reviews
         // ── 撰寫（規格 2-2、2-3）──────────────────────────────
 
         /// <summary>現場評論的撰寫頁設定。不能評論時回 NotFound／Expired／AlreadyReviewed。</summary>
-        Task<MemberReviewResult<WriteFormDto>> GetVisitFormAsync(int reviewPerVisitId, int? userId);
+        Task<MemberReviewResult<WriteFormDto>> GetVisitFormAsync(int orderId, int? userId);
 
         /// <summary>預約評論的撰寫頁設定。不能評論時回 NotFound／Expired／AlreadyReviewed。</summary>
         Task<MemberReviewResult<WriteFormDto>> GetBookingFormAsync(int orderId, int? userId);
@@ -34,7 +34,7 @@ namespace VenueGo.Services.Reviews
         /// 送出現場評論：重新判定資格 → 存評論 → 建立預審紀錄（預審失敗不影響送出）。
         /// 不能評論時回 NotFound／Expired／AlreadyReviewed，什麼都不存。
         /// </summary>
-        Task<MemberReviewOutcome> CreateVisitReviewAsync(int reviewPerVisitId, int? userId, ReviewCreateForVisitDto input);
+        Task<MemberReviewOutcome> CreateVisitReviewAsync(int orderId, int? userId, ReviewCreateForVisitDto input);
 
         /// <summary>送出預約評論。一律存成不公開、不匿名。其餘同 <see cref="CreateVisitReviewAsync"/>。</summary>
         Task<MemberReviewOutcome> CreateBookingReviewAsync(int orderId, int? userId, ReviewCreateForBookingDto input);
@@ -42,7 +42,7 @@ namespace VenueGo.Services.Reviews
         // ── 查看（規格 2-4、2-8），純讀取 ───────────────────────
 
         /// <summary>我的現場評論。還沒評論過也回 NotFound。不會記錄已讀。</summary>
-        Task<MemberReviewResult<MyReviewDto>> GetVisitReviewAsync(int reviewPerVisitId, int? userId);
+        Task<MemberReviewResult<MyReviewDto>> GetVisitReviewAsync(int orderId, int? userId);
 
         /// <summary>我的預約評論。還沒評論過也回 NotFound。不會記錄已讀。</summary>
         Task<MemberReviewResult<MyReviewDto>> GetBookingReviewAsync(int orderId, int? userId);
@@ -55,28 +55,34 @@ namespace VenueGo.Services.Reviews
 
         // ── 我的評論清單（10/10，規格 2-9、2-10）─────────────────
 
-        /// <summary>待評論：本人的、還沒評過、還沒過期的現場和預約憑證。快到期的排前面。沒登入回空清單。</summary>
+        /// <summary>待評論：資格成立、還沒評過、還沒過期的現場和預約評論對象。快到期的排前面。沒登入回空清單。</summary>
         Task<IReadOnlyList<PendingReviewItemDto>> ListPendingAsync(int? userId);
 
         /// <summary>已評論：本人寫過的現場和預約評論的摘要。新的排前面。沒登入回空清單。</summary>
         Task<IReadOnlyList<ReviewedItemDto>> ListReviewedAsync(int? userId);
 
+        /// <summary>
+        /// 我的預約、我的票券上的評論按鈕（10/15，規格 2-12）：哪些訂單要顯示「立刻評論」或「查看評論」。
+        /// 判斷規則跟待評論清單、已評論清單完全一樣。沒登入回空清單。
+        /// </summary>
+        Task<IReadOnlyList<ReviewStatusItemDto>> ListReviewStatusesAsync(int? userId);
+
         // ── 寫入（規格 2-5 ～ 2-7）────────────────────────────
 
         /// <summary>記錄已讀館方回覆。只在「有回覆而且還沒記錄過」時寫入；重複呼叫不會蓋掉第一次的時間。</summary>
-        Task<MemberReviewResult<ReplyViewedDto>> MarkVisitReplyViewedAsync(int reviewPerVisitId, int? userId);
+        Task<MemberReviewResult<ReplyViewedDto>> MarkVisitReplyViewedAsync(int orderId, int? userId);
 
         /// <summary>同 <see cref="MarkVisitReplyViewedAsync"/>，預約評論版。</summary>
         Task<MemberReviewResult<ReplyViewedDto>> MarkBookingReplyViewedAsync(int orderId, int? userId);
 
         /// <summary>切換現場評論公開。被標為垃圾的回 SpamMarked。只有現場評論有這個操作。</summary>
-        Task<MemberReviewResult<VisibilityResultDto>> SetVisitVisibilityAsync(int reviewPerVisitId, int? userId, bool isPublic);
+        Task<MemberReviewResult<VisibilityResultDto>> SetVisitVisibilityAsync(int orderId, int? userId, bool isPublic);
 
         /// <summary>
         /// 對館方回覆表態（0 不滿意、1 普通、2 滿意）。還沒回覆回 NoReply、表態過回 AlreadyRated。
         /// satisfaction 的範圍由 Controller 先檢查。
         /// </summary>
-        Task<MemberReviewResult<SatisfactionResultDto>> SetVisitSatisfactionAsync(int reviewPerVisitId, int? userId, byte satisfaction);
+        Task<MemberReviewResult<SatisfactionResultDto>> SetVisitSatisfactionAsync(int orderId, int? userId, byte satisfaction);
 
         /// <summary>同 <see cref="SetVisitSatisfactionAsync"/>，預約評論版。</summary>
         Task<MemberReviewResult<SatisfactionResultDto>> SetBookingSatisfactionAsync(int orderId, int? userId, byte satisfaction);

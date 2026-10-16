@@ -103,7 +103,7 @@ namespace VenueGo.Controllers.Api
         {
             MemberReviewOutcome.NotFound        => Fail(404, "NotFound", "查無指定評論"),
             MemberReviewOutcome.Expired         => Fail(410, "Expired", "超過可以評論的時間囉，下次請早"),
-            MemberReviewOutcome.AlreadyReviewed => Fail(409, "AlreadyReviewed", "這張憑證已經評論過了"),
+            MemberReviewOutcome.AlreadyReviewed => Fail(409, "AlreadyReviewed", "這筆訂單已經評論過了"),
             MemberReviewOutcome.NoReply         => Fail(409, "NoReply", "館方還沒有回覆，無法表態"),
             MemberReviewOutcome.AlreadyRated    => Fail(409, "AlreadyRated", "你已經表態過了"),
             MemberReviewOutcome.SpamMarked      => Fail(409, "SpamMarked", "這則評論已下架，無法切換公開狀態"),
@@ -138,7 +138,7 @@ namespace VenueGo.Controllers.Api
         // ════════════════════════════════════════════════════════
         //  第四區：Action
         //  現場評論與預約評論分成兩個 Action，而不是共用一個 {kind}：
-        //    1. 兩邊的識別碼意思不同（現場是憑證 Id、預約是訂單 Id），分開寫比較不會搞混。
+        //    1. 兩邊的判斷規則不同（現場看入場、預約看付款），分開寫比較不會搞混。（10/15 起兩邊的網址參數都是訂單 Id）
         //    2. 路由寫 {id:int}／{orderId:int}，不是整數的網址直接 404，不必進 Action 再檢查。
         //  兩邊共用的邏輯都在 Services/Reviews/ 裡（10/10 起），
         //  Action 本身只剩「接參數 → 呼叫 Service → 用第一區翻成回應」。
@@ -181,19 +181,40 @@ namespace VenueGo.Controllers.Api
             return Ok(ApiResult<PublicReviewListDto>.Ok(data));
         }
 
+        // ── 2-11 首頁顧客評價（10/15）────────────────────────
+
+        /// <summary>首頁顧客評價輪播</summary>
+        /// <remarks>
+        /// 首頁「顧客評價」區塊用：平均分數、總則數，加上最多 12 張有文字、星等夠高的評價卡片。不需要登入。
+        ///
+        /// ### 挑選規則
+        /// 依序找：近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星 → 全部 3 星以上。
+        /// 前面階段找到的全部保留；某一階段放不下時，只從這一階段隨機抽到 12 則為止。最後全部打亂順序。
+        ///
+        /// ### 注意
+        /// - **每次呼叫結果都不一樣**（隨機），所以回應標了不快取。
+        /// - `summary` 跟評論專區「全部時間」一致（含只給星等的評價）。
+        /// </remarks>
+        /// <response code="200">成功</response>
+        [HttpGet("featured")]
+        [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+        [ProducesResponseType<ApiResult<FeaturedReviewsDto>>(StatusCodes.Status200OK)]
+        public async Task<IActionResult> GetFeaturedReviews()
+            => Ok(ApiResult<FeaturedReviewsDto>.Ok(await _publicReviews.GetFeaturedReviewsAsync()));
+
         // ── 2-2 撰寫頁設定 ───────────────────────────────────
 
         /// <summary>取得現場評論表單</summary>
         /// <remarks>
-        /// 回傳撰寫頁的設定（要顯示哪些欄位、預設值、字數上限），同時判定這張憑證現在能不能評論。**需要會員本人登入。**
+        /// 回傳撰寫頁的設定（要顯示哪些欄位、預設值、字數上限），同時判定這筆訂單現在能不能評論。**需要會員本人登入。**
         ///
         /// ### 注意
-        /// - 憑證不是本人的時候回 404，不會透露「這張憑證存在」。
+        /// - 不是本人的訂單、或沒有資格時回 404，不會透露「這筆訂單存在」。
         /// </remarks>
-        /// <param name="id" example="1">現場評論憑證 Id（ReviewPerVisitId）</param>
+        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
         /// <response code="200">可以評論，Data 是表單設定</response>
-        /// <response code="404">查無評論資格：憑證不存在或不是本人。ErrorCode：`NotFound`</response>
-        /// <response code="409">這張憑證已經評論過了。ErrorCode：`AlreadyReviewed`</response>
+        /// <response code="404">查無評論資格：沒有有效入場（或付款）紀錄、或不是本人的訂單。ErrorCode：`NotFound`</response>
+        /// <response code="409">這筆訂單已經評論過了。ErrorCode：`AlreadyReviewed`</response>
         /// <response code="410">超過可以評論的時間。ErrorCode：`Expired`</response>
         /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
         /// <response code="403">登入的不是會員。ErrorCode：`Forbidden`</response>
@@ -214,13 +235,13 @@ namespace VenueGo.Controllers.Api
         ///
         /// ### 注意
         /// - 預約評論一律不公開、不匿名，表單不會顯示這兩個選項。
-        /// - 訂單有付款紀錄、但還沒有評論憑證時，會當場補建憑證（付款系統可能漏了呼叫工廠）。
+        /// - 10/15 起不再有評論憑證：有已付款紀錄、是訂購人本人、付款後 14 天內就能評。
         /// - 訂單不是本人的時候回 404，不會透露「這筆訂單存在」。
         /// </remarks>
         /// <param name="orderId" example="9007">訂單 Id</param>
         /// <response code="200">可以評論，Data 是表單設定</response>
-        /// <response code="404">查無評論資格：憑證不存在或不是本人。ErrorCode：`NotFound`</response>
-        /// <response code="409">這張憑證已經評論過了。ErrorCode：`AlreadyReviewed`</response>
+        /// <response code="404">查無評論資格：沒有有效入場（或付款）紀錄、或不是本人的訂單。ErrorCode：`NotFound`</response>
+        /// <response code="409">這筆訂單已經評論過了。ErrorCode：`AlreadyReviewed`</response>
         /// <response code="410">超過可以評論的時間。ErrorCode：`Expired`</response>
         /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
         /// <response code="403">登入的不是會員（例如員工帳號）。ErrorCode：`Forbidden`</response>
@@ -245,12 +266,12 @@ namespace VenueGo.Controllers.Api
         /// - 資格會在送出時重新判定一次：表單可能在畫面上停了好幾天。
         /// - 存好之後會建立預審紀錄；預審失敗不影響這次送出。
         /// </remarks>
-        /// <param name="id" example="1">現場評論憑證 Id（ReviewPerVisitId）</param>
+        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
         /// <param name="vm">評論內容：星等（必填）、文字、提及標籤、匿名、公開</param>
         /// <response code="200">送出成功，Message 是「評論已送出」</response>
         /// <response code="400">欄位驗證失敗，Data.errors 是各欄位的錯誤訊息。ErrorCode：`ValidationFailed`</response>
-        /// <response code="404">查無評論資格：憑證不存在或不是本人。ErrorCode：`NotFound`</response>
-        /// <response code="409">這張憑證已經評論過了。ErrorCode：`AlreadyReviewed`</response>
+        /// <response code="404">查無評論資格：沒有有效入場（或付款）紀錄、或不是本人的訂單。ErrorCode：`NotFound`</response>
+        /// <response code="409">這筆訂單已經評論過了。ErrorCode：`AlreadyReviewed`</response>
         /// <response code="410">超過可以評論的時間。ErrorCode：`Expired`</response>
         /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
         /// <response code="403">登入的不是會員。ErrorCode：`Forbidden`</response>
@@ -285,8 +306,8 @@ namespace VenueGo.Controllers.Api
         /// <param name="vm">評論內容：星等（必填）、文字</param>
         /// <response code="200">送出成功，Message 是「評論已送出」</response>
         /// <response code="400">欄位驗證失敗，Data.errors 是各欄位的錯誤訊息。ErrorCode：`ValidationFailed`</response>
-        /// <response code="404">查無評論資格：憑證不存在或不是本人。ErrorCode：`NotFound`</response>
-        /// <response code="409">這張憑證已經評論過了。ErrorCode：`AlreadyReviewed`</response>
+        /// <response code="404">查無評論資格：沒有有效入場（或付款）紀錄、或不是本人的訂單。ErrorCode：`NotFound`</response>
+        /// <response code="409">這筆訂單已經評論過了。ErrorCode：`AlreadyReviewed`</response>
         /// <response code="410">超過可以評論的時間。ErrorCode：`Expired`</response>
         /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
         /// <response code="403">登入的不是會員（例如員工帳號）。ErrorCode：`Forbidden`</response>
@@ -315,9 +336,9 @@ namespace VenueGo.Controllers.Api
         ///
         /// **純讀取**：不會記錄「顧客已看過回覆」，那是另一支 `POST .../reply-viewed`。
         /// </remarks>
-        /// <param name="id" example="1">現場評論憑證 Id（ReviewPerVisitId）</param>
+        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
         /// <response code="200">成功</response>
-        /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
+        /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         [HttpGet("visit/{id:int}")]
         [ProducesResponseType<ApiResult<MyReviewDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
@@ -333,7 +354,7 @@ namespace VenueGo.Controllers.Api
         /// </remarks>
         /// <param name="orderId" example="9002">訂單 Id</param>
         /// <response code="200">成功</response>
-        /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
+        /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         [HttpGet("booking/{orderId:int}")]
         [ProducesResponseType<ApiResult<MyReviewDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
@@ -353,7 +374,7 @@ namespace VenueGo.Controllers.Api
         /// ### 注意
         /// - 同一筆訂單可能同時出現一張現場、一張預約（兩種評論資格分開計算）。
         /// - `deadline.remainingText` 一律往少的說（13.9 天顯示「剩 13 天」）；`deadline.expiringSoon` 是剩 3 天以內。
-        /// - 查詢之前會先補建本人漏掉的現場、預約憑證，所以這支 GET **可能寫入資料**。
+        /// - 10/15 起不再建評論憑證，資格每次從票券、入場紀錄、訂單、付款即時判斷；這支 GET 不會寫入資料。
         ///   補建的期限從報到／付款時間起算（各 14 天），已經過期的不會建出來。
         /// </remarks>
         /// <response code="200">成功（沒有待評論時是空陣列）</response>
@@ -388,6 +409,30 @@ namespace VenueGo.Controllers.Api
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
         public async Task<IActionResult> GetReviewedList()
             => Ok(ApiResult<IReadOnlyList<ReviewedItemDto>>.Ok(await _memberReviews.ListReviewedAsync(_currentUser.UserId)));
+
+        // ── 2-12 我的預約、我的票券上的評論按鈕（10/15）──────────
+
+        /// <summary>評論按鈕狀態</summary>
+        /// <remarks>
+        /// 我的預約、我的票券要顯示「立刻評論」或「查看評論」時呼叫。一筆訂單一列，只列有按鈕要顯示的訂單。**需要會員本人登入。**
+        ///
+        /// ### 怎麼用
+        /// - 我的預約：用 `reservationId` 對到每一列，依 `bookingAction` 顯示預約評論的按鈕。
+        /// - 我的票券：用 `visitTicketId` 對到每一張票，依 `visitAction` 顯示現場評論的按鈕。
+        ///   一筆訂單手上有好幾張票時，只有 `visitTicketId` 那一張要顯示（每筆訂單只能評一次）。
+        /// - `"write"`＝立刻評論（連到撰寫頁）、`"view"`＝查看評論（連到單筆頁）、`null`＝不顯示。
+        ///   撰寫頁、單筆頁的網址都用 `orderId`。
+        /// </remarks>
+        /// <response code="200">成功</response>
+        /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
+        /// <response code="403">登入的不是會員。ErrorCode：`Forbidden`</response>
+        [HttpGet("mine/status")]
+        [ProducesResponseType<ApiResult<IReadOnlyList<ReviewStatusItemDto>>>(StatusCodes.Status200OK)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status403Forbidden)]
+        [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
+        public async Task<IActionResult> GetReviewStatuses()
+            => Ok(ApiResult<IReadOnlyList<ReviewStatusItemDto>>.Ok(await _memberReviews.ListReviewStatusesAsync(_currentUser.UserId)));
 
         // ── 2-8 員工預覽 ─────────────────────────────────────
 
@@ -425,9 +470,9 @@ namespace VenueGo.Controllers.Api
         /// - 只在「有回覆而且還沒記錄過」時寫入；重複呼叫不會蓋掉第一次的時間。
         /// - 還沒有回覆時不寫入，Data.viewed 是 `false`。
         /// </remarks>
-        /// <param name="id" example="1">現場評論憑證 Id（ReviewPerVisitId）</param>
+        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
         /// <response code="200">成功，Data.viewed 表示目前是否已記錄為已讀</response>
-        /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
+        /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         [HttpPost("visit/{id:int}/reply-viewed")]
         [ProducesResponseType<ApiResult<ReplyViewedDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
@@ -441,7 +486,7 @@ namespace VenueGo.Controllers.Api
         /// </remarks>
         /// <param name="orderId" example="9002">訂單 Id</param>
         /// <response code="200">成功，Data.viewed 表示目前是否已記錄為已讀</response>
-        /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
+        /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         [HttpPost("booking/{orderId:int}/reply-viewed")]
         [ProducesResponseType<ApiResult<ReplyViewedDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
@@ -457,11 +502,11 @@ namespace VenueGo.Controllers.Api
         ///
         /// 被館方標為垃圾的評論強制不公開，不能切換。
         /// </remarks>
-        /// <param name="id" example="1">現場評論憑證 Id（ReviewPerVisitId）</param>
+        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
         /// <param name="body">`{ "isPublic": true }`：要變成的狀態，不是「反過來」</param>
         /// <response code="200">成功，Data.isPublic 是切換後的狀態</response>
         /// <response code="400">沒有指定 isPublic。ErrorCode：`ValidationFailed`</response>
-        /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
+        /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         /// <response code="409">評論已被下架，不能切換。ErrorCode：`SpamMarked`</response>
         [HttpPost("visit/{id:int}/visibility")]
         [ProducesResponseType<ApiResult<VisibilityResultDto>>(StatusCodes.Status200OK)]
@@ -487,11 +532,11 @@ namespace VenueGo.Controllers.Api
         ///
         /// `satisfaction`：`0` 不滿意、`1` 普通、`2` 滿意。
         /// </remarks>
-        /// <param name="id" example="1">現場評論憑證 Id（ReviewPerVisitId）</param>
+        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
         /// <param name="body">`{ "satisfaction": 2 }`</param>
         /// <response code="200">成功，Data.satisfaction 是存下來的值</response>
         /// <response code="400">satisfaction 不是 0、1、2。ErrorCode：`InvalidSatisfaction`</response>
-        /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
+        /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         /// <response code="409">館方還沒回覆（`NoReply`），或已經表態過（`AlreadyRated`）</response>
         [HttpPost("visit/{id:int}/satisfaction")]
         [ProducesResponseType<ApiResult<SatisfactionResultDto>>(StatusCodes.Status200OK)]
@@ -513,7 +558,7 @@ namespace VenueGo.Controllers.Api
         /// <param name="body">`{ "satisfaction": 2 }`</param>
         /// <response code="200">成功，Data.satisfaction 是存下來的值</response>
         /// <response code="400">satisfaction 不是 0、1、2。ErrorCode：`InvalidSatisfaction`</response>
-        /// <response code="404">查無評論：憑證不存在、還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
+        /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         /// <response code="409">館方還沒回覆（`NoReply`），或已經表態過（`AlreadyRated`）</response>
         [HttpPost("booking/{orderId:int}/satisfaction")]
         [ProducesResponseType<ApiResult<SatisfactionResultDto>>(StatusCodes.Status200OK)]

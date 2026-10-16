@@ -2,7 +2,7 @@
     ReviewWriteView.vue — 撰寫評論
     取代 Views/CReview/CreateForVisit.cshtml 與 CreateForBooking.cshtml（兩個合成一個）
 
-    路由：/reviews/visit/:id/write      → kind='visit',   ticket=現場評論憑證 Id（ReviewPerVisitId）
+    路由：/reviews/visit/:id/write      → kind='visit',   ticket=訂單 Id（10/15 起；以前是現場評論憑證 Id）
           /reviews/booking/:orderId/write → kind='booking', ticket=OrderId
     兩種都要會員本人登入（10/9 起現場評論也限會員）。
 
@@ -40,7 +40,7 @@ import ConfirmModal from "@/components/ConfirmModal.vue";
 
 const props = defineProps({
   kind: { type: String, required: true }, // 'visit' | 'booking'
-  ticket: { type: String, required: true }, // 現場評論憑證 Id 或 OrderId
+  ticket: { type: String, required: true }, // 訂單 Id（10/15 起現場、預約都是）
 });
 
 const router = useRouter();

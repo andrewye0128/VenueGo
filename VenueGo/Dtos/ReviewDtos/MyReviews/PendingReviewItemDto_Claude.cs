@@ -7,7 +7,7 @@
     /// </summary>
     public sealed record PendingReviewItemDto(
         string Kind,                 // ReviewKind 的值：visit／booking
-        int Ticket,                  // 現場評論：憑證 Id（ReviewPerVisitId）；預約評論：訂單 Id
+        int Ticket,                  // 訂單 Id（10/15 起現場、預約都是；以前現場評論是憑證 Id）。名稱沿用，前台不用改
         ReviewContextDto Context,    // 兩行字：現場是場地／使用時段，預約是訂單編號
         ReviewDeadlineDto Deadline);
 }

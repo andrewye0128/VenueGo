@@ -101,18 +101,23 @@ const carouselUi = {
 <template>
   <!-- 檔頭第 10 點：挑不到評價就整個區塊不顯示 -->
   <section v-if="isLoading || errorMessage || cards.length > 0">
-    <!-- 區塊標題（首頁的 h1 在 HomeView）＋「看全部」 -->
-    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <div class="flex items-center gap-2">
-        <UIcon name="i-lucide-message-square-quote" class="size-6 text-brand-accent" />
+    <!-- 區塊標題（首頁的 h1 在 HomeView）＋「看全部」
+         10/17：items-center → items-baseline，「看全部評價」的字跟「顧客評價」的字對齊同一條底線 -->
+    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+      <div class="flex items-baseline gap-2">
+        <UIcon
+          name="i-lucide-message-square-quote"
+          class="size-6 shrink-0 self-center text-brand-accent"
+          aria-hidden="true"
+        />
         <h2 class="text-2xl font-bold text-neutral-text-primary">顧客評價</h2>
       </div>
       <RouterLink
         :to="{ name: 'review-index' }"
-        class="inline-flex items-center gap-1 text-sm font-semibold text-brand-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
+        class="inline-flex items-center gap-1 text-base font-semibold text-brand-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
       >
         看全部評價
-        <IconChevronRightBold class="size-4" aria-hidden="true" />
+        <IconChevronRightBold class="size-4 self-center" aria-hidden="true" />
       </RouterLink>
     </div>
 

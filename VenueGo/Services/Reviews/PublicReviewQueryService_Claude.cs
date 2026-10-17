@@ -34,9 +34,10 @@ namespace VenueGo.Services.Reviews
 
         /// <inheritdoc/>
         public async Task<PublicReviewListDto> GetPublicReviewsAsync(
-            int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort, int? take = null)
+            int? sportTypeId, string? range, int? star, string? mention, string? sort, int? take = null)
         {
             string rg = ReviewRange.Normalize(range);
+            string mn = ReviewMention.Normalize(mention);
             string so = ReviewSort.Normalize(sort);
             int? st = star is >= 1 and <= 5 ? star : null;
 
@@ -48,7 +49,7 @@ namespace VenueGo.Services.Reviews
                                         .ToListAsync());
 
             // 星等篩選之前的結果：分布圖與平均分數用這一份算
-            var beforeStar = ApplyCardFilters(PublishedReviews(_timeService.Now), sportTypeId, rg, hasContentOnly,
+            var beforeStar = ApplyCardFilters(PublishedReviews(_timeService.Now), sportTypeId, rg, mn,
                                               _timeService.Today);
 
             var countByStar = await beforeStar
@@ -56,9 +57,26 @@ namespace VenueGo.Services.Reviews
                 .Select(g => new { Star = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.Star, x => x.Count);
 
+            // 10/17：拿掉「只看有留言的」開關，改成：
+            //   - 選了星等 → 那個星等全部列出（含只給星等的）：使用者在意的是分數，不是文字。
+            //   - 沒選星等 → 只列有文字的；但一則有文字的都沒有時，全部列出，不讓畫面空著。
+            // 星等分布、平均分數不受影響：上面的 countByStar 一直是全部算。
             var listQuery = beforeStar;
+            int ratingOnlyHidden = 0;
             if (st is int s)
+            {
                 listQuery = listQuery.Where(r => r.StarRating == s);
+            }
+            else
+            {
+                var withText = listQuery.Where(r => r.ReviewContent != null && r.ReviewContent != "");
+                int textCount = await withText.CountAsync();
+                if (textCount > 0)
+                {
+                    ratingOnlyHidden = countByStar.Values.Sum() - textCount;
+                    listQuery = withText;
+                }
+            }
 
             // ⚠️ 還沒有分頁。資料量變大之後要補 Skip / Take（規格已經預留 page／totalPages）。
             // 10/13：take 有給就只取前幾則（首頁 Slide）。排序之後才取，取到的才會是「最新的幾則」
@@ -67,16 +85,18 @@ namespace VenueGo.Services.Reviews
             var reviews = await limited.ToListAsync();
 
             return new PublicReviewListDto(
-                Filter: new ReviewFilterDto(sportTypeId, rg, st, hasContentOnly, so),
-                Defaults: new ReviewDefaultsDto(ReviewRange.Default, ReviewSort.Default),
+                Filter: new ReviewFilterDto(sportTypeId, rg, st, mn, so),
+                Defaults: new ReviewDefaultsDto(ReviewRange.Default, ReviewMention.Default, ReviewSort.Default),
                 Options: new ReviewOptionsDto(
                     ReviewRange.Options.Select(o => new OptionItem(o.Value, o.Text)).ToList(),
+                    ReviewMention.Options.Select(o => new OptionItem(o.Value, o.Text)).ToList(),
                     ReviewSort.Options.Select(o => new OptionItem(o.Value, o.Text)).ToList()),
                 SportTabs: sportTabs,
                 Summary: ReviewMapper.ToRatingSummary(countByStar),
                 Items: reviews.Select(ReviewMapper.ToPublicCard).ToList(),
                 Page: 1,
-                TotalPages: 1);
+                TotalPages: 1,
+                RatingOnlyHidden: ratingOnlyHidden);
         }
 
         /// <inheritdoc/>
@@ -213,9 +233,9 @@ namespace VenueGo.Services.Reviews
                       .Where(r => r.RepliedAt != null || r.CreatedAt <= cutoff);
         }
 
-        /// <summary>類型、時間範圍、有無內容。星等「不」放進來——分布圖要用這個結果算。</summary>
+        /// <summary>類型、時間範圍、提及（10/17 取代「有無內容」）。星等「不」放進來——分布圖要用這個結果算。</summary>
         private static IQueryable<VReviewPublicCard> ApplyCardFilters(
-            IQueryable<VReviewPublicCard> q, int? sportTypeId, string range, bool hasContentOnly, DateTime todayStart)
+            IQueryable<VReviewPublicCard> q, int? sportTypeId, string range, string mention, DateTime todayStart)
         {
             if (sportTypeId is int st)
                 q = q.Where(r => r.SportTypeId == st);
@@ -227,8 +247,21 @@ namespace VenueGo.Services.Reviews
                 q = q.Where(r => r.CreatedAt >= from);
             }
 
-            if (hasContentOnly)
-                q = q.Where(r => r.ReviewContent != null && r.ReviewContent != "");
+            // 原本：if (hasContentOnly) q = q.Where(r => r.ReviewContent != null && r.ReviewContent != "");
+            switch (mention)
+            {
+                case ReviewMention.All:
+                    break;
+                case ReviewMention.Venue:
+                    q = q.Where(r => r.MentionsVenue);
+                    break;
+                case ReviewMention.Staff:
+                    q = q.Where(r => r.MentionsStaff);
+                    break;
+                default:
+                    // Normalize 過的值不會走到這裡
+                    throw new ArgumentOutOfRangeException(nameof(mention), mention, "不認得的提及篩選");
+            }
 
             return q;
         }

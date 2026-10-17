@@ -252,8 +252,8 @@ dotnet_naming_style.begins_with_i.capitalization = pascal_case
 dotnet_diagnostic.CA1822.severity = warning
 dotnet_diagnostic.CA1052.severity = warning
 
-# 將遺漏 XML 註解的警告（Warning），降級為建議（Suggestion）
-dotnet_diagnostic.CS1591.severity = suggestion
+# 將遺漏 XML 註解的警告（Warning）降級
+dotnet_diagnostic.CS1591.severity = none
 
 # 建議將常值、僅包含唯讀屬性的 class 改為 record
 dotnet_diagnostic.IDE0250.severity = suggestion

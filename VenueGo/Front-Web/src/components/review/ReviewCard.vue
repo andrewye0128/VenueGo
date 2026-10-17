@@ -55,6 +55,11 @@
   17. 評論專區（沒有傳 featured）的文字都大 1px：內文 17px、名字 17px、回覆 15px、日期與場地 13～15px。
       所有評論一起放大，不會只把某一則（例如很短的負評）凸顯出來；首頁輪播維持原本的字級（第 13 點的短評放大另外算）。
       標籤和「閱讀全文」不跟著放大：它們那一行固定 20px 高（第 14 點）。
+
+  ── 10/17：評論專區也放大引號 ─────────────────────────────────────
+  18. 第 13 點的淡色大引號，評論專區的卡片也放（原本只有首頁輪播）。條件一樣：留白夠高、不是只給星等。
+      評論專區兩欄等高，短的那張下面一樣會空一塊；這裡也是網站在列出顧客說的話，引號的意思一樣對。
+      短評放大字級還是只有首頁（理由見第 13 點）。
 -->
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount, nextTick } from "vue";
@@ -112,7 +117,7 @@ const initial = computed(() => avatarInitial(props.item.displayName));
 // 卡片寬度會變（視窗縮放、Slide 換斷點），截斷與否跟著變，所以用 ResizeObserver 重新量。
 const bodyEl = ref(null);
 const replyEl = ref(null);
-const spacerEl = ref(null); // 卡片底部的留白（只有首頁輪播有）
+const spacerEl = ref(null); // 卡片底部的留白（10/17 起評論專區也有，見第 18 點）
 const clamped = ref(false);
 const quoteFits = ref(false);
 const fullOpen = ref(false);
@@ -281,11 +286,11 @@ onBeforeUnmount(() => observer?.disconnect());
       </div>
     </div>
 
-    <!-- 首頁輪播：卡片底部的留白＋淡色大引號（檔頭第 13 點）。
+    <!-- 卡片底部的留白＋淡色大引號（檔頭第 13、18 點；10/17 起不限首頁輪播）。
              留白不夠高時引號不顯示（v-show 而不是 v-if：留白區一直都在，才量得到它多高）。
              -mb-8：大字的引號只畫在字框的上半部，往下拉、超出的空白由 overflow-hidden 裁掉，引號才會貼近卡片底部。 -->
     <div
-      v-if="featured && !full && !item.isRatingOnly"
+      v-if="!full && !item.isRatingOnly"
       ref="spacerEl"
       class="flex min-h-0 flex-1 items-end justify-end overflow-hidden"
       aria-hidden="true"

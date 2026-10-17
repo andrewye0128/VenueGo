@@ -182,7 +182,7 @@ async function main() {
   for (const fn of listApiFunctions(lines)) {
     if (STRICT_PATTERN.test(fn.comment)) continue;
     const reason = LOOSE_PATTERN.test(fn.comment)
-      ? "註解格式不對，方法要加中括號，例如 [GET] /api/ping"
+      ? "" // 註解格式不對，方法要加中括號，例如 [GET] /api/ping
       : "缺少「[方法] 網址」註解";
     problems.push(`${fn.file}:${fn.lineNo}  ${fn.name}()：${reason}`);
   }

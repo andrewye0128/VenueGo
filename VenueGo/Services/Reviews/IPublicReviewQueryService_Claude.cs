@@ -14,11 +14,12 @@ namespace VenueGo.Services.Reviews
     {
         /// <summary>
         /// 評論專區的完整資料（規格 2-1）。
-        /// 不認得的 range、sort 一律改用預設值；star 不在 1～5 當成不篩選。
+        /// 不認得的 range、mention、sort 一律改用預設值；star 不在 1～5 當成不篩選。
+        /// 10/17：沒選星等時只列有文字的評論（一則都沒有時全部列出）；選了星等就全部列出。
         /// take（10/13）：最多回傳幾則卡片，null 代表全部；只限制卡片，不影響星等分布與平均。
         /// </summary>
         Task<PublicReviewListDto> GetPublicReviewsAsync(
-            int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort, int? take = null);
+            int? sportTypeId, string? range, int? star, string? mention, string? sort, int? take = null);
 
         /// <summary>
         /// 首頁「顧客評價」輪播（規格 2-11，10/16 改版）：最多 12 則 3 星以上的評價，隨機順序。

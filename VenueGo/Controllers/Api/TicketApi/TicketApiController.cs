@@ -18,10 +18,12 @@ namespace VenueGo.Controllers.Api.TicketApi
     {
         private readonly IMemberTicketQueryService _ticketQuery;
         private readonly IWebHostEnvironment _env;
+        private readonly IEntryTicketService _entryTicketService;
 
-        public TicketApiController(IMemberTicketQueryService ticketQuery, IWebHostEnvironment env)
+        public TicketApiController(IMemberTicketQueryService ticketQuery, IWebHostEnvironment env, IEntryTicketService entryTicketService)
         {
             _ticketQuery = ticketQuery;
+            _entryTicketService = entryTicketService;
             _env = env;
         }
 
@@ -50,6 +52,85 @@ namespace VenueGo.Controllers.Api.TicketApi
             return Ok(ApiResult<List<MemberTicketDto>>.Ok(tickets));
         }
 
-    }
 
+
+        [Authorize(
+      AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        //POST /api/tickets/{id}/transfer
+        [HttpPost("{id:int}/transfer")]
+        public async Task<IActionResult> CreateCode(int id, [FromQuery] int? testUserId)
+        {
+            int? userId = User.GetUserId();
+
+            if (userId is null && _env.IsDevelopment())
+                userId = testUserId;
+
+            if (userId is null)
+                return Unauthorized(ApiResult.Fail("請先登入", "UNAUTHORIZED"));
+
+            TransferCodeResult result = await _entryTicketService.TransferCreateAsync(id, userId!.Value);
+
+            if (!result.Success)
+            {
+                return BadRequest(ApiResult.Fail(result.Reason ?? "產生驗證碼失敗", "TRANSFER_FAILED"));
+            }
+
+            var dto = new TransferCodeDto
+            {
+                Code = result.Code!,
+                ExpiresAt = result.ExpiresAt!.Value
+            };
+
+            return Ok(ApiResult<TransferCodeDto>.Ok(dto));
+        }
+
+        [Authorize(
+     AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        //DELETE /api/tickets/{id}/transfer
+        [HttpDelete("{id:int}/transfer")]
+        public async Task<IActionResult> DeleteTransfer(int id, [FromQuery] int? testUserId)
+        {
+            int? userId = User.GetUserId();
+
+            if (userId is null && _env.IsDevelopment())
+                userId = testUserId;
+
+            if (userId is null)
+                return Unauthorized(ApiResult.Fail("請先登入", "UNAUTHORIZED"));
+
+            TicketTransferResult result = await _entryTicketService.TransferCancelAsync(id, userId!.Value);
+
+            if (!result.Success)
+            {
+                return BadRequest(ApiResult.Fail(result.Reason ?? "取消轉讓失敗", "CANCEL_FAILED"));
+            }
+
+            return Ok(ApiResult.Ok("已取消轉讓"));
+        }
+
+
+        [Authorize(
+     AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        // POST /api/tickets/redeem
+        [HttpPost("redeem")]
+        public async Task<IActionResult> RedeemTransfer([FromBody] RedeemTicketRequest request, [FromQuery] int? testUserId)
+        {
+            int? userId = User.GetUserId();
+
+            if (userId is null && _env.IsDevelopment())
+                userId = testUserId;
+
+            if (userId is null)
+                return Unauthorized(ApiResult.Fail("請先登入", "UNAUTHORIZED"));
+
+            TicketTransferResult result = await _entryTicketService.TransferRedeemAsync(request.Code, userId!.Value);
+
+            if (!result.Success)
+            {
+                return BadRequest(ApiResult.Fail(result.Reason ?? "接收轉讓失敗", "REDEEM_FAILED"));
+            }
+
+            return Ok(ApiResult.Ok("領取成功"));
+        }
+    }
 }

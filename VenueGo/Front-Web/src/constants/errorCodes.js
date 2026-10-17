@@ -5,7 +5,7 @@
 export const ErrorCodes = Object.freeze({
   // ── 後端回傳 ──
   NotFound: "NotFound", // 找不到資料
-    LoginFailed: "LoginFailed", // 備用，理論上登入失敗現在都會有更明確的代碼
+  LoginFailed: "LoginFailed", // 備用，理論上登入失敗現在都會有更明確的代碼
 
   // ── 會員登入（MemberAuthApiController）──
   InvalidCredentials: "InvalidCredentials", // 帳號不存在 / 密碼錯誤
@@ -13,15 +13,15 @@ export const ErrorCodes = Object.freeze({
   AccountSuspended: "AccountSuspended", // 帳號已被停權
   AccountInactive: "AccountInactive", // 帳號已註銷 / 狀態異常
   NotLoggedIn: "NotLoggedIn", // 沒登入（/api 開頭的網址，後端 ApiResponses.RedirectToLogin 回的）
-    Forbidden: "Forbidden", // 登入了但身分不對，例如員工帳號打會員專用的 API
+  Forbidden: "Forbidden", // 登入了但身分不對，例如員工帳號打會員專用的 API
 
   // ── 會員個人資料（MemberProfileApiController）──
-    UpdateProfileFailed: "UpdateProfileFailed", // 更新個人資料時伺服器發生錯誤
+  UpdateProfileFailed: "UpdateProfileFailed", // 更新個人資料時伺服器發生錯誤
 
   // ── 會員註冊（MemberAuthApiController 的 register）──
   EmailAlreadyExists: "EmailAlreadyExists", // 這個 Email 已經註冊過（HTTP 409）
   RegistrationFailed: "RegistrationFailed", // 建立會員帳號時伺服器發生錯誤（HTTP 500）
-    MemberRoleNotConfigured: "MemberRoleNotConfigured", // 系統缺少可用的會員角色（HTTP 500）
+  MemberRoleNotConfigured: "MemberRoleNotConfigured", // 系統缺少可用的會員角色（HTTP 500）
 
   // ── 評論（昱）──
   Expired: "Expired", // 超過可以評論的時間

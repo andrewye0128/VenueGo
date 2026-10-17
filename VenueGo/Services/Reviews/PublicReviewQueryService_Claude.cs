@@ -29,6 +29,9 @@ namespace VenueGo.Services.Reviews
         /// <summary>首頁輪播最多幾張（10/15）：手機 1、平板 2、電腦 3 張一頁都整除。</summary>
         private const int FeaturedCount = 12;
 
+        // 首頁輪播：幾個字以上算「30 字以上」的長評（10/16）
+        private const int FeaturedLongTextMin = 30;
+
         /// <inheritdoc/>
         public async Task<PublicReviewListDto> GetPublicReviewsAsync(
             int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort, int? take = null)
@@ -88,11 +91,17 @@ namespace VenueGo.Services.Reviews
                 .Select(g => new { Star = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.Star, x => x.Count);
 
-            // 候選：有文字、3 星以上。只讀挑選需要的三個欄位，挑好之後才讀完整的卡片。
+            // 候選：3 星以上（10/16 起含只給星等的）。只讀挑選需要的欄位，挑好之後才讀完整的卡片。
             // （以專題的資料量全部讀回來沒問題；之後評論多到上萬則，再把階段條件搬進 SQL。）
+            // 字數用 SQL 的 LEN 算：只有空白的內容會算成 0 字，跟「只給星等」一樣處理。
             var candidates = await published
-                .Where(r => r.ReviewContent != null && r.ReviewContent != "" && r.StarRating >= 3)
-                .Select(r => new FeaturedCandidate(r.ReviewId, r.StarRating, r.CreatedAt))
+                .Where(r => r.StarRating >= 3)
+                .Select(r => new FeaturedCandidate(
+                    r.ReviewId,
+                    r.StarRating,
+                    r.CreatedAt,
+                    r.RepliedAt != null,                                         // HasReply
+                    r.ReviewContent == null ? 0 : r.ReviewContent.Length))      // TextLength
                 .ToListAsync();
 
             var pickedIds = PickFeatured(candidates, now, FeaturedCount, Random.Shared);
@@ -106,16 +115,21 @@ namespace VenueGo.Services.Reviews
                 Items: pickedIds.Where(byId.ContainsKey).Select(id => ReviewMapper.ToPublicCard(byId[id])).ToList());
         }
 
-        /// <summary>首頁輪播挑選用的最小資料。</summary>
-        public sealed record FeaturedCandidate(int ReviewId, byte StarRating, DateTime CreatedAt);
+        /// <summary>首頁輪播挑選用的最小資料。TextLength 是 0 代表只給星等。</summary>
+        public sealed record FeaturedCandidate(int ReviewId, byte StarRating, DateTime CreatedAt, bool HasReply, int TextLength)
+        {
+            public bool IsRatingOnly => TextLength == 0;
+            public bool IsLong => TextLength >= FeaturedLongTextMin;
+        }
 
         /// <summary>
-        /// 首頁輪播的挑選規則（規格 2-11）。純計算、不碰資料庫，random 由外面傳進來，方便寫單元測試（傳固定種子）。
+        /// 首頁輪播的挑選規則（規格 2-11，10/16 改版）。純計算、不碰資料庫，random 由外面傳進來，方便寫單元測試（傳固定種子）。
         /// <list type="number">
-        ///   <item>依序看五個階段：近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星 → 全部 3 星以上。
-        ///         後面的階段會包含前面已經選過的評論，選過的跳過。</item>
+        ///   <item>依序看 stages 裡的每一個階段（a～e，見程式裡的註解）。後面的階段會包含前面已經選過的評論，選過的跳過，
+        ///         所以每一群只要照字面寫條件，不用再寫「排除前面的」。</item>
         ///   <item>前面階段的全部保留；某一階段加進來會超過 count 時，只從這一階段裡隨機抽，補滿就停。</item>
         ///   <item>最後把全部打亂順序：每次打開首頁，看到的評論和順序都不一樣。</item>
+        ///   <item>一則都沒選到時回空清單，前台會把整個「顧客評價」區塊拿掉（f）。</item>
         /// </list>
         /// </summary>
         public static List<int> PickFeatured(IReadOnlyList<FeaturedCandidate> candidates, DateTime now, int count, Random random)
@@ -123,14 +137,33 @@ namespace VenueGo.Services.Reviews
             DateTime threeMonthsAgo = now.AddMonths(-3);
             DateTime oneYearAgo = now.AddYears(-1);
 
-            var stages = new Func<FeaturedCandidate, bool>[]
-            {
-                c => c.CreatedAt >= threeMonthsAgo && c.StarRating == 5,
-                c => c.CreatedAt >= threeMonthsAgo && c.StarRating == 4,
-                c => c.CreatedAt >= oneYearAgo && c.StarRating == 5,
-                c => c.CreatedAt >= oneYearAgo && c.StarRating == 4,
-                c => c.StarRating >= 3,
-            };
+            // 「近期四段」：近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星，套在某一群評論上
+            Func<FeaturedCandidate, bool>[] Recent(Func<FeaturedCandidate, bool> group) =>
+            [
+                c => group(c) && c.CreatedAt >= threeMonthsAgo && c.StarRating == 5,
+                c => group(c) && c.CreatedAt >= threeMonthsAgo && c.StarRating == 4,
+                c => group(c) && c.CreatedAt >= oneYearAgo && c.StarRating == 5,
+                c => group(c) && c.CreatedAt >= oneYearAgo && c.StarRating == 4,
+            ];
+
+            Func<FeaturedCandidate, bool>[] stages =
+            [
+                // a. 有館方回覆、30 字以上
+                .. Recent(c => !c.IsRatingOnly && c.HasReply && c.IsLong),
+                // b. 有館方回覆
+                .. Recent(c => !c.IsRatingOnly && c.HasReply),
+                // c. 30 字以上
+                .. Recent(c => !c.IsRatingOnly && c.IsLong),
+                // d. 不限時間、3 星以上：有回覆且 30 字以上 → 有回覆 → 30 字以上
+                c => !c.IsRatingOnly && c.StarRating >= 3 && c.HasReply && c.IsLong,
+                c => !c.IsRatingOnly && c.StarRating >= 3 && c.HasReply,
+                c => !c.IsRatingOnly && c.StarRating >= 3 && c.IsLong,
+                // d-4（10/16 待確認）：沒有回覆、不到 30 字的文字評論。不要的話刪掉這一行
+                c => !c.IsRatingOnly && c.StarRating >= 3,
+                // e. 只給星等
+                .. Recent(c => c.IsRatingOnly),
+                c => c.IsRatingOnly && c.StarRating >= 3,
+            ];
 
             var picked = new List<int>(count);
             var pickedSet = new HashSet<int>();

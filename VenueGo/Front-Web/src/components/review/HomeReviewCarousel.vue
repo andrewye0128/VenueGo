@@ -3,16 +3,17 @@
   用法（HomeView.vue）：<HomeReviewCarousel />
 
   ── 內容 ─────────────────────────────────────────────────────
-  標題＋整體平均分數，下面是最新的公開評論卡片（單列輪播，版型仿首頁的「場地介紹」）。
-  資料用評論專區同一支 API（規格 2-1），上架條件只有一份，首頁不會出現評論專區沒有的評論。
+  標題＋整體平均分數，下面是挑選過的公開評論卡片（單列輪播，版型仿首頁的「場地介紹」）。
 
-  ── 為什麼這樣抓資料 ─────────────────────────────────────────
-  1. range=all：平均分數要代表「全部」的評價，不是近一年。
-  2. hasContentOnly=false 再在前端濾掉「只給星等」的：
-     如果在後端只抓有文字的，平均分數也會只算有文字的評論，跟評論專區對不上。
-  3. take=30 再取前 12 則有文字的：最新的 30 則裡難免有只給星等的，多抓一些才湊得滿 12 則。
-  4. 不挑星等：首頁顯示的就是最新的真實評價（已經過館方審核、下架的不會出現）。
-     只挑高分的看起來漂亮，但顧客點進評論專區一看就知道，反而傷信任。
+  ── 資料（10/15 改成專用 API，規格 2-11）──────────────────────
+  1~4.（10/13 版：用評論專區的 API 抓最新 30 則、前端濾掉只給星等的。10/15 起不用了。）
+  9. 卡片由後端挑：近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星 → 全部 3 星以上，
+     某一階段放不下時從那一階段隨機抽，最多 12 則，順序也打亂。每次打開首頁看到的都不一樣。
+     上架條件跟評論專區是同一份（後端 PublicReviewQueryService），首頁不會出現評論專區沒有的評論。
+     平均分數、總則數是全部公開評價（含只給星等的），跟評論專區「全部時間」一致。
+  10. 10/16：挑選規則改版（有館方回覆、30 字以上的優先，最後才用只給星等的），細節在後端 PickFeatured。
+      一則都挑不到時，整個區塊拿掉（連標題都不顯示），不再顯示「還沒有公開的評價」。
+      載入失敗還是顯示錯誤訊息：那是「出問題了」，不是「沒有評價」。
 
   ── 10/14：無限循環 ─────────────────────────────────────────
   5. loop：往左、往右都沒有盡頭，最後一張接回第一張（Embla 把最前面的卡片移到後面接上，不是複製一份）。
@@ -33,14 +34,11 @@
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
 import { RouterLink } from "vue-router";
-import { getPublicReviews } from "@/api/reviewApi";
+import { getFeaturedReviews } from "@/api/reviewApi";
 import ReviewCard from "@/components/review/ReviewCard.vue";
 import StarView from "@/components/review/StarView.vue";
 import IconChevronLeftBold from "@/components/icons/IconChevronLeftBold.vue";
 import IconChevronRightBold from "@/components/icons/IconChevronRightBold.vue";
-
-const SHOW_COUNT = 12; // 輪播最多幾張（理由見檔頭第 6 點）
-const FETCH_COUNT = 30; // 跟後端要幾則（理由見檔頭第 3 點）
 
 const vm = ref(null);
 const isLoading = ref(true);
@@ -48,12 +46,7 @@ const errorMessage = ref("");
 
 onMounted(async () => {
   try {
-    vm.value = await getPublicReviews({
-      range: "all",
-      sort: "newest",
-      hasContentOnly: false,
-      take: FETCH_COUNT,
-    });
+    vm.value = await getFeaturedReviews(); // 檔頭第 9 點
   } catch (error) {
     // http.js 已經把錯誤轉成中文訊息
     errorMessage.value = error.message;
@@ -62,9 +55,8 @@ onMounted(async () => {
   }
 });
 
-const cards = computed(() =>
-  (vm.value?.items ?? []).filter((item) => !item.isRatingOnly).slice(0, SHOW_COUNT),
-);
+// 後端已經挑好、打亂順序（最多 12 則），照順序顯示
+const cards = computed(() => vm.value?.items ?? []);
 
 // 平均分數顯示一位小數（4.666… → 4.7）；四捨五入後的整數星等給星星用
 // ── 位置提示（檔頭第 7 點）──
@@ -78,16 +70,16 @@ const startIndex = computed(() => (cards.value.length >= 2 ? 1 : 0));
 watch(startIndex, (i) => (selected.value = i), { immediate: true });
 
 function groupLabel(g) {
-      const from = g * GROUP_SIZE + 1;
-      const to = Math.min(from + GROUP_SIZE - 1, cards.value.length);
-      return from === to ? `第 ${from} 則` : `第 ${from}～${to} 則`;
+  const from = g * GROUP_SIZE + 1;
+  const to = Math.min(from + GROUP_SIZE - 1, cards.value.length);
+  return from === to ? `第 ${from} 則` : `第 ${from}～${to} 則`;
 }
 
 // 把那一組中間那張移到正中間；最後一組不滿 3 張時，取那一組實際有的中間
 function goToGroup(g) {
-      const from = g * GROUP_SIZE;
-      const to = Math.min(from + GROUP_SIZE, cards.value.length) - 1;
-      carouselRef.value?.emblaApi?.scrollTo(Math.floor((from + to) / 2));
+  const from = g * GROUP_SIZE;
+  const to = Math.min(from + GROUP_SIZE, cards.value.length) - 1;
+  carouselRef.value?.emblaApi?.scrollTo(Math.floor((from + to) / 2));
 }
 
 const averageText = computed(() => (vm.value ? vm.value.summary.average.toFixed(1) : ""));
@@ -107,7 +99,8 @@ const carouselUi = {
 </script>
 
 <template>
-  <section>
+  <!-- 檔頭第 10 點：挑不到評價就整個區塊不顯示 -->
+  <section v-if="isLoading || errorMessage || cards.length > 0">
     <!-- 區塊標題（首頁的 h1 在 HomeView）＋「看全部」 -->
     <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
       <div class="flex items-center gap-2">
@@ -141,10 +134,6 @@ const carouselUi = {
       評價暫時無法載入：{{ errorMessage }}
     </p>
 
-    <p v-else-if="cards.length === 0" class="mt-6 text-sm text-neutral-text-secondary">
-      還沒有公開的評價
-    </p>
-
     <template v-else>
       <!-- 整體分數：大數字＋星星＋則數 -->
       <p class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -171,7 +160,7 @@ const carouselUi = {
         class="mt-4"
         @select="(i) => (selected = i)"
       >
-        <ReviewCard :item="item" />
+        <ReviewCard :item="item" featured />
       </UCarousel>
 
       <!-- 位置提示：4 條短橫桿，每條 3 則（檔頭第 7 點）。只有 1 組時不顯示 -->

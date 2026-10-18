@@ -1,7 +1,9 @@
-﻿using VenueGo.Models.Options;
+﻿using Microsoft.Extensions.Options;
+using VenueGo.Models.Options;
+using VenueGo.Services.Reviews;
 using VenueGo.Services.ReviewScreening;
 using VenueGo.Services.ReviewTickets;
-using VenueGo.Services.Reviews;
+using VenueGo.Services.Weather;
 
 namespace VenueGo.Extensions
 {
@@ -33,6 +35,17 @@ namespace VenueGo.Extensions
             services.AddScoped<IReviewScreeningAi, GeminiScreeningClient>();
             services.AddScoped<IReviewScreeningService, ReviewScreeningService>();
             services.AddHostedService<ReviewScreeningHostedService>();
+
+            // 首頁 TopBar 即時氣象（10/18，F5 的功能，不屬於評論，但同一個子系統所以放這裡）：
+            // 氣象署設定（授權碼在 Secrets.json）、連線（5 秒逾時，氣象署慢就先不顯示）、快取、服務
+            services.Configure<CwaOptions>(configuration.GetSection(CwaOptions.SectionName));
+            services.AddHttpClient(WeatherService.HttpClientName, (sp, c) =>
+            {
+                c.BaseAddress = new Uri(sp.GetRequiredService<IOptions<CwaOptions>>().Value.BaseUrl);
+                c.Timeout = TimeSpan.FromSeconds(5);
+            });
+            services.AddMemoryCache();   // 已經註冊過也沒關係，不會重複
+            services.AddScoped<IWeatherService, WeatherService>();
 
             return services;
         }

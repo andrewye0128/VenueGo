@@ -15,6 +15,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Models.Options;
 using VenueGo.Models.ReservationModels;
 using VenueGo.Services.Orders;
+using VenueGo.Services.Time;
 using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Services.Reservations

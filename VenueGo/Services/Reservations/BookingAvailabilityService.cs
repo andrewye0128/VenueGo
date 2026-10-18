@@ -9,6 +9,7 @@ using VenueGo.Data;
 using VenueGo.Dtos.BookingDtos;
 using VenueGo.Models.Entities;
 using VenueGo.Models.Options;
+using VenueGo.Services.Time;
 using VenueGo.Services.TimeSlots;
 
 namespace VenueGo.Services.Reservations

@@ -4,6 +4,7 @@ using VenueGo.Data;
 using VenueGo.Enums;
 using VenueGo.Models.Entities;
 using VenueGo.Services.ReviewTickets;
+using VenueGo.Services.Time;
 using static VenueGo.Services.CheckIn.ICheckInService;
 
 namespace VenueGo.Services.CheckIn

@@ -23,7 +23,7 @@
 //     這時變數還以為「已經存過了」，就不攔了，結果畫面上的內容直接不見。
 //     記在變數裡的是「頁面以為的狀態」，localStorage 裡的才是「真正的狀態」。
 //
-//  ⚠️ 館方端還在用 draft-box.js（Razor），那支檔案不要刪。
+//  10/9：draft-box.js 跟著 Razor 版 CReview 一起退役（館方端沒有用到它）。
 //
 //  9/29 移植到 Front-Web：「已經有草稿，要覆蓋嗎？」原本用 window.confirm，
 //  改成由頁面傳入 confirmOverwrite（回傳 Promise<boolean>），頁面用 Nuxt UI 的對話框問。

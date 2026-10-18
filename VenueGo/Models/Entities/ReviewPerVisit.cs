@@ -7,9 +7,11 @@ public partial class ReviewPerVisit
 {
     public int ReviewPerVisitId { get; set; }
 
-    public string Qrtoken { get; set; } = null!;
+    public int TicketId { get; set; }
 
-    public int BookingMemberId { get; set; }
+    public int OrderId { get; set; }
+
+    public int UserId { get; set; }
 
     public int VenueId { get; set; }
 

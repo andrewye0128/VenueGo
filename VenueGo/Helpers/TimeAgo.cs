@@ -1,4 +1,4 @@
-﻿using VenueGo.Services;
+﻿using VenueGo.Services.Time;
 
 namespace VenueGo.Helpers
 {

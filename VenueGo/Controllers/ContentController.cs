@@ -4,7 +4,7 @@ using VenueGo.Dtos;
 using VenueGo.Filters;
 using VenueGo.Constants;
 using VenueGo.Models.ContentModels;
-using VenueGo.Services;
+using VenueGo.Services.Time;
 using VenueGo.Services.Auth;
 using VenueGo.ViewModels.ContentViewModels;
 

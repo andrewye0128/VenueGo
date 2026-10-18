@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using VenueGo.Dtos;
 using VenueGo.Dtos.ContentDtos;
 using VenueGo.Models.ContentModels;
-using VenueGo.Services;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Controllers.Api.ContentApi
 {

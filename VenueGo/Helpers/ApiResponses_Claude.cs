@@ -63,7 +63,7 @@ namespace VenueGo.Helpers
 
         /// <summary>
         /// 本體整個沒送（收 JSON 的參數是 null）。
-        /// 參數要宣告成可為 null（例如 ReviewCreateForVisitVM? vm），框架才會把 null 交給 Action，
+        /// 參數要宣告成可為 null（例如 ReviewCreateForVisitDto? vm），框架才會把 null 交給 Action，
         /// 不然框架會自己產生一則英文的「The vm field is required.」。
         /// 用法：if (vm == null) return BadRequest(ApiResponses.EmptyBody());
         /// </summary>

@@ -13,6 +13,7 @@ using VenueGo.Helpers;
 using VenueGo.Services;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
+using VenueGo.Services.Time;
 var builder = WebApplication.CreateBuilder(args);
 
 // 讀取每個人的本機設定
@@ -140,7 +141,6 @@ builder.Services.AddSession();
 //{
 //    options.IdleTimeout = TimeSpan.FromMinutes(30);
 //    options.Cookie.HttpOnly = true;
-
 //    options.Cookie.IsEssential = true;
 //});
 
@@ -175,7 +175,7 @@ builder.Services.AddSingleton<TimeProvider, TaipeiTimeProvider>();
 
 
 // 註冊關於目前登入者的服務：介面 → 實作
-builder.Services.AddScoped<ICurrentUserService, VenueGo.Services.Auth.CurrentUserService>();
+builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 
 // 註冊會員登入驗證服務
 builder.Services.AddScoped<IAuthenticationService, AuthenticationService>();

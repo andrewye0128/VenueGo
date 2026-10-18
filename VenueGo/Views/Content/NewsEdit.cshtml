@@ -1,7 +1,7 @@
 @model VenueGo.Models.ContentModels.CNewsWrap
 @using VenueGo.Models.ContentModels
 @* 注入校時後的系統時間 >> 送出前比較發布時間用,不使用瀏覽器的時鐘 *@
-@inject VenueGo.Services.ITimeService TimeService
+@inject VenueGo.Services.Time.ITimeService TimeService
 
 @{
     ViewData["Title"] = "資訊刊登";

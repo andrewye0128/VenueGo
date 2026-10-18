@@ -25,6 +25,7 @@ namespace VenueGo.Extensions
 
             // 報到，以及定時結算票券的背景工作
             services.AddScoped<ICheckInService, CheckInService>();
+            services.AddScoped<QrTokenService>(); // 動態 QR 產生與驗證
             services.AddHostedService<TicketSettlementHostedService>();
             services.AddScoped<COvertimeChargeFactory>();
 

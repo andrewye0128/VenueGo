@@ -50,8 +50,6 @@ namespace VenueGo.Services.Ticket
             return (Message: "成功產生票券", TicketCount: count);
         }
 
-
-
         public async Task<int> CancelByOrderAsync(int orderId)
         {
             var tickets = await _db.EntryTickets
@@ -68,6 +66,9 @@ namespace VenueGo.Services.Ticket
             return tickets.Count;
         }
 
+
+
+        // 票券轉移
         public async Task<TransferCodeResult> TransferCreateAsync(int ticketId, int userId)
         {
             DateTime now = _time.Now;

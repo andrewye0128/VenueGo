@@ -53,6 +53,34 @@ namespace VenueGo.Controllers.Api.TicketApi
         }
 
 
+        // 前台「使用票券」視窗 >> GET /api/tickets/{id}/qr
+        // 回傳動態 QR（每 30 秒換一次），只有票的現在持有人拿得到
+        [Authorize(
+      AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        [HttpGet("{id:int}/qr")]
+        public async Task<IActionResult> GetQr(
+            int id, [FromQuery] int? testUserId, CancellationToken cancellationToken)
+        {
+            int? userId = User.GetUserId();
+
+            if (userId is null && _env.IsDevelopment())
+                userId = testUserId;
+
+            if (userId is null)
+                return Unauthorized(ApiResult.Fail("請先登入", "UNAUTHORIZED"));
+
+            // QR 每 30 秒就變，不能讓瀏覽器或中間的代理快取舊的
+            Response.Headers.CacheControl = "no-store";
+
+            TicketQrDto? dto = await _ticketQuery.GetQrAsync(id, userId.Value, cancellationToken);
+
+            // 統一錯訊息
+            if (dto == null)
+                return NotFound(ApiResult.Fail("此票券目前無法出示 QR", "QR_UNAVAILABLE"));
+
+            return Ok(ApiResult<TicketQrDto>.Ok(dto));
+        }
+
 
         [Authorize(
       AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]

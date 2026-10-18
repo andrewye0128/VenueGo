@@ -3,18 +3,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using QRCoder;
 using System.Security.Claims;
+using VenueGo.Constants;
 using VenueGo.Data;
+using VenueGo.Enums;
 using VenueGo.Helpers;
 using VenueGo.Models.CheckinModels;
 using VenueGo.Models.Entities;
 using VenueGo.Services.CheckIn;
-using VenueGo.ViewModels.CheckinViewModels;
 using VenueGo.Services.Ticket;
-using VenueGo.Enums;
+using VenueGo.ViewModels.CheckinViewModels;
 
 namespace VenueGo.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = RoleNames.BackOffice)]
     public class TicketController : Controller
     {
         //private readonly dbVenueContext _db;
@@ -361,6 +362,8 @@ namespace VenueGo.Controllers
             return RedirectToAction("ScanLog", new { id });
         }
 
+
+        // QR 圖也改畫動態 payload,不會讓任何人撈到 Qrtoken 本身
         public async Task<IActionResult> QrImage(int id)
         {
             var qrtoken = await _viewFactory.GetQrtokenAsync(id);

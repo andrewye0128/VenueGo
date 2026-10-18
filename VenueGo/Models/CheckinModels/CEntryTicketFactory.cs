@@ -63,5 +63,14 @@ namespace VenueGo.Models.CheckinModels
             ticket.ReceivedUserId = newUserId;
             ticket.Qrtoken = $"TCK-{Guid.NewGuid():N}";
         }
+
+        // 取得目前票券QRtoken, QR驗證重算簽章, 找度到回 null
+        public async Task<string?> GetQrtokenAsync(int ticketId)
+        {
+            return await _db.EntryTickets
+                .Where(t => t.TicketId == ticketId)
+                .Select(t => t.Qrtoken)
+                .FirstOrDefaultAsync();
+        }
     }
 }

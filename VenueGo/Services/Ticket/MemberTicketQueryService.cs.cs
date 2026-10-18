@@ -11,11 +11,13 @@ namespace VenueGo.Services.Ticket
 
         private readonly dbVenueContext _db;
         private readonly ITimeService _time;
+        private readonly QrTokenService _qrTokenService;
 
-        public MemberTicketQueryService(dbVenueContext db, ITimeService time)
+        public MemberTicketQueryService(dbVenueContext db, ITimeService time, QrTokenService qrTokenService)
         {
             _db = db;
             _time = time;
+            _qrTokenService = qrTokenService;
         }
 
 
@@ -24,6 +26,7 @@ namespace VenueGo.Services.Ticket
         {
             // 持有人 = EntryTicket.UserId；舊資料是 null 就退回訂購人 (Order.UserId)
             // 撈：我持有的票 + 我訂購但已轉給別人的票；已取消的票在這裡就過濾掉
+            // 移除傳入QRToken改由30秒組成QR(v1.{ticketId}.{時間窗}.{簽章})
             var rows = await (from t in _db.EntryTickets
                               join o in _db.Orders on t.OrderId equals o.OrderId
                               join r in _db.Reservations on o.ReservationId equals r.ReservationId
@@ -35,7 +38,6 @@ namespace VenueGo.Services.Ticket
                               select new
                               {
                                   t.TicketId,
-                                  t.Qrtoken,
                                   t.Status,
                                   HolderId = t.UserId ?? o.UserId,
                                   r.BookingDate,
@@ -48,6 +50,7 @@ namespace VenueGo.Services.Ticket
                              .ToListAsync(cancellationToken);
             var now = _time.Now;
             var ticketIds = rows.Select(x => x.TicketId).ToList();
+            var insideIds = await GetInsideTicketIdsAsync(ticketIds, cancellationToken);
             var pendingMap = await _db.TicketTransfers
                 .AsNoTracking()
                 .Where(p => ticketIds.Contains(p.TicketId)
@@ -59,7 +62,8 @@ namespace VenueGo.Services.Ticket
             return rows.Select(x =>
             {
                 string status = ToMemberStatus(
-                    x.Status, x.HolderId == userId, x.BookingDate.ToDateTime(x.EndTime), now);
+                    x.Status, x.HolderId == userId, insideIds.Contains(x.TicketId),
+                    x.BookingDate.ToDateTime(x.EndTime), now);
 
                 pendingMap.TryGetValue(x.TicketId, out var pending);
                 return new MemberTicketDto
@@ -70,28 +74,89 @@ namespace VenueGo.Services.Ticket
                     Date = x.BookingDate.ToString("yyyy/MM/dd"),
                     TimeRange = $"{x.StartTime:HH\\:mm}-{x.EndTime:HH\\:mm}",
                     Status = status,
-                    QrToken = status == "available" ? x.Qrtoken : null,   // 只有可使用的票才給 QR
                     TransferCode = status == "available" ? pending?.TransferCode : null,
                     TransferExpiresAt = status == "available" ? pending?.ExpiresAt : null,
                 };
             }).ToList();            
         }
 
-        private static string ToMemberStatus(byte dbStatus, bool heldByMe, DateTime endAt, DateTime now)
+
+        // 按下使用QRcode
+        public async Task<TicketQrDto?> GetQrAsync(
+           int ticketId, int userId, CancellationToken cancellationToken = default)
+        {
+            // 只有「現在的持有人」查得到；不是自己的票、不存在、已取消，都是 null
+            var row = await (from t in _db.EntryTickets
+                             join o in _db.Orders on t.OrderId equals o.OrderId
+                             join r in _db.Reservations on o.ReservationId equals r.ReservationId
+                             where t.TicketId == ticketId
+                                && t.Status != (byte)EntryTicketStatus.Cancelled
+                                && (t.UserId ?? o.UserId) == userId
+                             select new { t.TicketId, t.Qrtoken, t.Status, r.BookingDate, r.EndTime })
+                            .AsNoTracking()
+                            .FirstOrDefaultAsync(cancellationToken);
+            if (row == null) return null;
+
+            var insideIds = await GetInsideTicketIdsAsync(new List<int> { ticketId }, cancellationToken);
+            string status = ToMemberStatus(
+                row.Status, true, insideIds.Contains(ticketId),
+                row.BookingDate.ToDateTime(row.EndTime), _time.Now);
+
+            // 只有可使用或場內的票可以出示 QR
+            if (status != "available" && status != "inside") return null;
+
+            var (payload, expiresAt) = _qrTokenService.Generate(row.TicketId, row.Qrtoken);
+            return new TicketQrDto
+            {
+                Payload = payload,
+                ExpiresAt = expiresAt,
+                Status = status
+            };
+        }
+
+        private async Task<HashSet<int>> GetInsideTicketIdsAsync(
+           List<int> ticketIds, CancellationToken cancellationToken)
+        {
+            var lastActions = await _db.CheckInLogs
+                .AsNoTracking()
+                .Where(l => ticketIds.Contains(l.TicketId) && l.IsValid
+                    && (l.Action == (byte)CheckInAction.CheckIn || l.Action == (byte)CheckInAction.CheckOut))
+                .GroupBy(l => l.TicketId)
+                .Select(g => new
+                {
+                    TicketId = g.Key,
+                    Action = g.OrderByDescending(l => l.ActionTime).Select(l => l.Action).FirstOrDefault()
+                })
+                .ToListAsync(cancellationToken);
+
+            return lastActions
+                .Where(x => x.Action == (byte)CheckInAction.CheckIn)
+                .Select(x => x.TicketId)
+                .ToHashSet();
+        }
+
+        private static string ToMemberStatus(byte dbStatus, bool heldByMe, bool isInside, DateTime endAt, DateTime now)
         {
             // 票已經不在我手上（我訂購但轉給別人了）
             if (!heldByMe) return "transferred";
 
-            // Used（入場中）與 Completed（已離場）對會員來說都是「已使用」
-            if (dbStatus == (byte)EntryTicketStatus.Used
-                || dbStatus == (byte)EntryTicketStatus.Completed)
-                return "used";
+            // 人還在場內：不管有沒有超過預約結束時間（超時時 DB 可能已被標成 Expired），都還要能出示 QR 離場
+            if (isInside && (dbStatus == (byte)EntryTicketStatus.Used
+                          || dbStatus == (byte)EntryTicketStatus.Expired))
+                return "inside";
 
-            // 已標記失效，或還是 Valid 但時段已過（排程每 30 分鐘才結算，中間有空窗）
-            if (dbStatus == (byte)EntryTicketStatus.Expired || endAt < now)
-                return "expired";
+            // 已離場完成
+            if (dbStatus == (byte)EntryTicketStatus.Completed) return "used";
 
-            return "available";
+            // 已標記失效且人不在場內
+            if (dbStatus == (byte)EntryTicketStatus.Expired) return "expired";
+
+            // 入場過、現在在場外：時段內可以再次入場，時段過了就算已使用
+            if (dbStatus == (byte)EntryTicketStatus.Used)
+                return endAt < now ? "used" : "available";
+
+            // 還沒入場過（Valid）：時段沒過是可使用；還是 Valid 但時段已過（排程每 30 分鐘才結算，中間有空窗）算失效
+            return dbStatus == (byte)EntryTicketStatus.Valid && endAt >= now ? "available" : "expired";
         }
 
     }

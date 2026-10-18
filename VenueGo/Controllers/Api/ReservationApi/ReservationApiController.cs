@@ -41,7 +41,7 @@ namespace VenueGo.Controllers.Api.ReservationApi
         ///
         /// 需要會員的 JWT（Authorization: Bearer ...）。
         ///
-        /// 排序：預約日期新到舊 → 開始時間晚到早 → 預約編號大到小。
+        /// 排序：建立時間新到舊 → 預約編號大到小。
         /// </remarks>
         /// <param name="query">篩選條件與分頁</param>
         /// <param name="cancellationToken">使用者離開頁面時取消查詢</param>

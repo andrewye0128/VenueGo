@@ -27,7 +27,7 @@ import {
   RESERVATION_STATUS,
   RESERVATION_STATUS_OPTIONS,
 } from "@/constants/statuses";
-import { formatAmount, formatDate, formatTimeRange } from "@/utils/format";
+import { formatAmount, formatDate, formatDateTime, formatTimeRange } from "@/utils/format";
 import { canCancel, formatPersonCount } from "@/utils/reservation";
 
 const PAGE_SIZE = 10;
@@ -129,18 +129,26 @@ watch(page, load);
 onMounted(load);
 
 // ── 表格欄位 ──
-// accessorKey：對應資料的欄位名稱；沒有對應欄位的（使用時段、操作）用 id
+// accessorKey：對應資料的欄位名稱；沒有對應欄位的（使用時間、操作）用 id
 // 每一欄的顯示內容寫在下方 template 的 #xxx-cell
+// 排序是建立時間新到舊（後端排好），建立時間是次要資訊，放在操作前面
 const columns = [
   { accessorKey: "orderNo", header: "訂單編號" },
   { accessorKey: "venueName", header: "場地名稱" },
-  { accessorKey: "bookingDate", header: "預約日期" },
-  { id: "time", header: "使用時段" },
+  { id: "time", header: "使用時間" },
   { accessorKey: "personCount", header: "預約人數" },
   { accessorKey: "reservationStatus", header: "預約狀態" },
   { accessorKey: "paymentStatus", header: "付款狀態" },
+  { accessorKey: "reservedAt", header: "建立時間" },
   { id: "actions", header: "操作" },
 ];
+
+// 建立時間拆成日期、時間兩段：表格分兩行顯示（跟「使用時間」一樣），手機卡片接成一行
+// "2026-10-18T14:30:00" → { date: "2026/10/18", time: "14:30" }
+function reservedAtParts(reservation) {
+  const [date, time] = formatDateTime(reservation.reservedAt).split(" ");
+  return { date, time };
+}
 
 // ── 明細、取消 ──
 const overlay = useOverlay();
@@ -206,7 +214,8 @@ async function openCancel(reservation) {
               class="w-full"
             />
           </UFormField>
-          <UFormField label="預約日期">
+          <!-- 比對的是使用場地的那一天（bookingDate），不是建立日期，所以叫「使用日期」（同訂單頁） -->
+          <UFormField label="使用日期">
             <DatePickerInput v-model="draft.date" />
           </UFormField>
           <UFormField label="預約狀態">
@@ -286,11 +295,22 @@ async function openCancel(reservation) {
         </RouterLink>
         <span v-else>—</span>
       </template>
-      <template #bookingDate-cell="{ row }">
-        {{ formatDate(row.original.bookingDate) }}
-      </template>
+      <!-- 使用時間、建立時間：分成兩行（上面日期、下面時間），寫法同訂單頁的「使用時間」 -->
       <template #time-cell="{ row }">
-        {{ formatTimeRange(row.original.startTime, row.original.endTime) }}
+        <span class="block whitespace-nowrap tabular-nums">
+          {{ formatDate(row.original.bookingDate) }}
+        </span>
+        <span class="block whitespace-nowrap text-neutral-text-secondary tabular-nums">
+          {{ formatTimeRange(row.original.startTime, row.original.endTime) }}
+        </span>
+      </template>
+      <template #reservedAt-cell="{ row }">
+        <span class="block whitespace-nowrap tabular-nums">
+          {{ reservedAtParts(row.original).date }}
+        </span>
+        <span class="block whitespace-nowrap text-neutral-text-secondary tabular-nums">
+          {{ reservedAtParts(row.original).time }}
+        </span>
       </template>
       <!-- 人數、付款狀態：預約沒有訂單或付款紀錄時是 null，顯示「—」 -->
       <template #personCount-cell="{ row }">
@@ -358,6 +378,9 @@ async function openCancel(reservation) {
             {{ formatDate(row.bookingDate) }}
             {{ formatTimeRange(row.startTime, row.endTime) }} ·
             {{ formatPersonCount(row.personCount) }}
+          </p>
+          <p class="text-xs text-neutral-text-secondary tabular-nums">
+            建立於 {{ formatDateTime(row.reservedAt) }}
           </p>
           <div class="flex items-center justify-between gap-2">
             <!-- 沒有付款紀錄時不顯示付款標籤，用空的 span 佔位，讓「查看／取消」維持靠右 -->

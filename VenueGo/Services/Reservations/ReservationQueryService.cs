@@ -85,10 +85,10 @@ namespace VenueGo.Services.Reservations
             var totalCount = await reservations.CountAsync(cancellationToken);
 
             // 5. 排序 → 跳過前面幾頁 → 取這一頁（第 2 次送到資料庫）
-            //    最後加 ReservationId，讓順序固定，換頁時不會重複或漏掉
+            //    建立時間新到舊：剛訂的預約排最上面
+            //    最後加 ReservationId，讓順序固定（建立時間可能相同），換頁時不會重複或漏掉
             var items = await reservations
-                .OrderByDescending(r => r.BookingDate)
-                .ThenByDescending(r => r.StartTime)
+                .OrderByDescending(r => r.ReservedAt)
                 .ThenByDescending(r => r.ReservationId)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)

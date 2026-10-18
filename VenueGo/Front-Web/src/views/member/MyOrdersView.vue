@@ -109,14 +109,38 @@ onMounted(load);
 
 // ── 表格欄位（每一欄的顯示內容寫在下方 template 的 #xxx-cell）──
 const columns = [
-  { accessorKey: "orderNo", header: "訂單編號" },
-  { accessorKey: "venueName", header: "場地名稱" },
-  { id: "time", header: "使用時間" },
-  { accessorKey: "totalAmount", header: "金額" },
-  { accessorKey: "paymentMethod", header: "付款方式" },
-  { accessorKey: "paymentStatus", header: "付款狀態" },
-  { id: "deadline", header: "期限／付款時間" },
-  { id: "actions", header: "操作" },
+  {
+    accessorKey: "orderNo",
+    header: "訂單編號",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "venueName",
+    header: "場地名稱",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  { id: "time", header: "使用時間", meta: { class: { th: "text-center", td: "text-center" } } },
+  {
+    accessorKey: "totalAmount",
+    header: "金額",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "paymentMethod",
+    header: "付款方式",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "paymentStatus",
+    header: "付款狀態",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    id: "deadline",
+    header: "期限／付款時間",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  { id: "actions", header: "操作", meta: { class: { th: "text-center", td: "text-center" } } },
 ];
 
 // 「期限／付款時間」這一欄：未付款顯示期限、已付款顯示付款時間、其他（取消、逾期）顯示「—」
@@ -264,7 +288,7 @@ function onPay(order) {
         <span v-else>—</span>
       </template>
       <template #actions-cell="{ row }">
-        <div class="flex items-start gap-2">
+        <div class="flex justify-center items-start gap-2">
           <!-- 每一列都有「查看」，讀屏軟體只唸「查看」分不出是哪一筆，所以補上 aria-label
                外框按鈕（outline）：跟「付款」一樣的大小與框線，顏色維持品牌藍
                :loading-auto="false"：全站按鈕預設會在 async 的 @click 執行期間轉圈（vite.config.js 的 loadingAuto），

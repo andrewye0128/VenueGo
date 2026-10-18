@@ -133,14 +133,38 @@ onMounted(load);
 // 每一欄的顯示內容寫在下方 template 的 #xxx-cell
 // 排序是建立時間新到舊（後端排好），建立時間是次要資訊，放在操作前面
 const columns = [
-  { accessorKey: "orderNo", header: "訂單編號" },
-  { accessorKey: "venueName", header: "場地名稱" },
-  { id: "time", header: "使用時間" },
-  { accessorKey: "personCount", header: "預約人數" },
-  { accessorKey: "reservationStatus", header: "預約狀態" },
-  { accessorKey: "paymentStatus", header: "付款狀態" },
-  { accessorKey: "reservedAt", header: "建立時間" },
-  { id: "actions", header: "操作" },
+  {
+    accessorKey: "orderNo",
+    header: "訂單編號",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "venueName",
+    header: "場地名稱",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  { id: "time", header: "使用時間", meta: { class: { th: "text-center", td: "text-center" } } },
+  {
+    accessorKey: "personCount",
+    header: "預約人數",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "reservationStatus",
+    header: "預約狀態",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "paymentStatus",
+    header: "付款狀態",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "reservedAt",
+    header: "建立時間",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  { id: "actions", header: "操作", meta: { class: { th: "text-center", td: "text-center" } } },
 ];
 
 // 建立時間拆成日期、時間兩段：表格分兩行顯示（跟「使用時間」一樣），手機卡片接成一行
@@ -316,6 +340,7 @@ async function openCancel(reservation) {
       <template #personCount-cell="{ row }">
         {{ row.original.personCount ?? "—" }}
       </template>
+
       <template #reservationStatus-cell="{ row }">
         <StatusBadge :status="RESERVATION_STATUS[row.original.reservationStatus]" />
       </template>
@@ -327,7 +352,7 @@ async function openCancel(reservation) {
         <span v-else>—</span>
       </template>
       <template #actions-cell="{ row }">
-        <div class="flex gap-2">
+        <div class="flex justify-center gap-2">
           <!-- 每一列都有「查看」，讀屏軟體只唸「查看」會分不出是哪一筆，所以補上 aria-label
                外框按鈕（outline）：跟「訂單與付款」頁一致；顏色維持原本的藍（查看）、橘（取消）
                :loading-auto="false"：全站按鈕預設會在 async 的 @click 執行期間轉圈（vite.config.js 的 loadingAuto），

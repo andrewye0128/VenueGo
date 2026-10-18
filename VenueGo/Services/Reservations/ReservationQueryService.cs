@@ -143,6 +143,7 @@ namespace VenueGo.Services.Reservations
                        SportName = st.SportName,
 
                        // 沒有訂單時 o 是 null
+                       OrderNo = o == null ? null : o.OrderNo,
                        PersonCount = o == null ? null : (int?)o.PersonMount,
                        TotalAmount = o == null ? null : (int?)o.TotalAmount,
 
@@ -158,17 +159,15 @@ namespace VenueGo.Services.Reservations
         private static IQueryable<MyReservationDto> ApplyMyReservationFilters(
             IQueryable<MyReservationDto> reservations, MyReservationQuery query)
         {
-            // 關鍵字：場地名稱「包含」，或預約編號「完全相同」
-            // "R012"、"r012"、"012"、"12" 都當成預約編號 12
+            // 關鍵字：場地名稱或訂單編號「包含」
+            // 前台不顯示預約編號（R012），所以不比對預約編號：
+            // 不然客人輸入 12，會找到一筆畫面上看不到 12 的預約，看不懂為什麼
             var keyword = query.Keyword?.Trim();
             if (!string.IsNullOrEmpty(keyword))
             {
-                var isReservationNo = int.TryParse(
-                    keyword.TrimStart('R', 'r'), out var reservationId);
-
                 reservations = reservations.Where(r =>
                     r.VenueName.Contains(keyword)
-                    || (isReservationNo && r.ReservationId == reservationId));
+                    || (r.OrderNo != null && r.OrderNo.Contains(keyword)));
             }
 
             if (query.Date is DateOnly date)

@@ -47,6 +47,11 @@
         public string SportName { get; init; } = string.Empty;
 
         // ── 訂單（Orders）：沒有訂單時是 null ──
+        /// <summary>
+        /// 訂單編號（Orders.OrderNo），例如 VG20261015001。
+        /// 前台對客人只顯示這個編號，「我的預約」和「訂單與付款」用它互相對照、跳轉。
+        /// </summary>
+        public string? OrderNo { get; init; }
 
         /// <summary>預約人數（Orders.PersonMount）。</summary>
         public int? PersonCount { get; init; }

@@ -24,11 +24,11 @@
     <div class="card-body">
         <div class="row g-3 align-items-end">
             <div class="col-md-4">
-                <label class="form-label small text-secondary">搜尋會員</label>
+                <label class="form-label small text-secondary">搜尋</label>
                 <div class="input-group">
                     <span class="input-group-text bg-white"><i class="bi bi-search text-secondary"></i></span>
                     <input type="text" name="keyword" value="@Model.Filter.Keyword"
-                           class="form-control" placeholder="搜尋會員姓名、Email 或預約編號...">
+                           class="form-control" placeholder="會員姓名、Email、預約編號或訂單編號...">
                 </div>
             </div>
             <div class="col-md-4">
@@ -101,6 +101,7 @@
                 <thead class="table-light">
                     <tr>
                         <th scope="col">預約編號</th>
+                         <th scope="col">訂單編號</th>
                         <th scope="col">會員</th>
                         <th scope="col">場地</th>
                         <th scope="col">預約日期</th>
@@ -119,6 +120,7 @@
                                     R@(item.ReservationId.ToString("D3"))
                                 </a>
                             </td>
+                            <td class="text-nowrap small">@(item.OrderNo ?? "—")</td>
                             <td>
                                 <div>@item.UserName</div>
                                 <div class="small text-secondary">@item.UserEmail</div>

@@ -10,6 +10,10 @@ namespace VenueGo.ViewModels.ReservationViewModels
         [DisplayName("預約編號")]
         public int ReservationId { get; set; }
 
+        /// <summary>訂單編號。客人在前台只看得到這個編號，臨櫃時會報這個。沒有訂單時是 null。</summary>
+        [DisplayName("訂單編號")]
+        public string? OrderNo { get; set; }
+
         [DisplayName("會員名稱")]
         public string UserName { get; set; } = string.Empty;
 
@@ -94,7 +98,7 @@ namespace VenueGo.ViewModels.ReservationViewModels
     /// </summary>
     public class ReservationListFilter
     {
-        /// <summary>關鍵字，同時比對會員姓名、Email、預約編號。</summary>
+        /// <summary>關鍵字，同時比對會員姓名、Email、預約編號（R021 或 21）、訂單編號。</summary>
         public string? Keyword { get; set; }
 
         /// <summary>預約日期範圍起（含）。</summary>

@@ -164,7 +164,7 @@ const columns = [
     header: "建立時間",
     meta: { class: { th: "text-center", td: "text-center" } },
   },
-  { id: "actions", header: "操作", meta: { class: { th: "text-center", td: "text-center" } } },
+  { id: "actions", header: "操作", meta: { class: { th: "text-center" } } },
 ];
 
 // 建立時間拆成日期、時間兩段：表格分兩行顯示（跟「使用時間」一樣），手機卡片接成一行
@@ -352,7 +352,7 @@ async function openCancel(reservation) {
         <span v-else>—</span>
       </template>
       <template #actions-cell="{ row }">
-        <div class="flex justify-center gap-2">
+        <div class="flex gap-2">
           <!-- 每一列都有「查看」，讀屏軟體只唸「查看」會分不出是哪一筆，所以補上 aria-label
                外框按鈕（outline）：跟「訂單與付款」頁一致；顏色維持原本的藍（查看）、橘（取消）
                :loading-auto="false"：全站按鈕預設會在 async 的 @click 執行期間轉圈（vite.config.js 的 loadingAuto），

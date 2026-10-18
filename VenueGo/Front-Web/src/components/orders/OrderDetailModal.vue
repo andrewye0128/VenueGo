@@ -27,7 +27,7 @@ import {
 import { PAYMENT_STATUS, RESERVATION_STATUS } from "@/constants/statuses";
 import { formatDateTime, formatDateWithWeekday, formatTimeRange } from "@/utils/format";
 import { canPay, formatRemaining } from "@/utils/order";
-import { formatPersonCount, formatReservationNo } from "@/utils/reservation";
+import { formatPersonCount } from "@/utils/reservation";
 
 const props = defineProps({
   order: { type: Object, required: true },
@@ -59,8 +59,8 @@ onMounted(load);
 const o = computed(() => detail.value ?? props.order);
 const payable = computed(() => canPay(o.value, now.value));
 
+// 不顯示預約編號（R012）：前台只用訂單編號，已經顯示在標題下方
 const rows = computed(() => [
-  { label: "預約編號", value: formatReservationNo(o.value.reservationId) },
   { label: "場地", value: [o.value.sportName, o.value.venueName].filter(Boolean).join("・") },
   {
     label: "使用時間",

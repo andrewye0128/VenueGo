@@ -3,6 +3,7 @@
   跟「我的預約」的差別：這頁的重點是「錢付了沒、要付多少、什麼時候前要付」，排序是下單時間新到舊
   資料目前是假資料（api/orderApi.js），串接 API 時這個檔案不用改
   「付款」按鈕：3-A 先顯示按鈕和倒數，按下去提示「製作中」；3-D 再接上綠界付款流程（onPay）
+  訂單編號跟「我的預約」同一個編號；點編號跳到我的預約並只查這一筆
   UFormField、UInput、USelect、UAlert、UButton 與 useOverlay、useToast 由 Nuxt UI 自動匯入
 -->
 <script setup>
@@ -15,6 +16,7 @@ import ListTable from "@/components/list/ListTable.vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import OrderDetailModal from "@/components/orders/OrderDetailModal.vue";
 import { getMyOrders } from "@/api/orderApi";
+import { useKeywordQuery } from "@/composables/useKeywordQuery";
 import { useSiteClock } from "@/composables/useSiteClock";
 import { ErrorCodes } from "@/constants/errorCodes";
 import { PAYMENT_METHOD, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_OPTIONS } from "@/constants/payment";
@@ -44,6 +46,11 @@ const DEFAULT_FILTERS = {
 };
 const filters = ref({ ...DEFAULT_FILTERS });
 const page = ref(1);
+// 關鍵字跟網址的 ?keyword= 同步：從「我的預約」點編號跳過來時，一進來就只查那一筆
+useKeywordQuery(filters);
+
+// 訂單編號連到「我的預約」，並用這個編號查詢
+const reservationsLink = (orderNo) => ({ name: "reservations", query: { keyword: orderNo } });
 
 // 有沒有套用篩選條件：決定沒有資料時顯示哪一種空狀態（同「我的預約」）
 const hasActiveFilters = computed(() => {
@@ -215,8 +222,15 @@ function onPay(order) {
       </template>
 
       <!-- ── 電腦版表格（資料在 row.original 裡） ── -->
+      <!-- 訂單編號：連到「我的預約」只查這一筆（樣式、寫法同「我的預約」的編號連結） -->
       <template #orderNo-cell="{ row }">
-        <span class="tabular-nums">{{ row.original.orderNo }}</span>
+        <RouterLink
+          :to="reservationsLink(row.original.orderNo)"
+          class="rounded font-medium whitespace-nowrap text-brand-primary tabular-nums underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
+          :aria-label="`訂單 ${row.original.orderNo}，前往我的預約`"
+        >
+          {{ row.original.orderNo }}
+        </RouterLink>
       </template>
       <!-- 使用時間、期限：分成兩行（上面日期、下面時間／說明），表格才放得進會員中心的寬度 -->
       <template #time-cell="{ row }">
@@ -288,9 +302,13 @@ function onPay(order) {
       <template #card="{ row }">
         <div class="flex flex-col gap-2 text-sm">
           <div class="flex items-center justify-between gap-2">
-            <span class="font-semibold text-neutral-text-primary tabular-nums">
+            <RouterLink
+              :to="reservationsLink(row.orderNo)"
+              class="rounded font-semibold text-brand-primary tabular-nums underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
+              :aria-label="`訂單 ${row.orderNo}，前往我的預約`"
+            >
               {{ row.orderNo }}
-            </span>
+            </RouterLink>
             <StatusBadge :status="PAYMENT_STATUS[row.paymentStatus]" />
           </div>
           <p class="text-base font-semibold text-neutral-text-primary">{{ row.venueName }}</p>

@@ -17,7 +17,7 @@ import { computed } from "vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import { PAYMENT_STATUS, RESERVATION_STATUS } from "@/constants/statuses";
 import { formatAmount, formatDate, formatDateTime, formatTimeRange } from "@/utils/format";
-import { formatPersonCount, formatReservationNo } from "@/utils/reservation";
+import { formatPersonCount } from "@/utils/reservation";
 
 const props = defineProps({
   reservation: { type: Object, required: true },
@@ -55,7 +55,8 @@ const extraRows = computed(() =>
 </script>
 
 <template>
-  <UModal title="預約明細" :description="formatReservationNo(r.reservationId)">
+  <!-- 標題下方顯示訂單編號（跟「訂單與付款」同一個編號）；沒有訂單的舊資料不顯示 -->
+  <UModal title="預約明細" :description="r.orderNo ?? undefined">
     <template #body>
       <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
         <template v-for="item in rows" :key="item.label">

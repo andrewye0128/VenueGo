@@ -7,6 +7,7 @@ namespace VenueGo.Dtos.MemberDtos
     {
         [Required(ErrorMessage = "請輸入 Email")]
         [EmailAddress(ErrorMessage = "Email 格式不正確")]
+        [StringLength(254)]
         public string Email { get; set; } = string.Empty;
     }
 

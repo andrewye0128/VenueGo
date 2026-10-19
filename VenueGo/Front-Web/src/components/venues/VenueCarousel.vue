@@ -33,6 +33,11 @@ const filteredVenues = computed(() =>
     : venues.value.filter((venue) => venue.sportTypeId === selectedSportTypeId.value),
 );
 
+// 「看全部場地」連到場館資訊頁：選「全部」時不帶運動類型，選了某一類就直接進那一類的介紹
+const allVenuesLink = computed(() =>
+  selectedSportTypeId.value === null ? "/venues" : `/venues/${selectedSportTypeId.value}`,
+);
+
 // 進頁面時呼叫一次 API，切換篩選只在前端過濾，不重新呼叫
 onMounted(async () => {
   try {
@@ -62,10 +67,20 @@ const carouselUi = {
 
 <template>
   <section>
-    <!-- 區塊標題：h2（首頁的 h1 在 HomeView） -->
-    <div class="flex items-center gap-2">
-      <IconMapPin class="size-6 text-brand-accent" />
-      <h2 class="text-2xl font-bold text-neutral-text-primary">場地介紹</h2>
+    <!-- 區塊標題：h2（首頁的 h1 在 HomeView）；右邊「看全部場地」連到場館資訊頁 -->
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <IconMapPin class="size-6 text-brand-accent" />
+        <h2 class="text-2xl font-bold text-neutral-text-primary">場地介紹</h2>
+      </div>
+      <UButton
+        color="primary"
+        variant="link"
+        trailing-icon="i-mdi-chevron-right"
+        :to="allVenuesLink"
+      >
+        看全部場地
+      </UButton>
     </div>
 
     <!-- 載入中：灰色卡片骨架，張數跟輪播一樣（手機 1、平板 2、電腦 4） -->

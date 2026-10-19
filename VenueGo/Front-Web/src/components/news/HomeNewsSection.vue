@@ -55,7 +55,7 @@ const carouselUi = {
         <h2 class="text-2xl font-bold text-neutral-text-primary">最新消息</h2>
       </div>
       <UButton color="primary" variant="link" trailing-icon="i-mdi-chevron-right" to="/news">
-        看更多
+        看全部消息
       </UButton>
     </div>
 

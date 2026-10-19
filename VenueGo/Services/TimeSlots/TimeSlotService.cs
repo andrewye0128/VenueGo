@@ -468,7 +468,7 @@ namespace VenueGo.Services.TimeSlots
         /// 跟場地模組（VenueScheduleService）的規則一致，收費標準頁顯示的價格才會跟實際收費相同。
         /// 不讀 SportTypePriceRules.PeakStartTime：那是舊欄位，後台設定價格時已經不會更新它。
         /// </para>
-        /// /// <para>
+        /// <para>
         /// 計價規則沒有保留歷史（改設定就是直接蓋掉舊值），
         /// 所以 OrdersDetails 必須存下成交當下的單價快照：調價之後，舊訂單的金額不能跟著變。
         /// </para>

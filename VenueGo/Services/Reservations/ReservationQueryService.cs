@@ -323,6 +323,7 @@ namespace VenueGo.Services.Reservations
                 })
                 .ToList();
         }
+
         /// <summary>操作人員的姓名與員工代碼。userId 為 null 時回傳 null。</summary>
         private async Task<OperatorRow?> LoadOperatorAsync(int? userId, CancellationToken ct)
         {

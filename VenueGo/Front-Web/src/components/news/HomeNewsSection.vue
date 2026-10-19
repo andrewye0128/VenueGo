@@ -37,11 +37,12 @@ const carouselUi = {
   container: "items-stretch",
   // 一次顯示幾張：手機 1 張、平板 2 張、電腦 4 張
   item: "basis-full sm:basis-1/2 lg:basis-1/4",
-  // 手機用滑的，不顯示箭頭
-  arrows: "max-md:hidden",
-  // 箭頭放在卡片內側（預設在外側，會超出版面）
-  prev: "start-2 sm:start-2 rounded text-neutral-text-primary",
-  next: "end-2 sm:end-2 rounded text-neutral-text-primary",
+  // 箭頭樣式跟首頁評價輪播（HomeReviewCarousel）一致：
+  // 平板以下用滑的、不顯示箭頭（左右留白不夠放）；左右都不能按（張數不超過一頁）時整組隱藏
+  arrows: "max-lg:hidden has-[[data-slot=prev]:disabled]:has-[[data-slot=next]:disabled]:hidden",
+  // 箭頭放在卡片外側（壓在版面左右的留白上），不蓋住卡片內容
+  prev: "-start-5 sm:-start-5 rounded text-neutral-text-primary",
+  next: "-end-5 sm:-end-5 rounded text-neutral-text-primary",
 };
 </script>
 

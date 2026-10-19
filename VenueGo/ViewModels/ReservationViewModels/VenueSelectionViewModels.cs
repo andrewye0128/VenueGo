@@ -124,7 +124,7 @@ namespace VenueGo.ViewModels.ReservationViewModels
                 }
 
                 var hasDifferentPeakPrice =
-                   PeakPrice.HasValue && HasPeakHours && PeakPrice != OffPeakPrice;
+                    PeakPrice.HasValue && HasPeakHours && PeakPrice != OffPeakPrice;
 
                 if (!hasDifferentPeakPrice)
                 {
@@ -137,7 +137,7 @@ namespace VenueGo.ViewModels.ReservationViewModels
                 return new[]
                 {
                     new PriceRow { Label = "離峰價格", Value = $"NT$ {OffPeakPrice:N0} / 小時" },
-                     new PriceRow { Label = "尖峰價格", Value = $"NT$ {PeakPrice:N0} / 小時（尖峰時段依星期而定）" }
+                    new PriceRow { Label = "尖峰價格", Value = $"NT$ {PeakPrice:N0} / 小時（尖峰時段依星期而定）" }
                 };
             }
         }

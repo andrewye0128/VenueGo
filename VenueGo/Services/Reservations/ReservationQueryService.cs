@@ -295,7 +295,7 @@ namespace VenueGo.Services.Reservations
         /// </para>
         /// </summary>
         private async Task<List<ReservationDetailLineViewModel>> LoadLinesAsync(
-           int orderId, int sportTypeId, DateOnly bookingDate, CancellationToken ct)
+            int orderId, int sportTypeId, DateOnly bookingDate, CancellationToken ct)
         {
             // 預約那一天的尖峰起始時間（每個星期幾可能不同），由場地模組提供
             var peakStartTime = await _venueSchedule.GetPeakStartTimeAsync(sportTypeId, bookingDate, ct);
@@ -323,8 +323,6 @@ namespace VenueGo.Services.Reservations
                 })
                 .ToList();
         }
-
-
         /// <summary>操作人員的姓名與員工代碼。userId 為 null 時回傳 null。</summary>
         private async Task<OperatorRow?> LoadOperatorAsync(int? userId, CancellationToken ct)
         {

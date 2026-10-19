@@ -2,6 +2,7 @@
 using VenueGo.Dtos.TicketDtos;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Enums;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Services.Ticket
 {
@@ -46,12 +47,21 @@ namespace VenueGo.Services.Ticket
                              .AsNoTracking()
                              .ToListAsync(cancellationToken);
             var now = _time.Now;
+            var ticketIds = rows.Select(x => x.TicketId).ToList();
+            var pendingMap = await _db.TicketTransfers
+                .AsNoTracking()
+                .Where(p => ticketIds.Contains(p.TicketId)
+                    && p.FromUserId == userId
+                    && p.Status == (byte)TicketTransferStatus.Pending
+                    && p.ExpiresAt > now)
+                .ToDictionaryAsync(p => p.TicketId, cancellationToken);
 
             return rows.Select(x =>
             {
                 string status = ToMemberStatus(
                     x.Status, x.HolderId == userId, x.BookingDate.ToDateTime(x.EndTime), now);
 
+                pendingMap.TryGetValue(x.TicketId, out var pending);
                 return new MemberTicketDto
                 {
                     Id = x.TicketId,
@@ -60,10 +70,13 @@ namespace VenueGo.Services.Ticket
                     Date = x.BookingDate.ToString("yyyy/MM/dd"),
                     TimeRange = $"{x.StartTime:HH\\:mm}-{x.EndTime:HH\\:mm}",
                     Status = status,
-                    QrToken = status == "available" ? x.Qrtoken : null   // 只有可使用的票才給 QR
+                    QrToken = status == "available" ? x.Qrtoken : null,   // 只有可使用的票才給 QR
+                    TransferCode = status == "available" ? pending?.TransferCode : null,
+                    TransferExpiresAt = status == "available" ? pending?.ExpiresAt : null,
                 };
-            }).ToList();
+            }).ToList();            
         }
+
         private static string ToMemberStatus(byte dbStatus, bool heldByMe, DateTime endAt, DateTime now)
         {
             // 票已經不在我手上（我訂購但轉給別人了）

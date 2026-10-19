@@ -497,10 +497,33 @@
             loadList(f, { focusId: 'searchKeyword' });
       });
 
+      /* ── 回覆框自動長高（昱，10/14）───────────────────────
+       初始 3 行；內容寫到最後一行時就多長一行，永遠替員工留一行空白，最多 10 行，再多才出現捲軸。
+       用 scrollHeight 量「內容實際佔幾行」，所以一句太長自動折行也算得到，不是只數換行符號。
+       罐頭回覆、AI 草稿是程式填入的，那兩段程式都會補發 input 事件，所以一樣會長高。 */
+      const REPLY_MIN_ROWS = 3;
+      const REPLY_MAX_ROWS = 10;
+
+      function autoGrowReply(textarea) {
+            const style = getComputedStyle(textarea);
+            const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;
+            const padding = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom);
+            const keepScroll = window.scrollY;
+
+            // 先縮成 1 行，scrollHeight 才會是「內容」的高度，而不是框本身的高度
+            textarea.rows = 1;
+            const usedRows = Math.max(1, Math.round((textarea.scrollHeight - padding) / lineHeight));
+            textarea.rows = Math.min(Math.max(usedRows + 1, REPLY_MIN_ROWS), REPLY_MAX_ROWS);
+
+            // 暫時縮成 1 行時頁面可能往上跳，量完放回原本的捲動位置
+            window.scrollTo(window.scrollX, keepScroll);
+      }
+
       /* ── 字數計數 ─────────────────────────────────────── */
 
     root.addEventListener('input', function (e) {
-        if (!e.target.matches('.js-reply-text')) return;
+          if (!e.target.matches('.js-reply-text')) return;
+          autoGrowReply(e.target);
         const form = e.target.closest('form');
         const len = e.target.value.length;
         const counter = form.querySelector('.js-count');

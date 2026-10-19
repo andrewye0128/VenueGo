@@ -1,7 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Enums;
-using VenueGo.Services;
+using VenueGo.Services.Time;
 using VenueGo.Services.CheckIn;
 using VenueGo.ViewModels.DashboardViewModels;
 

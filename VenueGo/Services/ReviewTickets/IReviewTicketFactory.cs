@@ -26,13 +26,17 @@
     {
         /// <summary>
         /// 建立現場評論資格憑證。
-        /// ⚠️ 呼叫時機：票券狀態已改為 Used 且「已經 SaveChanges」之後再呼叫。
+        /// ⚠️ 呼叫時機：票券狀態已改為 Used、入場紀錄（CheckInLog）已寫入，而且「已經 SaveChanges」之後再呼叫。
         ///    本方法會自行 SaveChanges。
+        /// <para>
+        /// 10/9 起憑證屬於「領票的會員」（EntryTicket.ReceivedUserId），同一張訂單、同一位會員只建一張，
+        /// 而且要有預約時段內的有效入場紀錄。呼叫方式不變，報到系統不用改。
+        /// </para>
         /// </summary>
         /// <param name="token">報到票券的 QRToken（EntryTicket.Qrtoken）</param>
         /// <returns>
         /// true = 已建立憑證；
-        /// false = 不符合條件或已經建立過，屬於正常情況，不是錯誤，不需要重試。
+        /// false = 不符合條件（沒有領票人、不在預約時段內⋯）或已經建立過，屬於正常情況，不是錯誤，不需要重試。
         /// </returns>
         Task<bool> CreateReviewPerVisitAsync(string? token);
 
@@ -43,7 +47,7 @@
         /// </summary>
         /// <param name="ticketId">報到票券的 EntryTicket.TicketId</param>
         /// <returns>
-        /// true = 已寫入離場時間；
+        /// true = 已寫入離場時間（同一位會員有多張票時，保留最晚的那一筆）；
         /// false = 查無資料、時間不合理或尚未建立評論憑證，屬正常情況，不需要重試。
         /// </returns>
         Task<bool> RecordVisitEndTimeAsync(int? ticketId);
@@ -66,5 +70,31 @@
         /// false = 查無付款紀錄或已經建立過，屬正常情況，不是錯誤，不需要重試。
         /// </returns>
         Task<bool> CreateReviewPerBookingAsync(int? orderId);
+    }
+
+    /// <summary>
+    /// 給「我的評論」呼叫（10/11）。打開待評論清單時，替會員補建漏掉的憑證。
+    /// <para>
+    /// 報到組、訂單組不用這個介面：他們照舊在報到、離場、付款時呼叫上面兩個介面。
+    /// 補建的條件跟上面兩個介面的建立方法完全一樣（實際上就是逐張呼叫它們），期限從報到／付款時間起算，已過期的不建。
+    /// </para>
+    /// </summary>
+    public interface IReviewTicketBackfill
+    {
+        /// <summary>
+        /// 補建現場評論憑證：找出本人領的票（EntryTicket.ReceivedUserId）裡，已經入場、但同一張訂單還沒有憑證的，
+        /// 逐張交給 <see cref="IVisitReviewTicketFactory.CreateReviewPerVisitAsync"/>。本方法會自行 SaveChanges。
+        /// </summary>
+        /// <param name="userId">目前登入的會員</param>
+        /// <returns>這次新建了幾張。0 是正常情況（通常早就建好了）。</returns>
+        Task<int> BackfillVisitTicketsAsync(int userId);
+
+        /// <summary>
+        /// 補建預約評論憑證：找出本人的訂單裡，已經付款、但還沒有憑證的，
+        /// 逐張交給 <see cref="IBookingReviewTicketFactory.CreateReviewPerBookingAsync"/>。本方法會自行 SaveChanges。
+        /// </summary>
+        /// <param name="userId">目前登入的會員</param>
+        /// <returns>這次新建了幾張。0 是正常情況（通常早就建好了）。</returns>
+        Task<int> BackfillBookingTicketsAsync(int userId);
     }
 }

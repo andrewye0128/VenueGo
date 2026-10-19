@@ -5,7 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using VenueGo.Dtos;
 using VenueGo.Helpers;
-using VenueGo.Services;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Controllers
 {

@@ -6,12 +6,16 @@
 // 圖示名稱要寫完整字串：vite.config.js 已經把 src 裡的 .js 納入圖示掃描，寫在這裡的圖示也會被打包。
 export const REVIEW_KINDS = Object.freeze({
   visit: {
+    label: "現場評論", // 10/10：「我的評論」清單的卡片標題
     icon: "i-lucide-map-pin",
+    tileClass: "bg-brand-primary/10 text-brand-primary", // 10/12：「我的評論」每列左邊圖示方塊的顏色
     subtitle: "這次到場使用的感想",
     placeholder: "",
   },
   booking: {
+    label: "預約評論",
     icon: "i-lucide-receipt",
+    tileClass: "bg-brand-action/10 text-brand-action",
     subtitle: "這次預約流程的感想",
     placeholder: "訂位流程、付款方式、通知是否清楚，都可以暢所欲言",
   },
@@ -24,3 +28,42 @@ export const REPLY_SATISFACTION = Object.freeze([
   { value: 1, text: "普通", icon: "i-lucide-meh" },
   { value: 0, text: "不滿意", icon: "i-lucide-frown" },
 ]);
+
+// 「我的評論」清單上的標籤（10/10）。格式跟 constants/statuses.js 一樣：{ label, color, icon }，
+// 直接丟給 components/list/StatusBadge.vue 顯示。
+// 顏色照設計規範：warning 快到期、primary 館方回覆、neutral 一般資訊、success 公開中、error 已下架。
+// 圖示名稱要寫完整字串，Nuxt UI 打包時才掃描得到。
+export const MY_REVIEW_BADGES = Object.freeze({
+  expiringSoon: { label: "快到期", color: "warning", icon: "i-lucide-alarm-clock" },
+  hasDraft: { label: "有草稿", color: "neutral", icon: "i-lucide-file-pen-line" },
+  newReply: { label: "館方新回覆", color: "primary", icon: "i-lucide-message-circle-more" },
+  replied: { label: "館方已回覆", color: "primary", icon: "i-lucide-reply" },
+  noReply: { label: "尚未回覆", color: "neutral", icon: "i-lucide-hourglass" },
+  public: { label: "公開中", color: "success", icon: "i-lucide-globe" },
+  private: { label: "不公開", color: "neutral", icon: "i-lucide-lock" },
+  spam: { label: "已下架", color: "error", icon: "i-lucide-octagon-alert" },
+});
+
+// 「我的評論」每列左邊圖示方塊的狀態色（10/12）。狀態比種類優先：已下架、快到期時改用這裡的顏色。
+// 種類的顏色寫在上面 REVIEW_KINDS 的 tileClass。class 要寫完整字串，Tailwind 才掃描得到。
+export const TILE_TONES = Object.freeze({
+  error: "bg-semantic-error/10 text-semantic-error",
+  warning: "bg-semantic-warning/10 text-semantic-warning",
+});
+
+// 公開評論卡的頭像顏色（10/13）。依名字固定分配（utils/review/avatarTone.js），
+// 都是網站既有的設計色，淡色底＋深色字。class 要寫完整字串，Tailwind 才掃描得到。
+export const AVATAR_TONES = Object.freeze([
+  "bg-brand-primary/15 text-brand-primary",
+  "bg-brand-action/15 text-brand-action",
+  "bg-semantic-success/15 text-semantic-success",
+  "bg-semantic-peak/15 text-semantic-peak",
+  "bg-brand-dark/10 text-brand-dark",
+]);
+
+// 評論提及標籤（10/14）：公開評論卡、我的評論共用。
+// 兩個標籤用不同顏色＋不同圖示：只靠顏色分不出來的人（色弱）看圖示也分得出。
+export const MENTION_TAGS = Object.freeze({
+      venue: { label: "場地設施", color: "primary", icon: "i-lucide-building-2" },
+      staff: { label: "人員服務", color: "action", icon: "i-lucide-user-round" },
+});

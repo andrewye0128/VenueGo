@@ -1,0 +1,99 @@
+<script setup>
+// 首頁「最新消息」區塊：最新 8 則消息的圖卡輪播 + 「看更多」連結到列表頁
+// UButton、UCarousel、UIcon、USkeleton 由 Nuxt UI 自動匯入
+import { onMounted, ref } from "vue";
+import { getNewsList } from "@/api/newsApi";
+import NewsCard from "@/components/news/NewsCard.vue";
+import IconChevronLeftBold from "@/components/icons/IconChevronLeftBold.vue";
+import IconChevronRightBold from "@/components/icons/IconChevronRightBold.vue";
+
+// 首頁顯示 8 則（電腦一次 4 張，按箭頭看另外 4 張）：同一天發布多則消息時也不容易被擠掉
+// 跟列表頁共用同一支 API，用 pageSize 控制筆數
+const HOME_NEWS_COUNT = 8;
+
+// 載入中骨架的張數 = 電腦版一次顯示的張數
+const SKELETON_COUNT = 4;
+
+const newsList = ref([]);
+const isLoading = ref(true);
+const errorMessage = ref("");
+
+onMounted(async () => {
+  try {
+    const result = await getNewsList({ pageSize: HOME_NEWS_COUNT });
+    // 首頁不換頁，只需要 items
+    newsList.value = result.items;
+  } catch (error) {
+    // http.js 已經把錯誤轉成中文訊息
+    errorMessage.value = error.message;
+  } finally {
+    isLoading.value = false;
+  }
+});
+
+// 輪播外觀：只用 Tailwind 標準 class（前台 CSS 原則：不用任意值、不用 !important）
+const carouselUi = {
+  // 卡片等高
+  container: "items-stretch",
+  // 一次顯示幾張：手機 1 張、平板 2 張、電腦 4 張
+  item: "basis-full sm:basis-1/2 lg:basis-1/4",
+  // 手機用滑的，不顯示箭頭
+  arrows: "max-md:hidden",
+  // 箭頭放在卡片內側（預設在外側，會超出版面）
+  prev: "start-2 sm:start-2 rounded text-neutral-text-primary",
+  next: "end-2 sm:end-2 rounded text-neutral-text-primary",
+};
+</script>
+
+<template>
+  <section>
+    <!-- 區塊標題：h2（首頁的 h1 在 HomeView）；右邊「看更多」連到列表頁 -->
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <UIcon name="i-mdi-newspaper-variant-outline" class="size-6 text-brand-accent" />
+        <h2 class="text-2xl font-bold text-neutral-text-primary">最新消息</h2>
+      </div>
+      <UButton color="primary" variant="link" trailing-icon="i-mdi-chevron-right" to="/news">
+        看更多
+      </UButton>
+    </div>
+
+    <!-- 載入中：灰色卡片骨架，張數跟輪播一次顯示的一樣（手機 1、平板 2、電腦 4） -->
+    <div v-if="isLoading" class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <USkeleton
+        v-for="n in SKELETON_COUNT"
+        :key="n"
+        class="aspect-4/5 rounded-lg"
+        :class="{ 'hidden sm:block': n === 2, 'hidden lg:block': n > 2 }"
+      />
+    </div>
+
+    <!-- 載入失敗：只影響這個區塊，首頁其他區塊照常顯示 -->
+    <p
+      v-else-if="errorMessage"
+      class="mt-6 rounded-lg border border-semantic-error bg-neutral-surface p-4 text-sm text-semantic-error"
+    >
+      最新消息暫時無法載入：{{ errorMessage }}
+    </p>
+
+    <p v-else-if="newsList.length === 0" class="mt-6 text-sm text-neutral-text-secondary">
+      目前沒有最新消息
+    </p>
+
+    <!-- align="start"：第一張靠左對齊；slides-to-scroll="auto"：按一次箭頭換一整組 -->
+    <UCarousel
+      v-else
+      v-slot="{ item }"
+      :items="newsList"
+      align="start"
+      slides-to-scroll="auto"
+      arrows
+      :prev-icon="IconChevronLeftBold"
+      :next-icon="IconChevronRightBold"
+      :ui="carouselUi"
+      class="mt-6"
+    >
+      <NewsCard :news="item" />
+    </UCarousel>
+  </section>
+</template>

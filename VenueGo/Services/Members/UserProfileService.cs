@@ -5,6 +5,7 @@ using VenueGo.Data;
 using VenueGo.Dtos.MemberDtos;
 using VenueGo.Helpers;
 using VenueGo.Models.Entities;
+using VenueGo.Services.Time;
 using VenueGo.ViewModels.MemberViewModels;
 
 namespace VenueGo.Services.Members

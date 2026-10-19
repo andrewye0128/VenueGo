@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Models.Entities;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Services.ReviewScreening
 {
@@ -40,7 +41,7 @@ namespace VenueGo.Services.ReviewScreening
         /// 評論存進資料庫之後（已經 SaveChanges、有 ReviewId）呼叫一次，建立預審紀錄。
         /// ⚠️ 不會丟例外：評論已經存好了，預審失敗不該讓顧客看到錯誤頁，只寫 log。
         /// </summary>
-        Task CreateForReviewAsync(ReviewMain review, CancellationToken cancellationToken = default);
+        Task CreateForReviewAsync(Review review, CancellationToken cancellationToken = default);
 
         /// <summary>背景工作每一輪呼叫：處理到期的預審，回傳處理了幾筆。</summary>
         Task<int> ProcessDueAsync(int maxCount, CancellationToken cancellationToken = default);
@@ -74,7 +75,7 @@ namespace VenueGo.Services.ReviewScreening
         //  建立預審紀錄（評論送出時）
         // ════════════════════════════════════════════════════════
 
-        public async Task CreateForReviewAsync(ReviewMain review, CancellationToken cancellationToken = default)
+        public async Task CreateForReviewAsync(Review review, CancellationToken cancellationToken = default)
         {
             if (!IsEnabled) return;
 
@@ -121,7 +122,10 @@ namespace VenueGo.Services.ReviewScreening
             DateTime now = _timeService.Now;
 
             // 待分析的，加上「失敗、而且到了重試時間」的；先來先處理
+            // 10/12：預審紀錄的建立時間就是評論送出的時間。晚於網站時間的（時光機撥回來之後）先不分析，等時間到了再說，
+            //   免得寫出「分析時間早於評論建立時間」的資料
             var due = await _db.ReviewScreenings
+                .Where(s => s.CreatedAt <= now)
                 .Where(s => s.AiStatus == ScreeningCodes.AiPending
                          || (s.AiStatus == ScreeningCodes.AiFailed && s.NextAttemptAt != null && s.NextAttemptAt <= now))
                 .OrderBy(s => s.CreatedAt)
@@ -131,7 +135,7 @@ namespace VenueGo.Services.ReviewScreening
             if (due.Count == 0) return 0;
 
             var ids = due.Select(s => s.ReviewId).ToList();
-            var reviews = await _db.ReviewMains
+            var reviews = await _db.Reviews   // 10/15：ReviewMain → Reviews
                                    .Where(r => ids.Contains(r.ReviewId))
                                    .ToDictionaryAsync(r => r.ReviewId, cancellationToken);
 
@@ -161,7 +165,7 @@ namespace VenueGo.Services.ReviewScreening
             return due.Count;
         }
 
-        private async Task AnalyzeAsync(Models.Entities.ReviewScreening screening, ReviewMain review, CancellationToken cancellationToken)
+        private async Task AnalyzeAsync(Models.Entities.ReviewScreening screening, Review review, CancellationToken cancellationToken)
         {
             // ⚠️ 送給 AI 的一定是遮蔽後的文字：電話、Email 這些個資不能送出去
             string masked = ReviewTextGuard.MaskForPublic(review.ReviewContent);

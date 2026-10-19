@@ -9,6 +9,7 @@ using VenueGo.Data;
 using VenueGo.Enums;
 using VenueGo.Models.Options;
 using VenueGo.Models.ReservationModels;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Services.TimeSlots
 {

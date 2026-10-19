@@ -9,7 +9,7 @@ using NSubstitute;
 using Shouldly;
 using VenueGo.Controllers;
 using VenueGo.Dtos;
-using VenueGo.Services;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Tests.Services
 {

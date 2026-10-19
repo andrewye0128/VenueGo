@@ -15,6 +15,15 @@ export function formatDate(date) {
   return `${date.year}/${pad(date.month)}/${pad(date.day)}`;
 }
 
+// 日期 → "2026/10/20（二）"
+// 只接受 "2026-10-20" 字串；用年月日建立當地時間的 Date 來算星期，不會被時區影響
+const WEEKDAYS = ["日", "一", "二", "三", "四", "五", "六"];
+export function formatDateWithWeekday(date) {
+  if (!date) return "";
+  const [year, month, day] = date.split("-").map(Number);
+  return `${formatDate(date)}（${WEEKDAYS[new Date(year, month - 1, day).getDay()]}）`;
+}
+
 // 日期時間 → "2026/10/07 14:30"
 // 接受 API 回傳的 "2026-10-07T14:30:00"（C# DateTime 預設格式，沒有時區）
 // 一樣直接拆字串，不用 new Date()，避免被換算時區

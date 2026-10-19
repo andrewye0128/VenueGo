@@ -1,4 +1,6 @@
-﻿using Microsoft.OpenApi;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.OpenApi;
 using Scalar.AspNetCore;
 
 namespace VenueGo.Extensions
@@ -6,9 +8,13 @@ namespace VenueGo.Extensions
     // ════════════════════════════════════════════════════════════════
     //  API 文件：OpenAPI（產生 JSON）＋ Scalar（顯示成網頁）（10/5 從 Program.cs 搬出來）
     //
-    //  ── 為什麼獨立成一個檔案 ──────────────────────────────────────
-    //  前台改用 JWT 之後，下面的「安全性方案」要從防偽 token 換成 Bearer token。
-    //  集中在這裡，到時候只改這個檔案，Program.cs 不用動。
+    //  ── 10/12 改成 JWT（Bearer）──────────────────────────────────
+    //  前台 API 已經全面改用 JWT，Controllers/Api 底下也沒有 API 再驗防偽 token，
+    //  所以原本的「防偽 token」安全性方案拿掉，換成 Bearer：
+    //    - 只標在「用 JWT 驗證」的端點上（[Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]）。
+    //      Scalar 會在這些端點旁邊顯示鎖頭，送出時自動帶上你貼的 token。
+    //    - 不需要登入的端點、後台 Cookie 驗證的端點（例如員工預覽）不標：
+    //      後台端點在同一個網域、瀏覽器已經登入後台的話，Cookie 會自動帶上，不用另外貼。
     //
     //  ── 網址（只在開發環境開啟）────────────────────────────────────
     //    JSON：/openapi/v1.json
@@ -16,43 +22,41 @@ namespace VenueGo.Extensions
     // ════════════════════════════════════════════════════════════════
     public static class ApiDocsExtensions
     {
-        /// <summary>
-        /// 只有這幾種方法會驗證防偽 token，跟 Front-Web 的 http.js（UNSAFE_METHODS）一致。
-        /// GET 不驗，所以 Scalar 上也不該標示 GET 需要 token。
-        /// </summary>
-        private static readonly HttpMethod[] AntiforgeryMethods =
-            [HttpMethod.Post, HttpMethod.Put, HttpMethod.Patch, HttpMethod.Delete];
+        private const string BearerSchemeName = "Bearer";
 
         public static IServiceCollection AddApiDocs(this IServiceCollection services)
         {
             services.AddOpenApi(options =>
             {
+                // 宣告一種「把 JWT 放在 Authorization 標頭」的驗證方式，Scalar 會出現一個欄位讓人貼 token
                 options.AddDocumentTransformer((document, context, cancellationToken) =>
                 {
-                    // 宣告一種「把 token 放在標頭」的驗證方式，Scalar 會出現一個欄位讓人貼 token
                     document.Components ??= new OpenApiComponents();
-                    document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
+                    document.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+                    document.Components.SecuritySchemes[BearerSchemeName] = new OpenApiSecurityScheme
                     {
-                        ["Antiforgery"] = new OpenApiSecurityScheme
-                        {
-                            Type = SecuritySchemeType.ApiKey,
-                            In = ParameterLocation.Header,
-                            Name = "RequestVerificationToken",
-                            Description = "先打 GET /api/antiforgery/token，再貼上 XSRF-TOKEN Cookie 的值",
-                        },
+                        Type = SecuritySchemeType.Http,
+                        Scheme = "bearer",
+                        BearerFormat = "JWT",
+                        Description = "前台登入後拿到的 JWT。只貼 token 本身，不用加「Bearer 」",
                     };
+                    return Task.CompletedTask;
+                });
 
-                    // 只套用在會驗證防偽 token 的方法上
-                    foreach (var operation in document.Paths.Values
-                                 .SelectMany(path => path.Operations)
-                                 .Where(operation => AntiforgeryMethods.Contains(operation.Key)))
+                // 只套用在「用 JWT 驗證」的端點上：看端點身上的 [Authorize] 有沒有指定 JwtBearer
+                options.AddOperationTransformer((operation, context, cancellationToken) =>
+                {
+                    bool requiresJwt = context.Description.ActionDescriptor.EndpointMetadata
+                        .OfType<IAuthorizeData>()
+                        .Any(a => a.AuthenticationSchemes?.Split(',').Select(s => s.Trim())
+                                   .Contains(JwtBearerDefaults.AuthenticationScheme) == true);
+                    if (!requiresJwt) return Task.CompletedTask;
+
+                    operation.Security ??= [];
+                    operation.Security.Add(new OpenApiSecurityRequirement
                     {
-                        operation.Value.Security ??= [];
-                        operation.Value.Security.Add(new OpenApiSecurityRequirement
-                        {
-                            [new OpenApiSecuritySchemeReference("Antiforgery", document)] = [],
+                        [new OpenApiSecuritySchemeReference(BearerSchemeName, context.Document)] = [],
                         });
-                    }
                     return Task.CompletedTask;
                 });
             });

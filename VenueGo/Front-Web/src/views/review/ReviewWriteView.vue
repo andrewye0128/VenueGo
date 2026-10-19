@@ -2,8 +2,9 @@
     ReviewWriteView.vue — 撰寫評論
     取代 Views/CReview/CreateForVisit.cshtml 與 CreateForBooking.cshtml（兩個合成一個）
 
-    路由：/reviews/visit/:token/write   → kind='visit',   ticket=QRToken
+    路由：/reviews/visit/:id/write      → kind='visit',   ticket=訂單 Id（10/15 起；以前是現場評論憑證 Id）
           /reviews/booking/:orderId/write → kind='booking', ticket=OrderId
+    兩種都要會員本人登入（10/9 起現場評論也限會員）。
 
     ── 兩種評論的差別由後端決定 ─────────────────────────────
     要不要顯示提及標籤、能不能選匿名、要不要顯示公開開關，
@@ -32,15 +33,18 @@ import { ErrorCodes } from "@/constants/errorCodes";
 import { mineRoute } from "@/router/reviewRoutes";
 import { kindInfo } from "@/utils/review/reviewKinds";
 import { useDraft } from "@/composables/useDraft";
+import { reviewDraftKey } from "@/utils/review/draftKey";
+import { useMemberStore } from "@/stores/member";
 import StarInput from "@/components/review/StarInput.vue";
 import ConfirmModal from "@/components/ConfirmModal.vue";
 
 const props = defineProps({
   kind: { type: String, required: true }, // 'visit' | 'booking'
-  ticket: { type: String, required: true }, // QRToken 或 OrderId
+  ticket: { type: String, required: true }, // 訂單 Id（10/15 起現場、預約都是）
 });
 
 const router = useRouter();
+const memberStore = useMemberStore();
 const confirmModal = useOverlay().create(ConfirmModal);
 
 // ── 頁面狀態 ──
@@ -86,8 +90,10 @@ watch(
 // ── 草稿 ──
 const draft = useDraft({
   form: state,
-  // key 沿用 draft-box.js 的前綴，加上 v2：舊版草稿的欄位名稱是大寫開頭、值是字串，格式不相容
-  key: () => `review-draft:v2:${props.kind}:${props.ticket}`,
+  // v3（10/9）：key 加上會員 Id。共用電腦時，下一個登入的人不會看到上一個人的草稿；
+  // 現場評論的 ticket 也從 QRToken 改成憑證 Id，跟 v2 的草稿對不上，所以換版本號。
+  // 原本的在 10/10 格式搬到 utils/review/draftKey.js，「我的評論」清單也要用
+  key: () => reviewDraftKey(memberStore.member?.userId, props.kind, props.ticket),
   // 只存「這一頁允許使用者改」的欄位：例如未登入時匿名是鎖死的，就不存它
   fields: () => {
     const f = setup.value?.form;
@@ -145,6 +151,17 @@ function handleEligibility(e) {
 }
 
 onMounted(async () => {
+  // 草稿的 key 要用會員 Id。這頁不在 /member 底下，重新整理後路由守衛不會幫忙載入會員資料，所以這裡載入一次。
+  // try/catch 的決定：沒登入時這裡會失敗，但不用在這裡處理——接下來的 getWriteForm 會拿到 401，
+  // 由 handleEligibility 顯示「請先登入」。所以這裡失敗就安靜略過。
+  if (!memberStore.isLoggedIn) {
+    try {
+      await memberStore.fetchCurrentMember();
+    } catch {
+      // 交給下面的 getWriteForm 處理
+    }
+  }
+
   try {
     const data = await getWriteForm(props.kind, props.ticket);
     setup.value = data;
@@ -231,11 +248,12 @@ const mentionOptions = [
         aria-hidden="true"
       />
       <p class="mb-4 text-neutral-text-primary">{{ blockedMessage }}</p>
+      <!-- 10/13：撰寫的入口只有「我的評論」，返回也回那裡（原本回評論專區） -->
       <UButton
-        :to="{ name: 'review-index' }"
+        :to="{ name: 'member-reviews' }"
         color="primary"
         variant="outline"
-        label="回評論專區"
+        label="回我的評論"
       />
     </div>
 
@@ -327,8 +345,8 @@ const mentionOptions = [
       />
 
       <!-- 送出與草稿。
-           送出按鈕關掉全站預設的 loadingAuto：送出前要先等使用者在確認視窗按「送出」，
-           那段時間按鈕不該轉圈。真正呼叫後端時才用 submitting 顯示轉圈。 -->
+                 送出按鈕關掉全站預設的 loadingAuto：送出前要先等使用者在確認視窗按「送出」，
+                 那段時間按鈕不該轉圈。真正呼叫後端時才用 submitting 顯示轉圈。 -->
       <div class="flex flex-wrap items-center gap-2 border-t border-neutral-border pt-4">
         <UButton
           type="submit"
@@ -347,11 +365,12 @@ const mentionOptions = [
           :loading-auto="false"
           @click="saveDraft"
         />
+        <!-- 10/13：同上，回「我的評論」的待評論分頁 -->
         <UButton
-          :to="{ name: 'review-index' }"
+          :to="{ name: 'member-reviews' }"
           color="primary"
           variant="ghost"
-          label="回評論專區"
+          label="回我的評論"
           class="ms-auto"
         />
         <small v-if="savedAtText" class="w-full text-neutral-text-secondary" aria-live="polite">

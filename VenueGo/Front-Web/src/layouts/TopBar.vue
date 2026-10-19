@@ -88,18 +88,14 @@ async function confirmReset() {
   >
     <div class="mx-auto flex h-9 max-w-7xl items-center justify-between px-4 md:px-6">
       <div class="flex items-center gap-3">
-        <span class="flex items-center gap-1.5">
+        <!-- <span class="flex items-center gap-1.5">
           <IconUsers class="h-4 w-4" />
           <span class="hidden xl:inline">站內</span>
           <span class="tabular-nums">{{ onlineCount }} 人</span>
-        </span>
+        </span> -->
 
         <!-- 手機版不顯示日期（時光機旅行中例外，要讓人知道現在不是真的時間） -->
         <!-- 原本：<span class="hidden h-4 w-px bg-neutral-border md:block"></span> -->
-        <span
-          class="h-4 w-px bg-neutral-border"
-          :class="traveling ? 'block' : 'hidden md:block'"
-        ></span>
 
         <!-- 一般情況（正式版本、後端沒開）：跟原本完全一樣 -->
         <span v-if="!available" class="hidden items-center gap-1.5 tabular-nums md:flex">
@@ -163,14 +159,25 @@ async function confirmReset() {
             </div>
           </template>
         </UPopover>
+
+        <span
+          class="h-4 w-px bg-neutral-border"
+          :class="traveling ? 'block' : 'hidden md:block'"
+        ></span>
       </div>
 
       <div class="flex items-center gap-3">
-        <RouterLink to="/login" class="transition-colors hover:text-brand-primary">登入</RouterLink>
+        <!-- <RouterLink to="/login" class="transition-colors hover:text-brand-primary">登入</RouterLink>
         <span class="h-4 w-px bg-neutral-border"></span>
         <RouterLink to="/register" class="transition-colors hover:text-brand-primary">
           註冊
-        </RouterLink>
+        </RouterLink> -->
+
+        <span class="flex items-center gap-1.5">
+          <IconUsers class="h-4 w-4" />
+          <span class="hidden xl:inline">站內</span>
+          <span class="tabular-nums">{{ onlineCount }} 人</span>
+        </span>
       </div>
     </div>
   </div>

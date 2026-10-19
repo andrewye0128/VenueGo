@@ -14,10 +14,13 @@
   10/18 微調：
   7. 看得出來可以點：
      - 一直都有：淡淡的外框、右邊的小箭頭（打開時轉向上），滑鼠移上去變白底、變藍。
-     - 掃光：一道淡藍色的光從左掃到右。載入 3 秒後第一次，之後每 90 秒一次，最多 3 次；
-       點開過一次就再也不掃（記在 localStorage，這台電腦這個瀏覽器）。
+     - 掃光：一道淡藍色的光從左掃到右（約 1.4 秒）。10/18 晚改成昱設計的規則：
+       a. 每次重新整理、換頁（網址的路徑改變）後，隨機等 3～5 秒掃第一次。
+       b. 首頁：第一次掃完之後，固定再等 10 秒掃第二次，不掃第三次（10/19 改，原本是每 90 秒一次）。
+       c. 首頁以外：只掃那一次，下次換頁或重新整理才再掃。
+       d. 不記錄任何東西（不用 localStorage）。
        系統設定「減少動態效果」的人完全不掃。
-       為什麼有上限：一直重複的動畫在眼角很干擾，看過幾次的人已經知道可以點了。
+       「換頁」看的是路徑（route.path）：同一頁只改查詢字串（例如評論專區切換篩選）不算換頁，不然每點一次篩選就掃一次。
   8. 天氣圖示都看得到文字（圖示只分 9 種，「多雲時晴」「晴時多雲」都畫成同一個，文字才是準的）：
      - 滑鼠：移到圖示上出現提示框（TopBar 的按鈕、小視窗裡的三個圖示都有）。
      - 觸控（pointer-coarse）：沒有「移上去」這件事，所以小視窗的圖示下面直接寫出天氣文字；
@@ -26,11 +29,15 @@
 -->
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
+import { useRoute } from "vue-router";
 import { getWeather } from "@/api/weatherApi";
 import { weatherIcon, isNightNow } from "@/utils/weather/weatherIcon";
 
 const REFRESH_MS = 10 * 60 * 1000;
-const OPENED_KEY = "venuego:weather-opened"; // 點開過一次就不再掃光（檔頭第 7 點）
+const SHEEN_FIRST_MIN_MS = 3000; // 換頁後第一次掃光：隨機 3～5 秒（檔頭第 7 點）
+const SHEEN_FIRST_MAX_MS = 5000;
+const SHEEN_RUN_MS = 1400; // 掃一次的時間，要跟下面 CSS 的 animation 秒數一樣
+const SHEEN_HOME_SECOND_MS = 10 * 1000; // 首頁：第一次掃完後再等 10 秒掃第二次
 
 const weather = ref(null);
 const open = ref(false);
@@ -53,25 +60,51 @@ onMounted(() => {
 onBeforeUnmount(() => clearInterval(timer));
 
 // ── 掃光（檔頭第 7 點）──
-// try/catch 的決定：localStorage 在無痕模式、被封鎖的網站資料時會丟例外；
-// 這只是「要不要提示」的小事，讀不到就當沒點開過（照樣掃 3 次），寫不進去就算了。
-function readOpened() {
-  try {
-    return localStorage.getItem(OPENED_KEY) === "1";
-  } catch {
-    return false;
+// 做法（10/19 改）：每掃一次 sheenRun 加 1，掃光的 span 用它當 :key。
+// key 一變，Vue 就丟掉舊的 span、換一個新的，CSS 動畫自然從頭跑一次。
+// 不再靠 animationend 把狀態改回來：原本「true → 等動畫結束 → false」只要有一次沒收到 animationend，
+// 狀態就卡在 true，之後再設 true 都沒有變化，就再也不掃了。改成 key 之後沒有「卡住」這種狀態。
+const route = useRoute();
+const sheenRun = ref(0); // 0＝這一頁還沒掃過
+let firstSheenTimer = null;
+let homeSecondTimer = null;
+
+function playSheen() {
+  // 分頁在背景（切到別的分頁、視窗縮小）時跳過這一次：瀏覽器不畫背景分頁，掃了也沒人看到
+  if (document.visibilityState !== "visible") {
+    if (import.meta.env.DEV) console.debug("[TopBarWeather] 掃光：分頁在背景，跳過這一次");
+    return;
+  }
+  sheenRun.value += 1;
+  if (import.meta.env.DEV) {
+    console.debug(`[TopBarWeather] 掃光第 ${sheenRun.value} 次`, new Date().toLocaleTimeString());
   }
 }
-const sheen = ref(!readOpened());
-watch(open, (isOpen) => {
-  if (!isOpen || !sheen.value) return;
-  sheen.value = false;
-  try {
-    localStorage.setItem(OPENED_KEY, "1");
-  } catch {
-    // 不處理：只是下次重新整理還會再掃
-  }
-});
+
+function stopSheenTimers() {
+  clearTimeout(firstSheenTimer);
+  clearTimeout(homeSecondTimer);
+}
+
+function scheduleSheen() {
+  stopSheenTimers();
+  sheenRun.value = 0;
+  const delay = SHEEN_FIRST_MIN_MS + Math.random() * (SHEEN_FIRST_MAX_MS - SHEEN_FIRST_MIN_MS);
+  firstSheenTimer = setTimeout(() => {
+    playSheen();
+    // 「是不是首頁」要在這裡（3～5 秒後）才判斷，不能在 scheduleSheen 一開始就判斷（10/19 修正）：
+    // 重新整理時，元件掛上的那一刻 vue-router 還沒完成第一次導航，route 是起始位置，
+    // path 是 "/"、name 還沒有值，所以會被當成「不是首頁」；等導航完成，path 還是 "/" 沒變，
+    // watch 不會再觸發，首頁的第二次掃光就永遠排不進去。換頁再回首頁時沒有這個問題。
+    if (route.name === "home") {
+      homeSecondTimer = setTimeout(playSheen, SHEEN_RUN_MS + SHEEN_HOME_SECOND_MS);
+    }
+  }, delay);
+}
+
+// immediate：重新整理（元件第一次掛上）也算一次「換頁」
+watch(() => route.path, scheduleSheen, { immediate: true });
+onBeforeUnmount(stopSheenTimers);
 
 const current = computed(() => weather.value?.current ?? null);
 const days = computed(() => weather.value?.days ?? []);
@@ -142,7 +175,8 @@ const buttonTip = computed(() => {
           />
         </span>
       </UTooltip>
-      <span v-if="sheen" class="weather-sheen" aria-hidden="true"></span>
+      <!-- 掃完停在按鈕右邊外面（overflow-hidden 看不到），下一次換新的 key 才重跑 -->
+      <span v-if="sheenRun > 0" :key="sheenRun" class="weather-sheen" aria-hidden="true"></span>
     </button>
 
     <template #content>
@@ -187,9 +221,8 @@ const buttonTip = computed(() => {
 </template>
 
 <style scoped>
-/* 掃光（檔頭第 7 點）：一道斜的淡藍光從按鈕左邊外面掃到右邊外面。
-   90 秒一輪，前 1.6%（約 1.4 秒）在掃，其他時間停在右邊外面看不到；延遲 3 秒開始，跑 3 輪。
-   both：等待的 3 秒停在起點（左邊外面），跑完停在終點（右邊外面），兩邊都看不到。 */
+/* 掃光（檔頭第 7 點）：一道斜的淡藍光從按鈕左邊外面掃到右邊外面，跑一次 1.4 秒（改秒數要一起改 SHEEN_RUN_MS）。
+   什麼時候掃由程式決定（scheduleSheen），這裡只管掃一次的樣子。 */
 .weather-sheen {
   position: absolute;
   inset: 0 auto 0 0;
@@ -202,14 +235,13 @@ const buttonTip = computed(() => {
     color-mix(in srgb, var(--color-brand-primary) 22%, transparent),
     transparent
   );
-  animation: weather-sheen 90s ease-in-out 3s 3 both;
+  animation: weather-sheen 1.4s ease-in-out both;
 }
 
 @keyframes weather-sheen {
   0% {
     transform: translateX(-150%) skewX(-20deg);
   }
-  1.6%,
   100% {
     transform: translateX(300%) skewX(-20deg);
   }

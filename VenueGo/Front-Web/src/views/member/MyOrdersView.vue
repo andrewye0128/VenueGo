@@ -1,7 +1,7 @@
 <!--
   會員中心／訂單與付款：篩選、列表（電腦表格／手機卡片）、分頁、明細、付款
   跟「我的預約」的差別：這頁的重點是「錢付了沒、要付多少、什麼時候前要付」，排序是下單時間新到舊
-  資料目前是假資料（api/orderApi.js），串接 API 時這個檔案不用改
+  資料來自 [GET] /api/orders（api/orderApi.js）；明細視窗另外讀 /api/orders/{orderId}
   「付款」按鈕：3-A 先顯示按鈕和倒數，按下去提示「製作中」；3-D 再接上綠界付款流程（onPay）
   訂單編號跟「我的預約」同一個編號；點編號跳到我的預約並只查這一筆
   UFormField、UInput、USelect、UAlert、UButton 與 useOverlay、useToast 由 Nuxt UI 自動匯入
@@ -84,6 +84,7 @@ async function load() {
     });
     if (requestId !== latestRequestId) return;
     result.value = data;
+    console.log("訂單資料", result.value);
   } catch (err) {
     if (requestId !== latestRequestId) return;
     // 登入失效：登出並回登入頁，登入後回到這一頁（跟路由守衛的處理一致）
@@ -220,7 +221,7 @@ function onPay(order) {
       :rows="result.items"
       :columns="columns"
       :loading="loading"
-      :total="result.totalCount"
+      :total="result.totalCount" 
       :page-size="PAGE_SIZE"
       row-key="orderId"
     >

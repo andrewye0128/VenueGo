@@ -71,7 +71,6 @@ namespace VenueGo.Models.Options
         /// </summary>
         public int MemberOnlinePaymentBufferMinutes { get; set; } = 30;
 
-
         /// <summary>
         /// 「線上付款」：付款期限前幾分鐘就不能「開始」付款。
         /// <para>
@@ -94,7 +93,6 @@ namespace VenueGo.Models.Options
         /// 要測試新邏輯，在自己的 appsettings.Local.json 裡把這個值設為 true。
         /// </para>
         /// </summary>
-
         public bool UseScenario1PaymentRule { get; set; } = false;
 
         /// <summary>情境一／後台代客的付款緩衝分鐘數：建立時間＋這個分鐘數＝付款期限。</summary>

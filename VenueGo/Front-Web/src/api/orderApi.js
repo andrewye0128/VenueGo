@@ -1,26 +1,18 @@
 // 訂單與付款 API（會員中心「訂單與付款」頁）
-// 不用自己帶會員資訊：http.js 會自動在標頭加上登入的 JWT，後端從 token 知道是哪位會員
-// ⚠️ 後端還沒做：先回傳假資料（mocks/myOrders.js），後端做好後換成註解裡的寫法
+// 不用自己帶會員資訊：http.js 會自動在標頭加上登入的 JWT（Authorization: Bearer ...），
+// 後端從 token 知道是哪位會員
+import http from "./http";
 import { ALL } from "@/constants/statuses";
-import { myOrders } from "@/mocks/myOrders";
-import { delay } from "@/utils/delay";
-
-// 列表不回傳的欄位（明細才有）：假資料要拿掉，模擬真的 API 的回傳
-const DETAIL_ONLY = ["personCount", "invoiceType", "carrierNo", "lines"];
-const toListItem = (order) =>
-  Object.fromEntries(Object.entries(order).filter(([key]) => !DETAIL_ONLY.includes(key)));
 
 /**
  * 取得我的訂單（篩選＋分頁）：[GET] /api/orders
- * 後端做好後換成：
- *   const { data } = await http.get("/orders", { params });
  * @param {object} params
  * @param {string} params.keyword 訂單編號「包含」，或場地名稱「包含」
  * @param {string|null} params.date 使用日期 "2026-10-20"；null 表示不篩選
  * @param {number|"all"} params.paymentMethod 付款方式；"all" 表示不篩選
  * @param {number|"all"} params.paymentStatus 付款狀態；"all" 表示不篩選
  * @param {number} params.page 第幾頁（從 1 開始）
- * @param {number} params.pageSize 每頁幾筆
+ * @param {number} params.pageSize 每頁幾筆（後端限制最多 50）
  * @returns {Promise<{ items: object[], totalCount: number, page: number, pageSize: number }>}
  *   items：orderId、orderNo、reservationId、venueName、sportName、bookingDate、startTime、endTime、
  *   totalAmount、paymentMethod、paymentStatus、paymentDueAt、paidAt、reservationStatus、orderCreatedAt、
@@ -35,58 +27,30 @@ export async function getMyOrders({
   page = 1,
   pageSize = 10,
 } = {}) {
-  await delay(300);
-  const word = keyword.trim().toLowerCase();
-  const filtered = myOrders
-    .filter(
-      (o) =>
-        !word || o.orderNo.toLowerCase().includes(word) || o.venueName.toLowerCase().includes(word),
-    )
-    .filter((o) => !date || o.bookingDate === date)
-    .filter((o) => paymentMethod === ALL || o.paymentMethod === paymentMethod)
-    .filter((o) => paymentStatus === ALL || o.paymentStatus === paymentStatus)
-    .sort((a, b) => b.orderCreatedAt.localeCompare(a.orderCreatedAt));
+  // 沒有值、選「全部」的條件不送：後端看到「沒有這個參數」就不篩選
+  // （"all" 只是前端下拉選單用的值，後端不認得）
+  const params = { page, pageSize };
+  const word = keyword.trim();
+  if (word) params.keyword = word;
+  if (date) params.date = date;
+  if (paymentMethod !== ALL) params.paymentMethod = paymentMethod;
+  if (paymentStatus !== ALL) params.paymentStatus = paymentStatus;
 
-  const start = (page - 1) * pageSize;
-  return {
-    items: filtered.slice(start, start + pageSize).map(toListItem),
-    totalCount: filtered.length,
-    page,
-    pageSize,
-  };
+  // http.js 已經把 ApiResult 的 data 取出來，這裡拿到的就是 { items, totalCount, page, pageSize }
+  const { data } = await http.get("/orders", { params });
+  return data;
 }
 
 /**
  * 取得一筆訂單的明細：[GET] /api/orders/{orderId}
  * 只能看自己的訂單：別人的訂單後端回 404（不回 403，避免讓人知道這個編號存在）
- * 後端做好後換成：
- *   const { data } = await http.get(`/orders/${orderId}`);
  * @param {number} orderId
  * @returns {Promise<object>} 列表的欄位＋personCount、invoiceType、carrierNo、
  *   lines: [{ slotTime, unitPrice, isPeak }]、
- *   payments: [{ paymentMethod, paymentChannel, paymentStatus, amount, paymentDueAt, paidAt, createdAt }]
+ *   payments: [{ paymentMethod, paymentChannel, paymentStatus, amount, paymentDueAt, paidAt, createdAt }]（新到舊）
+ *   錯誤：NotFound（404，不存在、不是自己的、預約已作廢）、NotLoggedIn（401）
  */
 export async function getMyOrder(orderId) {
-  await delay(300);
-  const order = myOrders.find((o) => o.orderId === orderId);
-  if (!order) {
-    const error = new Error("找不到要求的資料");
-    error.errorCode = "NotFound";
-    throw error;
-  }
-  return {
-    ...order,
-    // 付款紀錄：目前一筆訂單一筆；3-C 綠界串接後，付款失敗再付一次會有多筆
-    payments: [
-      {
-        paymentMethod: order.paymentMethod,
-        paymentChannel: order.paymentMethod === 1 ? 1 : 0, // 線上：信用卡；現場：櫃台
-        paymentStatus: order.paymentStatus,
-        amount: order.totalAmount,
-        paymentDueAt: order.paymentDueAt,
-        paidAt: order.paidAt,
-        createdAt: order.orderCreatedAt,
-      },
-    ],
-  };
+  const { data } = await http.get(`/orders/${orderId}`);
+  return data;
 }

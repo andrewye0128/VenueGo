@@ -99,18 +99,19 @@ async function handleRedeem() {
 
 onMounted(loadTickets);
 
-// 統計卡與 tab 共用 statusCards，數字在這裡算
-function countOf(key) {
-  return key === "all"
-    ? tickets.value.length
-    : tickets.value.filter((t) => t.status === key).length;
+// 分頁篩選規則：「可使用」包含場內，人在場內的票還沒結束，仍屬於可使用
+function matchesTab(ticket, key) {
+  if (key === "all") return true;
+  if (key === "available") return ticket.status === "available" || ticket.status === "inside";
+  return ticket.status === key;
 }
 
-const filteredTickets = computed(() =>
-  activeTab.value === "all"
-    ? tickets.value
-    : tickets.value.filter((t) => t.status === activeTab.value),
-);
+// 統計卡與 tab 共用 statusCards，數字在這裡算
+function countOf(key) {
+  return tickets.value.filter((t) => matchesTab(t, key)).length;
+}
+
+const filteredTickets = computed(() => tickets.value.filter((t) => matchesTab(t, activeTab.value)));
 
 //  const tickets = ref([
 //   {
@@ -339,7 +340,11 @@ function openQr(ticket) {
     </section> -->
 
     <!-- QRcode -->
-    <TicketQrModal v-model:open="qrOpen" :ticket="selectedTicket" />
+    <TicketQrModal
+      v-model:open="qrOpen"
+      :ticket="selectedTicket"
+      @status-changed="loadTickets({ silent: true })"
+    />
   </div>
 </template>
 <style scoped></style>

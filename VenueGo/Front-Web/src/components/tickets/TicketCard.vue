@@ -10,15 +10,20 @@ const emit = defineEmits(["view-qr", "transfer", "cancel-transfer", "transfer-ex
 
 const statusMap = {
   available: { label: "可使用", class: "bg-blue-800 text-white" },
+  inside: { label: "場內", class: "bg-green-700 text-white" },
   used: { label: "已使用", class: "bg-gray-100 text-gray-500" },
   expired: { label: "已過期", class: "border border-gray-200 bg-gray-100 text-gray-500" },
   transferred: { label: "已轉贈", class: "bg-gray-100 text-gray-500" },
 };
 
+const unknownBadge = { label: "狀態未知", class: "bg-gray-100 text-gray-500" };
+
 const placeholderText = computed(() => {
   switch (props.ticket.status) {
     case "available":
       return "想送給朋友?點下方轉贈,產生驗證碼";
+    case "inside":
+      return "您目前在場內，離場時請出示 QR Code";
     case "used":
       return "此票券已使用";
     case "expired":
@@ -31,13 +36,18 @@ const placeholderText = computed(() => {
 });
 
 const isTransferring = computed(() => !!props.ticket.transferCode); // !!
-const canUse = computed(() => props.ticket.status === "available" && !isTransferring.value);
+// 能出示 QR：可使用（入場用）或場內（離場用）；轉贈中也可以（後端規則：轉贈完成前持有人 QR 仍有效）
+const canShowQr = computed(
+  () => props.ticket.status === "available" || props.ticket.status === "inside",
+);
+// 能轉贈：只有可使用的票，場內的人不能轉贈
+const canTransfer = computed(() => props.ticket.status === "available" && !isTransferring.value);
 
 // 轉贈中優先顯示 -> 再顯示其他狀態
 const badge = computed(() =>
   isTransferring.value
     ? { label: "轉贈中", class: "bg-gray-900 text-white" }
-    : statusMap[props.ticket.status],
+    : (statusMap[props.ticket.status] ?? unknownBadge),
 );
 // 倒數計時
 const now = ref(Date.now());
@@ -165,27 +175,34 @@ function onCancel() {
             {{ busy ? "取消中…" : "確定取消" }}
           </button>
         </div>
+        <button
+          type="button"
+          class="col-span-2 py-2 text-sm font-medium rounded border bg-white text-gray-900 border-gray-400 hover:bg-gray-100 transition-colors"
+          @click="emit('view-qr')"
+        >
+          使用票券
+        </button>
       </template>
       <template v-else>
         <button
           type="button"
-          :disabled="!canUse"
+          :disabled="!canShowQr"
           class="py-2 text-sm font-medium rounded border transition-colors"
           :class="
-            canUse
+            canShowQr
               ? 'bg-gray-900 text-white border-gray-900 hover:bg-gray-700'
               : 'bg-white text-gray-300 border-gray-200 cursor-not-allowed'
           "
           @click="emit('view-qr')"
         >
-          查看 QR Code
+          使用票券
         </button>
         <button
           type="button"
-          :disabled="!canUse || busy"
+          :disabled="!canTransfer || busy"
           class="py-2 text-sm font-medium rounded border transition-colors"
           :class="
-            canUse && !busy
+            canTransfer && !busy
               ? 'bg-white text-gray-900 border-gray-400 hover:bg-gray-100'
               : 'bg-white text-gray-300 border-gray-200 cursor-not-allowed'
           "

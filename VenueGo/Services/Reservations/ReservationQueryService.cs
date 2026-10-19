@@ -437,8 +437,8 @@ namespace VenueGo.Services.Reservations
 
         /// <summary>
         /// 判斷時段是否落在尖峰區間。
-        /// SportTypePriceRules 只有 PeakStartTime 沒有 PeakEndTime，
-        /// 因此規則是「起始時間 &gt;= PeakStartTime 即為尖峰」，一路延續到打烊。
+        /// 尖峰起始時間依預約日期是星期幾而定，由場地模組（SportTypePeakHours）提供；
+        /// 規則是「起始時間 &gt;= 尖峰起始時間即為尖峰」，一路延續到打烊。
         /// 此判斷與 TimeSlotService 一致。
         /// </summary>
         private static bool IsPeakSlot(TimeOnly? slotTime, TimeOnly? peakStartTime)

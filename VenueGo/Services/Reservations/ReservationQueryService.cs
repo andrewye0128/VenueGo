@@ -10,6 +10,7 @@ using VenueGo.Dtos;
 using VenueGo.Dtos.ReservationDtos;
 using VenueGo.Enums;
 using VenueGo.Services.VenueSchedules;
+using VenueGo.Models.ReservationModels;
 using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Services.Reservations
@@ -319,7 +320,7 @@ namespace VenueGo.Services.Reservations
                     UnitPrice = d.UnitPrice,
                     DurationHours = d.DurationHours,
                     Subtotal = d.Subtotal,
-                    IsPeak = IsPeakSlot(d.SlotTime, peakStartTime)
+                    IsPeak = PeakSlotRules.IsPeak(d.SlotTime, peakStartTime)
                 })
                 .ToList();
         }

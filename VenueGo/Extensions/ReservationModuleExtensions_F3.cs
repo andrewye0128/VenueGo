@@ -39,6 +39,9 @@ namespace VenueGo.Extensions
             // 前台會員預約：試算、建立預約（寫入交給 IReservationCreationService.WriteAsync）
             services.AddScoped<IMemberBookingService, MemberBookingService>();
 
+            // 前台會員「訂單與付款」：訂單列表、明細
+            services.AddScoped<IMemberOrderQueryService, MemberOrderQueryService>();
+
             return services;
         }
     }

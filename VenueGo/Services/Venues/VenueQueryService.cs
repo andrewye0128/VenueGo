@@ -107,7 +107,15 @@ namespace VenueGo.Services.Venues
                         join pr in _db.SportTypePriceRules.Where(r => r.IsActive)
                             on v.SportTypeId equals pr.SportTypeId into prs
                         from pr in prs.DefaultIfEmpty()
-                        select new VenueQueryRow { Venue = v, SportType = st, PriceRule = pr };
+                        select new VenueQueryRow
+                        {
+                            Venue = v,
+                            SportType = st,
+                            PriceRule = pr,
+                            // 任何一天有尖峰起始時間（公休日、不分尖離峰的日子存的是 null）
+                            HasPeakHours = _db.SportTypePeakHours
+                                .Any(p => p.SportTypeId == v.SportTypeId && p.PeakStartTime != null)
+                        };
 
             if (sportTypeId.HasValue)
             {
@@ -122,35 +130,6 @@ namespace VenueGo.Services.Venues
             return query;
         }
 
-        /// <summary>
-        /// 投影成卡片 ViewModel。價格以子查詢取得，
-        /// 因為 SportTypePriceRules 對每種運動只有一列（UQ_SportTypePriceRules_SportTypeId）。
-        /// </summary>
-        /// 
-        //private VenueCardViewModel Project(VenueQueryRow row) => new()
-        //{
-        //    VenueId = row.Venue.VenueId,
-        //    VenueName = row.Venue.VenueName,
-        //    SportName = row.SportType.SportName,
-        //    Capacity = row.Venue.Capacity,
-        //    PhotoPath = row.Venue.PhotoPath,
-        //    IsActive = row.Venue.IsActive,
-        //    OffPeakPrice = _db.SportTypePriceRules
-        //        .Where(r => r.SportTypeId == row.Venue.SportTypeId && r.IsActive)
-        //        .Select(r => (int?)r.OffPeakPrice)
-        //        .FirstOrDefault(),
-        //    PeakPrice = _db.SportTypePriceRules
-        //        .Where(r => r.SportTypeId == row.Venue.SportTypeId && r.IsActive)
-        //        .Select(r => (int?)r.PeakPrice)
-        //        .FirstOrDefault(),
-        //    PeakStartTime = _db.SportTypePriceRules
-        //        .Where(r => r.SportTypeId == row.Venue.SportTypeId && r.IsActive)
-        //        .Select(r => r.PeakStartTime)
-        //        .FirstOrDefault()
-        //};
-
-
-
         private static readonly Expression<Func<VenueQueryRow, VenueCardViewModel>> Project =
         row => new VenueCardViewModel
         {
@@ -162,7 +141,7 @@ namespace VenueGo.Services.Venues
             IsActive = row.Venue.IsActive,
             OffPeakPrice = row.PriceRule == null ? null : (int?)row.PriceRule.OffPeakPrice,
             PeakPrice = row.PriceRule == null ? null : (int?)row.PriceRule.PeakPrice,
-            PeakStartTime = row.PriceRule == null ? null : row.PriceRule.PeakStartTime
+            HasPeakHours = row.HasPeakHours
         };
 
 
@@ -175,6 +154,8 @@ namespace VenueGo.Services.Venues
             public Models.Entities.Venue Venue { get; init; } = null!;
             public Models.Entities.SportType SportType { get; init; } = null!;
             public Models.Entities.SportTypePriceRule? PriceRule { get; init; }
+
+            public bool HasPeakHours { get; init; }
         }
     }
 }

@@ -9,6 +9,7 @@ using VenueGo.Data;
 using VenueGo.Dtos;
 using VenueGo.Dtos.ReservationDtos;
 using VenueGo.Enums;
+using VenueGo.Services.VenueSchedules;
 using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Services.Reservations
@@ -30,10 +31,16 @@ namespace VenueGo.Services.Reservations
     public class ReservationQueryService : IReservationQueryService
     {
         private readonly dbVenueContext _db;
+        private readonly IVenueScheduleService _venueSchedule;
 
-        public ReservationQueryService(dbVenueContext db)
+        /// <summary>
+        /// 尖峰時間由場地模組（IVenueScheduleService）負責，這裡不直接查它的資料表，
+        /// 場地模組改了規則也不用跟著改。
+        /// </summary>
+        public ReservationQueryService(dbVenueContext db, IVenueScheduleService venueSchedule)
         {
             _db = db;
+            _venueSchedule = venueSchedule;
         }
 
         // 取得預約詳細頁所需的完整資料。查無此預約時回傳 null。
@@ -51,7 +58,7 @@ namespace VenueGo.Services.Reservations
 
             var lines = order is null
                 ? new List<ReservationDetailLineViewModel>()
-                : await LoadLinesAsync(order.OrderId, core.SportTypeId, cancellationToken);
+                : await LoadLinesAsync(order.OrderId, core.SportTypeId, core.BookingDate, cancellationToken);
 
             var createdBy = await LoadOperatorAsync(core.CreatedBy, cancellationToken);
             var cancelledBy = await LoadOperatorAsync(core.CancelledBy, cancellationToken);
@@ -288,9 +295,10 @@ namespace VenueGo.Services.Reservations
         /// </para>
         /// </summary>
         private async Task<List<ReservationDetailLineViewModel>> LoadLinesAsync(
-            int orderId, int sportTypeId, CancellationToken ct)
+           int orderId, int sportTypeId, DateOnly bookingDate, CancellationToken ct)
         {
-            var peakStartTime = await LoadPeakStartTimeAsync(sportTypeId, ct);
+            // 預約那一天的尖峰起始時間（每個星期幾可能不同），由場地模組提供
+            var peakStartTime = await _venueSchedule.GetPeakStartTimeAsync(sportTypeId, bookingDate, ct);
 
             var rows = await _db.OrdersDetails.AsNoTracking()
                 .Where(d => d.OrderId == orderId)
@@ -316,17 +324,6 @@ namespace VenueGo.Services.Reservations
                 .ToList();
         }
 
-        /// <summary>
-        /// 取得該運動類型目前啟用的尖峰起始時間。查無規則時為 null。
-        /// SportTypePriceRules 多了 IsActive 欄位，停用的規則不可採用。
-        /// </summary>
-        private async Task<TimeOnly?> LoadPeakStartTimeAsync(int sportTypeId, CancellationToken ct)
-        {
-            return await _db.SportTypePriceRules.AsNoTracking()
-                .Where(r => r.SportTypeId == sportTypeId && r.IsActive)
-                .Select(r => r.PeakStartTime)
-                .FirstOrDefaultAsync(ct);
-        }
 
         /// <summary>操作人員的姓名與員工代碼。userId 為 null 時回傳 null。</summary>
         private async Task<OperatorRow?> LoadOperatorAsync(int? userId, CancellationToken ct)

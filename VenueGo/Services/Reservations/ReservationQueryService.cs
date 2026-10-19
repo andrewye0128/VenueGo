@@ -441,12 +441,12 @@ namespace VenueGo.Services.Reservations
         /// 規則是「起始時間 &gt;= 尖峰起始時間即為尖峰」，一路延續到打烊。
         /// 此判斷與 TimeSlotService 一致。
         /// </summary>
-        private static bool IsPeakSlot(TimeOnly? slotTime, TimeOnly? peakStartTime)
-        {
-            if (slotTime is null || peakStartTime is null) return false;
+        //private static bool IsPeakSlot(TimeOnly? slotTime, TimeOnly? peakStartTime)
+        //{
+        //    if (slotTime is null || peakStartTime is null) return false;
 
-            return slotTime.Value >= peakStartTime.Value;
-        }
+        //    return slotTime.Value >= peakStartTime.Value;
+        //}
 
         // ── 各段查詢的中繼型別 ───────────────────────────
         // 之所以不直接投影成 ViewModel，是因為組裝時需要處理

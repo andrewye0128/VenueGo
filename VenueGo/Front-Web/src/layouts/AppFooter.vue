@@ -11,7 +11,7 @@ import IconClockSolid from "@/components/icons/IconClockSolid.vue";
 const contactItems = [
   { icon: IconMapPin, label: "場館地址", value: "高雄市中正區運動路 100 號" },
   // href 用國際格式：+886 台灣國碼，區碼 02 去掉開頭的 0
-  { icon: IconPhone, label: "聯絡電話", value: "(02) 1234-5678", href: "tel:+886212345678" },
+  { icon: IconPhone, label: "聯絡電話", value: "(07) 1234-5678", href: "tel:+886712345678" },
   { icon: IconClock, label: "平日開放時間", value: "06:00-22:00" },
   { icon: IconClockSolid, label: "假日開放時間", value: "08:00-21:00" },
 ];

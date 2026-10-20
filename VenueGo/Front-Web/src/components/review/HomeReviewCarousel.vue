@@ -78,16 +78,16 @@ const startIndex = computed(() => (cards.value.length >= 2 ? 1 : 0));
 watch(startIndex, (i) => (selected.value = i), { immediate: true });
 
 function groupLabel(g) {
-      const from = g * GROUP_SIZE + 1;
-      const to = Math.min(from + GROUP_SIZE - 1, cards.value.length);
-      return from === to ? `第 ${from} 則` : `第 ${from}～${to} 則`;
+  const from = g * GROUP_SIZE + 1;
+  const to = Math.min(from + GROUP_SIZE - 1, cards.value.length);
+  return from === to ? `第 ${from} 則` : `第 ${from}～${to} 則`;
 }
 
 // 把那一組中間那張移到正中間；最後一組不滿 3 張時，取那一組實際有的中間
 function goToGroup(g) {
-      const from = g * GROUP_SIZE;
-      const to = Math.min(from + GROUP_SIZE, cards.value.length) - 1;
-      carouselRef.value?.emblaApi?.scrollTo(Math.floor((from + to) / 2));
+  const from = g * GROUP_SIZE;
+  const to = Math.min(from + GROUP_SIZE, cards.value.length) - 1;
+  carouselRef.value?.emblaApi?.scrollTo(Math.floor((from + to) / 2));
 }
 
 const averageText = computed(() => (vm.value ? vm.value.summary.average.toFixed(1) : ""));

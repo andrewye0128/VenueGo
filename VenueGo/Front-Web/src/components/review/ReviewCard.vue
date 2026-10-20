@@ -145,15 +145,15 @@ onBeforeUnmount(() => observer?.disconnect());
       <!-- 評論或回覆被截掉才出現（檔頭第 6 點） -->
       <div v-if="clamped" class="mt-1 flex justify-end">
         <UButton
-        color="primary"
-        variant="link"
-        size="sm"
-        label="閱讀全文"
-        trailing-icon="i-lucide-chevron-right"
-        aria-haspopup="dialog"
+          color="primary"
+          variant="link"
+          size="sm"
+          label="閱讀全文"
+          trailing-icon="i-lucide-chevron-right"
+          aria-haspopup="dialog"
           class="-me-2.5"
-        @click="fullOpen = true"
-      />
+          @click="fullOpen = true"
+        />
       </div>
     </div>
 

@@ -221,7 +221,7 @@ function onPay(order) {
       :rows="result.items"
       :columns="columns"
       :loading="loading"
-      :total="result.totalCount" 
+      :total="result.totalCount"
       :page-size="PAGE_SIZE"
       row-key="orderId"
     >

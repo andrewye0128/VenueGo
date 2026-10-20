@@ -31,7 +31,7 @@ namespace VenueGo.Services.Reservations
         /// 取得某位會員的預約列表（篩選、排序、分頁）。
         /// <para>
         /// 只回傳這位會員的預約，不含已作廢。
-        /// 排序：預約日期新到舊 → 開始時間晚到早 → 預約編號大到小。
+        /// 排序：建立時間新到舊 → 預約編號大到小。
         /// </para>
         /// <para>
         /// 查無資料時回傳空的 Items（TotalCount = 0），不是 null。

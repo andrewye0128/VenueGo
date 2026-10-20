@@ -71,6 +71,18 @@ namespace VenueGo.Models.Options
         /// </summary>
         public int MemberOnlinePaymentBufferMinutes { get; set; } = 30;
 
+        /// <summary>
+        /// 「線上付款」：付款期限前幾分鐘就不能「開始」付款。
+        /// <para>
+        /// 原因：客人進到綠界付款頁、輸入卡號需要幾分鐘。快到期才開始付款的話，
+        /// 可能付到一半預約就逾期了。
+        /// </para>
+        /// <para>
+        /// 讀取這個設定的地方用 IOptionsSnapshot，改 appsettings 之後不用重新啟動網站。
+        /// </para>
+        /// </summary>
+        public int MemberOnlinePaymentStartCutoffMinutes { get; set; } = 5;
+
         // ── 情境一：後台代客的付款期限規則（開關）──────────────
 
         /// <summary>
@@ -167,6 +179,15 @@ namespace VenueGo.Models.Options
             var due = now.AddMinutes(MemberOnlinePaymentBufferMinutes);
             return due < slotStart ? due : slotStart;
         }
+
+        /// <summary>
+        /// 前台會員「線上付款」最晚可以開始付款的時間：付款期限往前 <see cref="MemberOnlinePaymentStartCutoffMinutes"/> 分鐘。
+        /// <para>例：期限 15:30 → 15:25 以後就不能按「付款」。</para>
+        /// <para>訂單列表、之後的「開始付款」API 都呼叫這個方法，兩邊才會是同一條規則。</para>
+        /// </summary>
+        /// <param name="dueAt">付款期限（Payments.PaymentDueAt）。</param>
+        public DateTime GetMemberOnlinePaymentStartDeadline(DateTime dueAt)
+            => dueAt.AddMinutes(-MemberOnlinePaymentStartCutoffMinutes);
 
         /// <summary>
         /// 前台會員「現場付款」的付款期限：時段開始前 <see cref="MemberOnsitePaymentDueDaysBeforeUse"/> 天。

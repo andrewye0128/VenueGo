@@ -158,6 +158,14 @@ export default defineConfig({
               class:
                 "ring-0 border border-brand-primary bg-neutral-surface hover:bg-brand-primary/8 active:bg-brand-primary/16 disabled:bg-neutral-border aria-disabled:bg-neutral-border disabled:text-white aria-disabled:text-white disabled:border-neutral-border aria-disabled:border-neutral-border",
             },
+            // 白底橘框：寫法比照上面的白底藍框（例如「我的預約」的「取消」）
+            // 不設定的話會用 Nuxt UI 預設的半透明 ring，框線很淡，看起來像停用的按鈕
+            {
+              color: "action",
+              variant: "outline",
+              class:
+                "ring-0 border border-brand-action text-brand-action bg-neutral-surface hover:bg-brand-action/8 active:bg-brand-action/16 disabled:bg-neutral-border aria-disabled:bg-neutral-border disabled:text-white aria-disabled:text-white disabled:border-neutral-border aria-disabled:border-neutral-border",
+            },
             // 純文字（text）
             {
               color: "primary",

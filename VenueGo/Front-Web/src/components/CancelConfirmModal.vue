@@ -12,7 +12,7 @@
     const done = await cancelModal.open({
       title: "取消預約",
       description: "確定要取消以下預約嗎？",
-      details: [{ label: "預約編號", value: "R012" }, { label: "場地名稱", value: "羽球場 A" }],
+      details: [{ label: "訂單編號", value: "VG20261015001" }, { label: "場地名稱", value: "羽球場 A" }],
       notice: "此預約已付款 NT$ 800，…",          // 選填，不傳就不顯示
       action: (reason) => cancelMyReservation(12, reason),
     });

@@ -64,18 +64,35 @@ namespace VenueGo.Controllers
             {
                 var keyword = filter.Keyword.Trim();
 
-                // 關鍵字如果剛好是數字，一併比對預約編號；
-                // 不是數字就只比對姓名跟 Email，避免 int.Parse 丟例外。
-                if (int.TryParse(keyword, out var keywordId))
-                {
-                    query = query.Where(x => x.r.ReservationId == keywordId
-                        || x.u.Name.Contains(keyword) || x.u.Email.Contains(keyword));
-                }
-                else
-                {
-                    query = query.Where(x => x.u.Name.Contains(keyword) || x.u.Email.Contains(keyword));
-                }
+                // 去掉開頭的 R 再判斷是不是數字："R021"、"r021"、"021"、"21" 都當成預約編號 21
+                // （畫面上顯示的是 R021，員工照著輸入也要找得到）
+                var isReservationNo = int.TryParse(keyword.TrimStart('R', 'r'), out var keywordId);
+
+                query = query.Where(x =>
+                    x.u.Name.Contains(keyword)
+                    || x.u.Email.Contains(keyword)
+                    || (isReservationNo && x.r.ReservationId == keywordId)
+                    // 訂單編號：客人在前台只看得到訂單編號，臨櫃時報的是這個
+                    || _db.Orders.Any(o => o.ReservationId == x.r.ReservationId
+                                        && o.OrderNo.Contains(keyword)));
             }
+            // 63-78 舊的程式碼
+            //if (!string.IsNullOrWhiteSpace(filter.Keyword))
+            //{
+            //    var keyword = filter.Keyword.Trim();
+
+            //    // 關鍵字如果剛好是數字，一併比對預約編號；
+            //    // 不是數字就只比對姓名跟 Email，避免 int.Parse 丟例外。
+            //    if (int.TryParse(keyword, out var keywordId))
+            //    {
+            //        query = query.Where(x => x.r.ReservationId == keywordId
+            //            || x.u.Name.Contains(keyword) || x.u.Email.Contains(keyword));
+            //    }
+            //    else
+            //    {
+            //        query = query.Where(x => x.u.Name.Contains(keyword) || x.u.Email.Contains(keyword));
+            //    }
+            //}
 
             if (filter.DateFrom.HasValue)
             {
@@ -119,7 +136,13 @@ namespace VenueGo.Controllers
                                   on o.OrderId equals p.OrderId
                               where o.ReservationId == x.r.ReservationId
                               select (int?)p.Amount)
-                             .FirstOrDefault()
+                             .FirstOrDefault(),
+
+                // 一筆預約最多一張訂單（UQ_Orders_ReservationId），沒有訂單時是 null
+                OrderNo = _db.Orders
+                    .Where(o => o.ReservationId == x.r.ReservationId)
+                    .Select(o => o.OrderNo)
+                    .FirstOrDefault()
             });
 
             if (filter.PaymentStatus.HasValue)
@@ -134,6 +157,7 @@ namespace VenueGo.Controllers
                 .Select(x => new ReservationListViewModel
                 {
                     ReservationId = x.r.ReservationId,
+                    OrderNo = x.OrderNo,
                     UserName = x.u.Name,
                     UserEmail = x.u.Email,
                     VenueName = x.v.VenueName,

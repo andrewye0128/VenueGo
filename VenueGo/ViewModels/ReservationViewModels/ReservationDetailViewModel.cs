@@ -243,8 +243,8 @@ namespace VenueGo.ViewModels.ReservationViewModels
         /// <summary>
         /// 是否為尖峰時段。
         /// <para>
-        /// OrdersDetails 沒有存這個欄位，因此由 SlotTime 與目前的
-        /// SportTypePriceRules.PeakStartTime 比對得出，僅供畫面標示。
+        /// OrdersDetails 沒有存這個欄位，因此由 SlotTime 與預約當天（依星期幾）
+        /// 的尖峰起始時間比對得出，僅供畫面標示。
         /// 若計價規則在成交後被調整，這個標籤可能與當時的判斷不同，
         /// 但金額仍以 UnitPrice 的快照為準，不受影響。
         /// </para>

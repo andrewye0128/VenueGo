@@ -15,8 +15,8 @@
     public class MyReservationQuery
     {
         /// <summary>
-        /// 關鍵字：場地名稱「包含」，或去掉開頭的 R 後是數字 → 預約編號「完全相同」。
-        /// 例如 "羽球"、"R012"、"r012"、"12"。
+        /// 關鍵字：場地名稱或訂單編號「包含」。
+        /// 例如 "羽球"、"VG20261015001"。
         /// </summary>
         public string? Keyword { get; set; }
 

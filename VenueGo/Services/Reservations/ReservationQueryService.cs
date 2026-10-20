@@ -9,6 +9,8 @@ using VenueGo.Data;
 using VenueGo.Dtos;
 using VenueGo.Dtos.ReservationDtos;
 using VenueGo.Enums;
+using VenueGo.Services.VenueSchedules;
+using VenueGo.Models.ReservationModels;
 using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.Services.Reservations
@@ -30,10 +32,16 @@ namespace VenueGo.Services.Reservations
     public class ReservationQueryService : IReservationQueryService
     {
         private readonly dbVenueContext _db;
+        private readonly IVenueScheduleService _venueSchedule;
 
-        public ReservationQueryService(dbVenueContext db)
+        /// <summary>
+        /// 尖峰時間由場地模組（IVenueScheduleService）負責，這裡不直接查它的資料表，
+        /// 場地模組改了規則也不用跟著改。
+        /// </summary>
+        public ReservationQueryService(dbVenueContext db, IVenueScheduleService venueSchedule)
         {
             _db = db;
+            _venueSchedule = venueSchedule;
         }
 
         // 取得預約詳細頁所需的完整資料。查無此預約時回傳 null。
@@ -51,7 +59,7 @@ namespace VenueGo.Services.Reservations
 
             var lines = order is null
                 ? new List<ReservationDetailLineViewModel>()
-                : await LoadLinesAsync(order.OrderId, core.SportTypeId, cancellationToken);
+                : await LoadLinesAsync(order.OrderId, core.SportTypeId, core.BookingDate, cancellationToken);
 
             var createdBy = await LoadOperatorAsync(core.CreatedBy, cancellationToken);
             var cancelledBy = await LoadOperatorAsync(core.CancelledBy, cancellationToken);
@@ -85,10 +93,10 @@ namespace VenueGo.Services.Reservations
             var totalCount = await reservations.CountAsync(cancellationToken);
 
             // 5. 排序 → 跳過前面幾頁 → 取這一頁（第 2 次送到資料庫）
-            //    最後加 ReservationId，讓順序固定，換頁時不會重複或漏掉
+            //    建立時間新到舊：剛訂的預約排最上面
+            //    最後加 ReservationId，讓順序固定（建立時間可能相同），換頁時不會重複或漏掉
             var items = await reservations
-                .OrderByDescending(r => r.BookingDate)
-                .ThenByDescending(r => r.StartTime)
+                .OrderByDescending(r => r.ReservedAt)
                 .ThenByDescending(r => r.ReservationId)
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
@@ -143,6 +151,7 @@ namespace VenueGo.Services.Reservations
                        SportName = st.SportName,
 
                        // 沒有訂單時 o 是 null
+                       OrderNo = o == null ? null : o.OrderNo,
                        PersonCount = o == null ? null : (int?)o.PersonMount,
                        TotalAmount = o == null ? null : (int?)o.TotalAmount,
 
@@ -158,17 +167,15 @@ namespace VenueGo.Services.Reservations
         private static IQueryable<MyReservationDto> ApplyMyReservationFilters(
             IQueryable<MyReservationDto> reservations, MyReservationQuery query)
         {
-            // 關鍵字：場地名稱「包含」，或預約編號「完全相同」
-            // "R012"、"r012"、"012"、"12" 都當成預約編號 12
+            // 關鍵字：場地名稱或訂單編號「包含」
+            // 前台不顯示預約編號（R012），所以不比對預約編號：
+            // 不然客人輸入 12，會找到一筆畫面上看不到 12 的預約，看不懂為什麼
             var keyword = query.Keyword?.Trim();
             if (!string.IsNullOrEmpty(keyword))
             {
-                var isReservationNo = int.TryParse(
-                    keyword.TrimStart('R', 'r'), out var reservationId);
-
                 reservations = reservations.Where(r =>
                     r.VenueName.Contains(keyword)
-                    || (isReservationNo && r.ReservationId == reservationId));
+                    || (r.OrderNo != null && r.OrderNo.Contains(keyword)));
             }
 
             if (query.Date is DateOnly date)
@@ -289,9 +296,10 @@ namespace VenueGo.Services.Reservations
         /// </para>
         /// </summary>
         private async Task<List<ReservationDetailLineViewModel>> LoadLinesAsync(
-            int orderId, int sportTypeId, CancellationToken ct)
+            int orderId, int sportTypeId, DateOnly bookingDate, CancellationToken ct)
         {
-            var peakStartTime = await LoadPeakStartTimeAsync(sportTypeId, ct);
+            // 預約那一天的尖峰起始時間（每個星期幾可能不同），由場地模組提供
+            var peakStartTime = await _venueSchedule.GetPeakStartTimeAsync(sportTypeId, bookingDate, ct);
 
             var rows = await _db.OrdersDetails.AsNoTracking()
                 .Where(d => d.OrderId == orderId)
@@ -312,21 +320,9 @@ namespace VenueGo.Services.Reservations
                     UnitPrice = d.UnitPrice,
                     DurationHours = d.DurationHours,
                     Subtotal = d.Subtotal,
-                    IsPeak = IsPeakSlot(d.SlotTime, peakStartTime)
+                    IsPeak = PeakSlotRules.IsPeak(d.SlotTime, peakStartTime)
                 })
                 .ToList();
-        }
-
-        /// <summary>
-        /// 取得該運動類型目前啟用的尖峰起始時間。查無規則時為 null。
-        /// SportTypePriceRules 多了 IsActive 欄位，停用的規則不可採用。
-        /// </summary>
-        private async Task<TimeOnly?> LoadPeakStartTimeAsync(int sportTypeId, CancellationToken ct)
-        {
-            return await _db.SportTypePriceRules.AsNoTracking()
-                .Where(r => r.SportTypeId == sportTypeId && r.IsActive)
-                .Select(r => r.PeakStartTime)
-                .FirstOrDefaultAsync(ct);
         }
 
         /// <summary>操作人員的姓名與員工代碼。userId 為 null 時回傳 null。</summary>
@@ -441,16 +437,16 @@ namespace VenueGo.Services.Reservations
 
         /// <summary>
         /// 判斷時段是否落在尖峰區間。
-        /// SportTypePriceRules 只有 PeakStartTime 沒有 PeakEndTime，
-        /// 因此規則是「起始時間 &gt;= PeakStartTime 即為尖峰」，一路延續到打烊。
+        /// 尖峰起始時間依預約日期是星期幾而定，由場地模組（SportTypePeakHours）提供；
+        /// 規則是「起始時間 &gt;= 尖峰起始時間即為尖峰」，一路延續到打烊。
         /// 此判斷與 TimeSlotService 一致。
         /// </summary>
-        private static bool IsPeakSlot(TimeOnly? slotTime, TimeOnly? peakStartTime)
-        {
-            if (slotTime is null || peakStartTime is null) return false;
+        //private static bool IsPeakSlot(TimeOnly? slotTime, TimeOnly? peakStartTime)
+        //{
+        //    if (slotTime is null || peakStartTime is null) return false;
 
-            return slotTime.Value >= peakStartTime.Value;
-        }
+        //    return slotTime.Value >= peakStartTime.Value;
+        //}
 
         // ── 各段查詢的中繼型別 ───────────────────────────
         // 之所以不直接投影成 ViewModel，是因為組裝時需要處理

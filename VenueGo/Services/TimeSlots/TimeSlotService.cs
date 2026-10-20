@@ -79,8 +79,8 @@ namespace VenueGo.Services.TimeSlots
             var unavailableSet = unavailable.ToHashSet();
             var bookedSet = booked.ToHashSet();
 
-            // 計價規則。整天共用同一組規則，所以只查一次。
-            var priceRule = await GetPriceRuleAsync(venueId, cancellationToken);
+            // 計價規則。尖峰從幾點開始依「星期幾」而定，所以要傳日期；整天共用同一組，只查一次。
+            var priceRule = await GetPriceRuleAsync(venueId, date, cancellationToken);
 
             var now = _timeService.Now;
             var today = DateOnly.FromDateTime(now);
@@ -196,8 +196,8 @@ namespace VenueGo.Services.TimeSlots
                 .Select(s => new { s.VenueId, s.SlotTime })
                 .ToListAsync(cancellationToken);
 
-            // 第 4 次：這些場地各自的計價規則
-            var priceRules = await GetPriceRulesAsync(ids, cancellationToken);
+            // 第 4 次：這些場地各自的計價規則（尖峰時間依這天是星期幾）
+            var priceRules = await GetPriceRulesAsync(ids, date, cancellationToken);
 
             // 查回來之後，在記憶體裡依場地分組
             var unavailableByVenue = unavailable
@@ -445,52 +445,52 @@ namespace VenueGo.Services.TimeSlots
         }
 
         /// <summary>
-        /// 取得場地所屬運動類型的計價規則。
+        /// 取得場地所屬運動類型在某一天的計價規則。
         /// <para>
-        /// SportTypePriceRules 對每種運動只有一列（UQ_SportTypePriceRules_SportTypeId），
-        /// 因此沒有價格歷史。這也是為什麼 OrdersDetails 必須存下當時的單價快照——
-        /// 老闆調價之後，舊訂單的金額不能跟著變動。
+        /// 直接呼叫批次版、只傳一個場地：查詢只寫一份，兩個入口的結果一定一致。
         /// </para>
         /// </summary>
         private async Task<PriceRule?> GetPriceRuleAsync(
-            int venueId, CancellationToken cancellationToken)
+            int venueId, DateOnly date, CancellationToken cancellationToken)
         {
-            var rule = await (from v in _db.Venues.AsNoTracking()
-                              join r in _db.SportTypePriceRules
-                                  on v.SportTypeId equals r.SportTypeId
-                              where v.VenueId == venueId && r.IsActive
-                              select new
-                              {
-                                  r.PeakStartTime,
-                                  r.PeakPrice,
-                                  r.OffPeakPrice
-                              })
-                             .FirstOrDefaultAsync(cancellationToken);
-
-            if (rule is null) return null;
-
-            return new PriceRule
-            {
-                PeakStartTime = rule.PeakStartTime,
-                PeakPrice = rule.PeakPrice,
-                OffPeakPrice = rule.OffPeakPrice
-            };
+            var rules = await GetPriceRulesAsync(new List<int> { venueId }, date, cancellationToken);
+            return rules.TryGetValue(venueId, out var rule) ? rule : null;
         }
 
         /// <summary>
-        /// 多個場地各自的計價規則（批次查詢用）。沒有計價規則的場地不會出現在結果裡。
+        /// 多個場地在某一天各自的計價規則（批次查詢用）。沒有計價規則的場地不會出現在結果裡。
+        /// <para>
+        /// 價格（尖峰價、離峰價）在 SportTypePriceRules；
+        /// 尖峰從幾點開始在 SportTypePeakHours，每種運動、每個星期幾各一筆。
+        /// </para>
+        /// <para>
+        /// 那天在 SportTypePeakHours 沒有資料，或 PeakStartTime 是 null → 整天都是離峰。
+        /// 跟場地模組（VenueScheduleService）的規則一致，收費標準頁顯示的價格才會跟實際收費相同。
+        /// 不讀 SportTypePriceRules.PeakStartTime：那是舊欄位，後台設定價格時已經不會更新它。
+        /// </para>
+        /// <para>
+        /// 計價規則沒有保留歷史（改設定就是直接蓋掉舊值），
+        /// 所以 OrdersDetails 必須存下成交當下的單價快照：調價之後，舊訂單的金額不能跟著變。
+        /// </para>
         /// </summary>
         private async Task<Dictionary<int, PriceRule>> GetPriceRulesAsync(
-            List<int> venueIds, CancellationToken cancellationToken)
+            List<int> venueIds, DateOnly date, CancellationToken cancellationToken)
         {
+            // 0 = 星期日 … 6 = 星期六，跟 SportTypePeakHours.DayOfWeek 的存法一致（同 C# 的 DayOfWeek）
+            var dayOfWeek = (byte)date.DayOfWeek;
+
             var rows = await (from v in _db.Venues.AsNoTracking()
                               join r in _db.SportTypePriceRules
                                   on v.SportTypeId equals r.SportTypeId
+                              // left join：那天沒有尖峰設定，價格還是要留下（整天離峰價）
+                              join ph in _db.SportTypePeakHours.Where(p => p.DayOfWeek == dayOfWeek)
+                                  on v.SportTypeId equals ph.SportTypeId into peakHours
+                              from ph in peakHours.DefaultIfEmpty()
                               where venueIds.Contains(v.VenueId) && r.IsActive
                               select new
                               {
                                   v.VenueId,
-                                  r.PeakStartTime,
+                                  PeakStartTime = ph == null ? null : ph.PeakStartTime,
                                   r.PeakPrice,
                                   r.OffPeakPrice
                               })
@@ -507,12 +507,11 @@ namespace VenueGo.Services.TimeSlots
         }
 
         /// <summary>
-        /// 計價規則的輕量結構。
+        /// 計價規則的輕量結構（某一天的）。
         /// <para>
-        /// 注意 SportTypePriceRules 只有 PeakStartTime 沒有 PeakEndTime，
-        /// 因此判斷規則只能是「時段起始時間 &gt;= PeakStartTime 即為尖峰」，
-        /// 也就是尖峰一路延續到打烊。若日後新增 PeakEndTime 欄位，
-        /// 判斷邏輯集中在 BuildSlotStatus 一處，只需改那一行。
+        /// PeakStartTime 是「這一天」的尖峰起始時間，來自 SportTypePeakHours。
+        /// 規則是「時段起始時間 &gt;= PeakStartTime 即為尖峰」，尖峰一路延續到打烊；
+        /// 判斷集中在 BuildSlotStatus 一處。
         /// </para>
         /// </summary>
         private readonly struct PriceRule

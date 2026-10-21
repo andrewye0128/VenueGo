@@ -291,16 +291,13 @@ namespace VenueGo.Services.Reservations
         /// <summary>
         /// 費用明細，一格時段一列（方案 C）。
         /// <para>
-        /// 尖峰標籤由 SlotTime 與目前的計價規則比對得出，僅供顯示；
-        /// 金額一律以 OrdersDetails.UnitPrice 的成交快照為準。
+        /// 尖峰標籤：先用下單時存下來的 OrdersDetails.IsPeak；舊資料沒有才用預約當天的尖峰起始時間推算
+        /// （規則在 PeakSlotRules）。金額一律以 OrdersDetails.UnitPrice 的成交快照為準。
         /// </para>
         /// </summary>
         private async Task<List<ReservationDetailLineViewModel>> LoadLinesAsync(
             int orderId, int sportTypeId, DateOnly bookingDate, CancellationToken ct)
         {
-            // 預約那一天的尖峰起始時間（每個星期幾可能不同），由場地模組提供
-            var peakStartTime = await _venueSchedule.GetPeakStartTimeAsync(sportTypeId, bookingDate, ct);
-
             var rows = await _db.OrdersDetails.AsNoTracking()
                 .Where(d => d.OrderId == orderId)
                 .OrderBy(d => d.SlotTime)
@@ -309,9 +306,15 @@ namespace VenueGo.Services.Reservations
                     d.SlotTime,
                     d.UnitPrice,
                     d.DurationHours,
-                    d.Subtotal
+                    d.Subtotal,
+                    d.IsPeak
                 })
                 .ToListAsync(ct);
+
+            // 有舊資料（IsPeak 是 null）才向場地模組查預約當天的尖峰起始時間（每個星期幾可能不同）
+            var peakStartTime = PeakSlotRules.NeedsFallback(rows.Select(d => d.IsPeak))
+                ? await _venueSchedule.GetPeakStartTimeAsync(sportTypeId, bookingDate, ct)
+                : null;
 
             return rows
                 .Select(d => new ReservationDetailLineViewModel
@@ -320,7 +323,7 @@ namespace VenueGo.Services.Reservations
                     UnitPrice = d.UnitPrice,
                     DurationHours = d.DurationHours,
                     Subtotal = d.Subtotal,
-                    IsPeak = PeakSlotRules.IsPeak(d.SlotTime, peakStartTime)
+                    IsPeak = PeakSlotRules.IsPeak(d.IsPeak, d.SlotTime, peakStartTime)
                 })
                 .ToList();
         }

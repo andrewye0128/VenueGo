@@ -42,6 +42,10 @@ namespace VenueGo.Extensions
             // 前台會員「訂單與付款」：訂單列表、明細
             services.AddScoped<IMemberOrderQueryService, MemberOrderQueryService>();
 
+            // 逾期排程：每 1 分鐘把超過付款期限、還沒付款的預約改成已逾期，並釋放時段
+            services.AddScoped<IReservationExpiryService, ReservationExpiryService>();
+            services.AddHostedService<ReservationExpiryHostedService>();
+
             return services;
         }
     }

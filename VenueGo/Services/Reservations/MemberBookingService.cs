@@ -135,7 +135,7 @@ namespace VenueGo.Services.Reservations
                 }
             }
 
-            // ── 3. 付款規則：用「現在」重新算（線上付款的 30 分鐘從建立的這一刻開始算）──
+            // ── 3. 付款規則：用「現在」重新算（線上付款的 35 分鐘從建立的這一刻開始算）──
             var now = _timeService.Now;
             var option = BuildPaymentOptions(booking, now).First(o => o.Method == paymentMethod);
             if (!option.IsAvailable)

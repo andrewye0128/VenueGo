@@ -69,7 +69,7 @@ namespace VenueGo.Models.Options
         /// 兩邊的營運需求可能不同，只想調整其中一邊時不會影響另一邊。
         /// </para>
         /// </summary>
-        public int MemberOnlinePaymentBufferMinutes { get; set; } = 30;
+        public int MemberOnlinePaymentBufferMinutes { get; set; } = 35;
 
         /// <summary>
         /// 「線上付款」：付款期限前幾分鐘就不能「開始」付款。
@@ -169,7 +169,7 @@ namespace VenueGo.Models.Options
         /// <summary>
         /// 前台會員「線上付款」的付款期限：現在＋緩衝分鐘，但不晚於時段開始時間。
         /// <para>
-        /// 例：14:50 訂 15:00 的時段，現在＋30 分鐘是 15:20，已經超過開始時間，期限改成 15:00。
+        /// 例：14:50 訂 15:00 的時段，現在＋35 分鐘是 15:25，已經超過開始時間，期限改成 15:00。
         /// </para>
         /// </summary>
         /// <param name="now">現在時間（請用 ITimeService.Now）。</param>

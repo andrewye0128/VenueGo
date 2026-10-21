@@ -44,6 +44,8 @@ namespace VenueGo.Extensions
 
             // 逾期排程：每 1 分鐘把超過付款期限、還沒付款的預約改成已逾期，並釋放時段
             services.AddScoped<IReservationExpiryService, ReservationExpiryService>();
+
+            // 預約逾期背景排程
             services.AddHostedService<ReservationExpiryHostedService>();
 
             return services;

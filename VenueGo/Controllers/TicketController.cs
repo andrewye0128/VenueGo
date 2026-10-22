@@ -135,23 +135,6 @@ namespace VenueGo.Controllers
             return View(vm);
         }
 
-        private static string GetFailMessage(CheckInFailReason reason, string actionText) => reason switch
-        {
-            CheckInFailReason.TicketNotFound => "找不到這張票券",
-            CheckInFailReason.AlreadyCancelled => $"票券已取消，無法{actionText}",
-            CheckInFailReason.AlreadyExpired => $"票券已失效，無法{actionText}",
-            CheckInFailReason.AlreadyCompleted => $"票券已使用完畢，無法{actionText}",
-            CheckInFailReason.NotYetStartTime => $"尚未到預約時間，無法{actionText}",
-            CheckInFailReason.InvalidSequence => actionText switch
-            {
-                "入場" => "入場順序異常（可能已經入場）",
-                "離場" => "離場順序異常（這張票還沒入場）",
-                "取消" => "只有「有效」狀態的票券才能取消（已使用過的不行）",
-                "轉失效" => "只有「有效」狀態的票券才能轉失效",
-                _ => $"{actionText}失敗：異常操作行為"
-            },
-            _ => $"{actionText}失敗"
-        };
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -170,7 +153,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "入場"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "入場"); // 失敗一定有值
             }
             return RedirectToAction("ScanLog", new { id });
         }
@@ -195,7 +178,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "離場"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "離場"); // 失敗一定有值
             }
             return RedirectToAction("ScanLog", new { id });
         }
@@ -221,7 +204,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "取消"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "取消"); // 失敗一定有值
             }
             return RedirectToAction("ManualLog", new { id });
         }
@@ -248,7 +231,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "轉失效"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "轉失效"); // 失敗一定有值
             }
             return RedirectToAction("ManualLog", new { id });
         }
@@ -275,7 +258,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "補發QRcode"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "補發QRcode"); // 失敗一定有值
             }
             return RedirectToAction("ManualLog", new { id });
         }

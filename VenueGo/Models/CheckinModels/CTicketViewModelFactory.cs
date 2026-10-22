@@ -9,6 +9,7 @@ using VenueGo.Models.ReviewModels;
 using VenueGo.Services.Time;
 using VenueGo.Services.ReviewTickets;
 using VenueGo.ViewModels.CheckinViewModels;
+using VenueGo.Dtos.TicketDtos;
 
 namespace VenueGo.Models.CheckinModels
 {
@@ -45,6 +46,15 @@ namespace VenueGo.Models.CheckinModels
                     Text = v.VenueName
                 })
                 .ToList();
+        }
+
+        public async Task<string?> GetActiveVenueName(int venueId)
+        {
+            return await _db.Venues
+                .AsNoTracking()
+                .Where(v => v.VenueId == venueId && v.IsActive)
+                .Select(v => v.VenueName)
+                .FirstOrDefaultAsync();
         }
 
 
@@ -240,6 +250,39 @@ namespace VenueGo.Models.CheckinModels
                 .Where(t => t.TicketId == ticketId)
                 .Select(t => t.Qrtoken)
                 .FirstOrDefaultAsync();
+        }
+
+
+        public async Task<ScanTicketSummaryDto?> GetScanSummaryAsync(int ticketId)
+        {
+            var data = await (from t in _db.EntryTickets.AsNoTracking()
+                              join o in _db.Orders on t.OrderId equals o.OrderId
+                              join u in _db.Users on (t.UserId ?? o.UserId) equals u.UserId
+                              join r in _db.Reservations on o.ReservationId equals r.ReservationId
+                              join v in _db.Venues on r.VenueId equals v.VenueId
+                              where t.TicketId == ticketId
+                              select new
+                              {
+                                  t.TicketId,
+                                  MemberName = u.Name,
+                                  v.VenueId,
+                                  v.VenueName,
+                                  r.BookingDate,
+                                  r.StartTime,
+                                  r.EndTime
+                              }).FirstOrDefaultAsync();
+
+            if (data == null) return null;
+
+            return new ScanTicketSummaryDto
+            {
+                TicketId = data.TicketId,
+                MemberName = data.MemberName,
+                VenueId = data.VenueId,
+                VenueName = data.VenueName,
+                Date = data.BookingDate.ToString("yyyy/MM/dd"),
+                TimeRange = $"{data.StartTime:HH\\:mm}-{data.EndTime:HH\\:mm}"
+            };
         }
     }
 }

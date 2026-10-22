@@ -5,6 +5,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Enums;
 using VenueGo.Services.Ticket;
 using VenueGo.ViewModels.CheckinViewModels;
+using VenueGo.ViewModels.Shared;
 
 namespace VenueGo.Models.CheckinModels
 {
@@ -17,9 +18,10 @@ namespace VenueGo.Models.CheckinModels
             _db = db;
         }
 
-        public List<EntryTicketListViewModel> SearchTickets(DateOnly date, string? keyword, int? venueId, int? status)
+        public PagedResult<EntryTicketListViewModel> SearchTickets(DateOnly date, string? keyword, int? venueId, int? status, int page, int pageSize)
         {
-            List<EntryTicketListViewModel> list = _db.Database.SqlQuery<EntryTicketListViewModel>($@"
+            // 組查詢
+            IQueryable<EntryTicketListViewModel> query = _db.Database.SqlQuery<EntryTicketListViewModel>($@"
                 SELECT TicketId,
                     TicketQRToken     AS Qrtoken,
                     UserName,
@@ -36,8 +38,25 @@ namespace VenueGo.Models.CheckinModels
                                   OR UserPhone     LIKE '%' + {keyword} + '%'
                                   OR TicketQRToken LIKE '%' + {keyword} + '%')
                     AND  ({venueId} IS NULL OR VenueId = {venueId})
-                    AND  ({status}  IS NULL OR TicketStatusValue = {status})")
+                    AND  ({status}  IS NULL OR TicketStatusValue = {status})");
+
+            int totalCount = query.Count();
+
+            int totalPage = totalCount == 0 ? 1 : (int)Math.Ceiling(totalCount / (double)pageSize);
+            if(page < 1)
+            {
+                page = 1;
+            }
+            if(page > totalPage)
+            {
+                page = totalPage;
+            }
+
+            List<EntryTicketListViewModel> list = query
                 .OrderBy(x => x.StartTime)
+                .ThenBy(x => x.TicketId)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToList();
 
             // 臨時測試用之後改檢視表
@@ -54,7 +73,13 @@ namespace VenueGo.Models.CheckinModels
                 item.Holder = holders.ContainsKey(item.TicketId) ? holders[item.TicketId] : item.UserName;
             }
 
-            return list;
+            return new PagedResult<EntryTicketListViewModel>
+            {
+                Items = list,
+                Page = page,
+                PageSize = pageSize,
+                TotalCount = totalCount,
+            };
         }
 
         public void ChangeHolder(EntryTicket ticket, int newUserId)

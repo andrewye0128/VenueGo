@@ -1,7 +1,6 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using QRCoder;
 using System.Security.Claims;
 using VenueGo.Constants;
 using VenueGo.Data;
@@ -12,6 +11,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Services.CheckIn;
 using VenueGo.Services.Ticket;
 using VenueGo.ViewModels.CheckinViewModels;
+using VenueGo.ViewModels.Shared;
 
 namespace VenueGo.Controllers
 {
@@ -25,6 +25,7 @@ namespace VenueGo.Controllers
         private readonly CTicketViewModelFactory _viewFactory;
         private readonly CTicketStatusLogFactory _ticketStatusLogFactory;
         private readonly COvertimeChargeFactory _overtimeChargeFactory;
+        private const int TicketPageSize = 10;
         private int? GetCurrentUserId()
         {
             var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -42,19 +43,17 @@ namespace VenueGo.Controllers
             _overtimeChargeFactory = overtimeChargeFactory;
         }
 
-        public IActionResult Index(string? txtKeyword, DateOnly? selectedDate, int? venueId, int? status)
+        private IActionResult RedirectToList()
+        {
+            string savedQuery = HttpContext.Session.GetString("searchQuery") ?? "";
+            return Redirect(Url.Action("Index", "Ticket") + savedQuery);
+        }
+
+        public IActionResult Index(string? txtKeyword, DateOnly? selectedDate, int? venueId, int? status, int page = 1)
         {
 
-            // 沒有選擇日期時，預設使用今天的日期, 第一次進入頁面時，selectedDate 為 null傳入今天
-            // ViewBag傳到頁面是今天, 前一天為今天 - 1, 後一天為今天 + 1
-            // 有選擇日期時，使用選擇的日期, selectedDate 為選擇的日期
-            // ViewBag傳到頁面是選擇的日期, 前一天為選擇的日期 - 1, 後一天為選擇的日期 + 1
-
             // 網址有搜尋條件
-            if(Request.QueryString.HasValue)
-            {
-                HttpContext.Session.SetString("searchQuery", Request.QueryString.Value!);
-            }
+            HttpContext.Session.SetString("searchQuery", Request.QueryString.Value ?? "");
 
             //防呆
             DateOnly targetDate = selectedDate ?? _viewFactory.GetToday();
@@ -68,7 +67,7 @@ namespace VenueGo.Controllers
                 SelectedStatus = status,
                 // 使用<SelectListItem>接收下拉選單內容並用asp-items綁定了CTicketViewModelFactory裡搜尋場地的結果
                 AvailableVenues = _viewFactory.GetVenueOptions(),
-                Tickets = _ticketFactory.SearchTickets(targetDate, txtKeyword, venueId, status)
+                Tickets = _ticketFactory.SearchTickets(targetDate, txtKeyword, venueId, status, page, TicketPageSize)
             };
 
             return View(vm);
@@ -83,12 +82,12 @@ namespace VenueGo.Controllers
 
             if (isSuccess)
             {
-                return RedirectToAction("Index");
+                return RedirectToList();
             }
             else
             {
                 TempData["ErrorMessage"] = "票券不存在或是錯誤的進出行為";
-                return RedirectToAction("Index");
+                return RedirectToList();
             }
         }
 
@@ -100,12 +99,12 @@ namespace VenueGo.Controllers
 
             if (isSuccess)
             {
-                return RedirectToAction("Index");
+                return RedirectToList();
             }
             else
             {
                 TempData["ErrorMessage"] = "票券不存在或是錯誤的進出行為";
-                return RedirectToAction("Index");
+                return RedirectToList();
             }
         }
 

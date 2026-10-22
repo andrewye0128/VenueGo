@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Models.Options
+﻿namespace VenueGo.Options
 {
     /// <summary>
     /// 中央氣象署開放資料的連線設定（10/18，首頁 TopBar 即時氣象）。

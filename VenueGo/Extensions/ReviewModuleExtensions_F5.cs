@@ -1,5 +1,5 @@
 ﻿using Microsoft.Extensions.Options;
-using VenueGo.Models.Options;
+using VenueGo.Options;
 using VenueGo.Services.Reviews;
 using VenueGo.Services.ReviewScreening;
 using VenueGo.Services.ReviewTickets;

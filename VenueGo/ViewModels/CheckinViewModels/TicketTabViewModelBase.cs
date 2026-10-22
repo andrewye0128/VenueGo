@@ -1,4 +1,5 @@
 ﻿using VenueGo.Enums;
+using VenueGo.Extensions;
 
 namespace VenueGo.ViewModels.CheckinViewModels
 {

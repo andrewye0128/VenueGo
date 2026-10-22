@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace VenueGo.Models.Options
+namespace VenueGo.Options
 {
     /// <summary>
     /// 預約相關的業務規則設定，對應 appsettings.json 的 ReservationRules 節點。

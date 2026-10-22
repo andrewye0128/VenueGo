@@ -1,7 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.Extensions.Options;
-using VenueGo.Models.Options;
+using VenueGo.Options;
 
 namespace VenueGo.Services.ReviewScreening
 {

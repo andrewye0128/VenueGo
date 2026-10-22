@@ -1,4 +1,5 @@
 ﻿@model VenueGo.ViewModels.MemberViewModels.UserListViewModel
+@inject VenueGo.Services.Time.ITimeService TimeService
 
 @{
     ViewData["Title"] = "會員帳號管理";
@@ -83,7 +84,7 @@
                     {
                         @foreach (var user in Model.Users)
                         {
-                            bool isLocked = user.LockedUntil.HasValue && user.LockedUntil.Value > DateTime.Now;
+                            bool isLocked = user.LockedUntil.HasValue && user.LockedUntil.Value > TimeService.Now;
                             <tr>
                                 <td class="ps-3 fw-bold">
                                     <i class="bi bi-person-circle text-secondary me-2"></i>@user.Name

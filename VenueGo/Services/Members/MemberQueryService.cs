@@ -1,16 +1,17 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
+using VenueGo.Constants;
 using VenueGo.Data;
+using VenueGo.Enums;
 using VenueGo.Models.Entities;
+using VenueGo.Services.Members;
+using VenueGo.Services.Time;
 using VenueGo.ViewModels.ReservationViewModels;
 using VenueGo.ViewModels.Shared;
-using VenueGo.Services.Members;
-using VenueGo.Constants;
-using VenueGo.Enums;
 
 namespace VenueGo.Services.Members
 {
@@ -26,10 +27,12 @@ namespace VenueGo.Services.Members
     public class MemberQueryService : IMemberQueryService
     {
         private readonly dbVenueContext _db;
+        private readonly ITimeService _timeService;
 
-        public MemberQueryService(dbVenueContext db)
+        public MemberQueryService(dbVenueContext db, ITimeService timeService)
         {
             _db = db;
+            _timeService = timeService;
         }
 
         
@@ -66,7 +69,7 @@ namespace VenueGo.Services.Members
                 })
                 .ToListAsync(cancellationToken);
 
-            var now = DateTime.Now;
+            var now = _timeService.Now;
             var items = rows.Select(r => ToViewModel(r, now)).ToList();
 
             return new PagedResult<MemberListItemViewModel>
@@ -97,7 +100,7 @@ namespace VenueGo.Services.Members
 
             if (row is null) return null;
 
-            var viewModel = ToViewModel(row, DateTime.Now);
+            var viewModel = ToViewModel(row, _timeService.Now);
 
             // 刻意回傳 null 而非不可選的物件：
             // 呼叫端只需判斷 null，不必再重複一次可選性的判斷邏輯。

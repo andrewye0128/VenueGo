@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using VenueGo.Enums;
+using VenueGo.Extensions;
 using VenueGo.Models.ReservationModels;
 
 namespace VenueGo.ViewModels.ReservationViewModels

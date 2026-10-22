@@ -23,7 +23,7 @@
 //  所以是「兩個 POST 都會用，兩個 GET 都不會用」。
 // ============================================================
 
-namespace VenueGo.Helpers;
+namespace VenueGo.Services.Reviews;
 
 public static class NicknameGenerator
 {

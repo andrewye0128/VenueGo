@@ -1,4 +1,4 @@
-﻿using VenueGo.Models.Options;
+﻿using VenueGo.Options;
 using VenueGo.Services.Orders;
 using VenueGo.Services.Reservations;
 using VenueGo.Services.TimeSlots;

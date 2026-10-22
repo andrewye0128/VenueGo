@@ -1,9 +1,10 @@
-﻿using System;
+﻿using Microsoft.EntityFrameworkCore;
+using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Services.Orders
 {
@@ -19,15 +20,17 @@ namespace VenueGo.Services.Orders
         private const int SequenceDigits = 3;
 
         private readonly dbVenueContext _db;
+        private readonly ITimeService _timeService;
 
-        public OrderNoGenerator(dbVenueContext db)
+        public OrderNoGenerator(dbVenueContext db, ITimeService timeService)
         {
             _db = db;
+            _timeService = timeService;
         }
 
         public async Task<string> GenerateAsync(CancellationToken cancellationToken = default)
         {
-            var datePart = $"{Prefix}{DateTime.Now:yyyyMMdd}";
+            var datePart = $"{Prefix}{_timeService.Now:yyyyMMdd}";
 
             // 每次呼叫都重新查詢。重試時才會看到對方剛寫進去的那一筆，
             // 否則重試也只會算出同樣的編號。

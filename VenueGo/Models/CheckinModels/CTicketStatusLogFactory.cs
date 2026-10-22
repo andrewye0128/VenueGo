@@ -2,6 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Enums;
+using VenueGo.Extensions;
 using VenueGo.Models.Entities;
 
 namespace VenueGo.Models.CheckinModels

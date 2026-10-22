@@ -1,4 +1,4 @@
-﻿namespace VenueGo.Helpers
+﻿namespace VenueGo.Constants
 {
     public static class CDictionary
     {

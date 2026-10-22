@@ -1,4 +1,4 @@
-namespace VenueGo.Models.Options
+namespace VenueGo.Options
 {
     /// <summary>
     /// Google Gemini 的連線設定。值放在 Secrets.json（管理使用者祕密），不放在任何會進 Git 的檔案。

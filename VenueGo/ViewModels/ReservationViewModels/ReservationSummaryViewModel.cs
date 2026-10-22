@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using VenueGo.Enums;
+using VenueGo.Extensions;
 using VenueGo.ViewModels.ReservationViewModels;
 
 namespace VenueGo.ViewModels.Reservations

@@ -8,7 +8,7 @@
     這是 POST-Redirect-GET 模式必要的配套：
     異動成功後導向 GET 頁面，ModelState 會消失，只有 TempData 留得住。
 *@
-@using VenueGo.Helpers
+@using VenueGo.Constants
 
 @if (TempData[CDictionary.TK_MSG_操作成功] is string successMessage)
 {

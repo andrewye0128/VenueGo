@@ -4,8 +4,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Options;
-using VenueGo.Models.Options;
 using VenueGo.Models.ReservationModels;
+using VenueGo.Options;
 using VenueGo.Services.TimeSlots;
 
 namespace VenueGo.Services.Reservations

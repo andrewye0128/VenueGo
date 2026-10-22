@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using VenueGo.Constants;
 using VenueGo.Enums;
+using VenueGo.Extensions;
 
 namespace VenueGo.ViewModels.ReservationViewModels
 {

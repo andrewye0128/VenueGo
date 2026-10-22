@@ -7,8 +7,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using VenueGo.Data;
 using VenueGo.Enums;
-using VenueGo.Models.Options;
 using VenueGo.Models.ReservationModels;
+using VenueGo.Options;
 using VenueGo.Services.Time;
 
 namespace VenueGo.Services.TimeSlots

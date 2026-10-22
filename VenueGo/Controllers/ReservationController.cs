@@ -4,7 +4,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
-using VenueGo.Helpers;
 using VenueGo.Models.Entities;
 using VenueGo.Models.ReservationModels;
 using VenueGo.Services.Auth;

@@ -4,8 +4,8 @@ using VenueGo.Data;
 using VenueGo.Dtos;
 using VenueGo.Dtos.OrderDtos;
 using VenueGo.Enums;
-using VenueGo.Models.Options;
 using VenueGo.Models.ReservationModels;
+using VenueGo.Options;
 using VenueGo.Services.VenueSchedules;
 
 namespace VenueGo.Services.Orders

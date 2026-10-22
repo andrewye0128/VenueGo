@@ -7,6 +7,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Enums;
 using VenueGo.Models.ReviewModels;
 using VenueGo.Services.ReviewScreening;
+using VenueGo.Extensions;
 
 namespace VenueGo.Mappers
 {

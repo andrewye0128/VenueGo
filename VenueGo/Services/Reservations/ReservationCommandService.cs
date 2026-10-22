@@ -11,6 +11,7 @@ using VenueGo.Models.Entities;
 using VenueGo.Models.ReservationModels;
 using VenueGo.Services.ReviewTickets;
 using VenueGo.Services.Ticket;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Services.Reservations
 {
@@ -27,11 +28,13 @@ namespace VenueGo.Services.Reservations
         private readonly IBookingReviewTicketFactory _bookingFactory;
 
         private readonly IEntryTicketService _entryTicketService;
+        private readonly ITimeService _timeService;
 
         public ReservationCommandService(
             dbVenueContext db,
             IBookingReviewTicketFactory bookingFactory,
-            IEntryTicketService entryTicketService)
+            IEntryTicketService entryTicketService,
+            ITimeService timeService)
         {
             _db = db;
 
@@ -40,6 +43,8 @@ namespace VenueGo.Services.Reservations
 
             // 注入 IEntryTicketService 介面，讓標記已付款時可以一併建立入場票券。
             _entryTicketService = entryTicketService;
+
+            _timeService = timeService;
         }
 
         // ══ 標記為已付款 ═══════════════════════════════
@@ -85,7 +90,7 @@ namespace VenueGo.Services.Reservations
             var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             await using (transaction)
             {
-                var now = DateTime.Now;
+                var now = _timeService.Now;
 
                 payment.PaymentStatus = (byte)PaymentStatus.Paid;
                 payment.PaidAt = now;
@@ -195,7 +200,7 @@ namespace VenueGo.Services.Reservations
             var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             await using (transaction)
             {
-                var now = DateTime.Now;
+                var now = _timeService.Now;
 
                 reservation.ReservationStatus = (byte)targetStatus;
                 reservation.CancelledBy = operatorUserId;
@@ -322,7 +327,7 @@ namespace VenueGo.Services.Reservations
                 EntityId = reservationId.ToString(),
                 OldValue = oldValue,
                 NewValue = newValue,
-                CreatedAt = DateTime.Now
+                CreatedAt = _timeService.Now
             });
         }
     }

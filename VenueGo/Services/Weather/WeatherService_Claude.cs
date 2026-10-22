@@ -2,7 +2,7 @@
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using VenueGo.Dtos.WeatherDtos;
-using VenueGo.Models.Options;
+using VenueGo.Options;
 
 namespace VenueGo.Services.Weather
 {

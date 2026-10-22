@@ -11,6 +11,7 @@ using VenueGo.Services.CheckIn;
 using VenueGo.ViewModels.CheckinViewModels;
 using VenueGo.Services.Ticket;
 using VenueGo.Enums;
+using VenueGo.Constants;
 
 namespace VenueGo.Controllers
 {

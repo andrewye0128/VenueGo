@@ -1,10 +1,5 @@
 // 預約相關的共用規則：表格、手機卡片、明細視窗都用這裡的函式，規則只寫一次
 
-// 預約編號：R + ReservationId，補到 3 位數（R001、R012、R123；超過 3 位數照原本位數，R1234）
-export function formatReservationNo(reservationId) {
-  return `R${String(reservationId).padStart(3, "0")}`;
-}
-
 // 預約人數 → "4 人"；預約沒有訂單時人數是 null，顯示「—」
 export function formatPersonCount(personCount) {
   return personCount == null ? "—" : `${personCount} 人`;

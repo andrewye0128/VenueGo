@@ -7,7 +7,7 @@ import { ALL } from "@/constants/statuses";
 /**
  * 取得我的預約（篩選＋分頁）：[GET] /api/reservations
  * @param {object} params
- * @param {string} params.keyword 比對場地名稱「包含」，或預約編號「完全相同」（R012、12 都找得到 R012）
+ * @param {string} params.keyword 比對場地名稱或訂單編號「包含」
  * @param {string|null} params.date 預約日期 "2026-10-08"；null 表示不篩選
  * @param {number|"all"} params.reservationStatus 預約狀態；"all" 表示不篩選
  * @param {number|"all"} params.paymentStatus 付款狀態；"all" 表示不篩選

@@ -29,6 +29,9 @@
         /// <summary>場館取消預約（場地維護等館方因素）。</summary>
         public const string CancelReservationByVenue = "CancelReservationByVenue";
 
+        /// <summary>預約逾期：超過付款期限仍未付款，由排程自動取消（AuditLogs.UserId 為 NULL）。</summary>
+        public const string ExpireReservation = "ExpireReservation";
+
         /// <summary>編輯預約（修改日期、場地或時段）。期末功能。</summary>
         public const string UpdateReservation = "UpdateReservation";
 

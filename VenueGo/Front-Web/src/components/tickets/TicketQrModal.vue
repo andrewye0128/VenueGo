@@ -13,6 +13,7 @@ const emit = defineEmits(["status-changed"]);
 // v-model:open：父層用 v-model:open 綁定開關
 const open = defineModel("open", { type: Boolean, default: false });
 const REFRESH_SECONDS = 20;
+const STATUS_CHECK_SECONDS = 5; // 多久檢查一次票券狀態有沒有變（例如被櫃台掃進場）
 
 const statusMap = {
   available: { label: "可使用", class: "border border-gray-900 text-gray-900" },
@@ -35,6 +36,8 @@ const qrStatus = ref(""); // 最新一次後端回的狀態：available / inside
 const secondsLeft = ref(REFRESH_SECONDS);
 
 let timer = null;
+let statusTimer = null;
+let checkInStatus = false;
 let requestId = 0; // 每次請求編號，慢的請求晚回來時不要蓋掉新的結果
 let knownStatus = ""; // 目前已知的票券狀態，用來判斷要不要通知父層
 
@@ -131,6 +134,8 @@ watch(open, (isOpen) => {
     startSession();
   } else {
     endSession();
+    // 關窗時一定叫列表重新載入：會員可能在掃描後馬上關掉，視窗內的計時器已經來不及發現狀態變了
+    if (!isOpen) emit("status-changed");
   }
 });
 

@@ -1,5 +1,5 @@
 import { createRouter, createWebHistory } from "vue-router";
-import HomeView from "../views/HomeView.vue";
+// import HomeView from "../views/HomeView.vue";
 import { useMemberStore } from "@/stores/member";
 // 顧客端評論的路由（昱）：評論專區、撰寫、我的評論、員工預覽
 import reviewRoutes from "./reviewRoutes";
@@ -10,7 +10,9 @@ const router = createRouter({
     {
       path: "/",
       name: "home",
-      component: HomeView,
+      // 10/23：首頁也改成用到才載入。首頁的日期選擇、輪播這些套件很大，
+      // 寫成 import 的話，從其他頁面（評論專區、會員中心）進站也要先下載它們。
+      component: () => import("../views/HomeView.vue"),
     },
     {
       path: "/about",

@@ -215,6 +215,21 @@ export default defineConfig({
     }),
     vueDevTools(),
   ],
+  // 開發模式加速（10/23）：Nuxt UI 把自己排除在預先打包之外，連帶它用到的 Reka UI 等套件
+  // 也不會被預先打包，瀏覽器要一個一個檔案下載（首頁約 800 個請求）。
+  // 在這裡明確列出來，Vite 會把它們先合併成少數幾個檔案（首頁降到約 200 個請求）。
+  // 只影響 npm run dev；npm run build 本來就會打包，不受影響。
+  optimizeDeps: {
+    include: [
+      "reka-ui",
+      "reka-ui/namespaced",
+      "reka-ui/date",
+      "@unhead/vue",
+      "@unhead/vue/client",
+      "tailwind-variants",
+      "@vueuse/core",
+    ],
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

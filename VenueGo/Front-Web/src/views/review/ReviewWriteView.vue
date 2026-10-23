@@ -26,7 +26,7 @@
 -->
 <script setup>
 import { ref, reactive, computed, watch, onMounted } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router"; // 10/23：useRoute 給「登入後繼續撰寫」帶回這一頁的網址
 import { z } from "zod";
 import { getWriteForm, createReview } from "@/api/reviewApi";
 import { ErrorCodes } from "@/constants/errorCodes";
@@ -44,12 +44,14 @@ const props = defineProps({
 });
 
 const router = useRouter();
+const route = useRoute();
 const memberStore = useMemberStore();
 const confirmModal = useOverlay().create(ConfirmModal);
 
 // ── 頁面狀態 ──
 const pageState = ref("loading"); // 'loading' | 'blocked' | 'ready'
 const blockedMessage = ref("");
+const blockedCode = ref(""); // 10/23：評不了的原因（ErrorCodes），決定下方要放哪些按鈕
 const setup = ref(null); // 後端回傳的表單設定（規格 2-2）
 
 // ── 表單內容 ──
@@ -137,11 +139,21 @@ function handleEligibility(e) {
       draft.discard();
       router.replace(mineRoute(props.kind, props.ticket));
       return true;
+    // 10/23：沒登入（多半是 token 過期，或在別的分頁登出了）分出來，不清草稿：
+    //   登入後回到這一頁，草稿會被 draft.start() 代回來，可以接著寫。
+    //   送出時才發現的話，有改過就先把目前寫的存成草稿（不問覆蓋，使用者沒辦法選）；
+    //   存完就不算「沒儲存」，按「登入後繼續撰寫」換頁時也不會跳「尚未儲存」。
+    case ErrorCodes.NotLoggedIn:
+      if (pageState.value === "ready" && draft.isDirty()) draft.save(true);
+      pageState.value = "blocked";
+      blockedCode.value = e.errorCode;
+      blockedMessage.value = e.message;
+      return true;
     case ErrorCodes.NotFound:
     case ErrorCodes.Expired:
-    case ErrorCodes.NotLoggedIn: // 預約評論要會員登入
     case ErrorCodes.Forbidden: // 登入的不是會員（例如員工帳號）
       pageState.value = "blocked";
+      blockedCode.value = e.errorCode;
       blockedMessage.value = e.message;
       draft.discard(); // 停止攔截離開；評不了了，草稿留著也沒用
       return true;
@@ -248,8 +260,27 @@ const mentionOptions = [
         aria-hidden="true"
       />
       <p class="mb-4 text-neutral-text-primary">{{ blockedMessage }}</p>
+      <!-- 10/23：沒登入的人去不了「我的評論」（會被帶去登入頁），所以改成兩個選項：
+           登入後回到這一頁繼續寫，或先不登入、去看評論專區 -->
+      <div
+        v-if="blockedCode === ErrorCodes.NotLoggedIn"
+        class="flex flex-wrap justify-center gap-3"
+      >
+        <UButton
+          :to="{ name: 'login', query: { redirect: route.fullPath } }"
+          color="primary"
+          label="登入後繼續撰寫"
+        />
+        <UButton
+          :to="{ name: 'review-index' }"
+          color="primary"
+          variant="outline"
+          label="先看看評論專區"
+        />
+      </div>
       <!-- 10/13：撰寫的入口只有「我的評論」，返回也回那裡（原本回評論專區） -->
       <UButton
+        v-else
         :to="{ name: 'member-reviews' }"
         color="primary"
         variant="outline"

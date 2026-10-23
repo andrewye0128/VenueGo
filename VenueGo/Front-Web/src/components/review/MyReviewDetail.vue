@@ -47,7 +47,8 @@ const props = defineProps({
 // 讓外層（單筆頁、「我的評論」清單）知道狀態變了，清單上的標籤才能跟著更新，不必整份重讀
 //   reply-viewed：已記錄「顧客看過回覆」→ 清單的「新回覆」標籤拿掉
 //   visibility-changed：公開狀態切換成功（參數是新的 isPublic）
-const emit = defineEmits(["reply-viewed", "visibility-changed"]);
+//   load-error：讀取失敗（參數是 ErrorCodes），外層依原因決定要放哪些按鈕（10/23）
+const emit = defineEmits(["reply-viewed", "visibility-changed", "load-error"]);
 
 const vm = ref(null);
 const loadError = ref("");
@@ -73,6 +74,7 @@ onMounted(async () => {
     vm.value = await load();
   } catch (e) {
     loadError.value = e.message;
+    emit("load-error", e.errorCode);
     return;
   }
 

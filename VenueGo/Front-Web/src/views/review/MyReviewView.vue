@@ -32,7 +32,9 @@
         現在 GET 拿到的是寫入之前的狀態，第一次打開時提示會正常出現。
 -->
 <script setup>
-import { computed } from "vue";
+import { computed, ref } from "vue";
+import { useRoute } from "vue-router";
+import { ErrorCodes } from "@/constants/errorCodes";
 import MyReviewDetail from "@/components/review/MyReviewDetail.vue";
 
 // 顧客模式傳 kind + ticket；預覽模式只傳 previewId（種類由 API 回傳的 kind 決定）
@@ -43,6 +45,12 @@ const props = defineProps({
 });
 
 const isPreview = computed(() => props.previewId != null);
+
+// 10/23：讀取失敗的原因（MyReviewDetail 的 load-error）。
+// 沒登入的人去不了「我的評論」（會被帶去登入頁），所以改放「登入後查看」和「先看看評論專區」。
+const route = useRoute();
+const loadErrorCode = ref("");
+const needsLogin = computed(() => loadErrorCode.value === ErrorCodes.NotLoggedIn);
 </script>
 
 <template>
@@ -59,7 +67,28 @@ const isPreview = computed(() => props.previewId != null);
       class="mb-4"
     />
 
-    <MyReviewDetail :kind="kind" :ticket="ticket" :preview-id="previewId" />
+    <MyReviewDetail
+      :kind="kind"
+      :ticket="ticket"
+      :preview-id="previewId"
+      @load-error="(code) => (loadErrorCode = code)"
+    >
+      <template v-if="needsLogin" #error-action>
+        <div class="flex flex-wrap justify-center gap-3">
+          <UButton
+            :to="{ name: 'login', query: { redirect: route.fullPath } }"
+            color="primary"
+            label="登入後查看"
+          />
+          <UButton
+            :to="{ name: 'review-index' }"
+            color="primary"
+            variant="outline"
+            label="先看看評論專區"
+          />
+        </div>
+      </template>
+    </MyReviewDetail>
 
     <UButton
       v-if="isPreview"
@@ -70,8 +99,9 @@ const isPreview = computed(() => props.previewId != null);
       label="返回評論專區"
       class="mt-6"
     />
+    <!-- 10/23：需要登入時，上面的錯誤框已經有按鈕，這顆不顯示 -->
     <UButton
-      v-else
+      v-else-if="!needsLogin"
       :to="{ name: 'member-reviews', query: { tab: 'reviewed' } }"
       color="primary"
       variant="outline"

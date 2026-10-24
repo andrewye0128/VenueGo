@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Net.WebSockets;
 using System.Reflection.Metadata.Ecma335;
 using VenueGo.Data;
+using VenueGo.Enums;
 using VenueGo.Extensions;
 using VenueGo.Helpers;
 using VenueGo.Models.VenueModels;
@@ -973,6 +974,15 @@ namespace VenueGo.Controllers
                 reasonByTime[slot.UnavailableTime] = slot.Reason;
             }
 
+            //一次查出這天被預約佔用的時段,一樣轉成Dictionary逐一比對,提醒後台人員哪些時段已有會員預約
+            List<CVenueSlotBooking> bookings = VenueUnavailableSlotFactory.QueryBookingsByVenueAndDate(venueId, targetDate);
+
+            Dictionary<TimeOnly, CVenueSlotBooking> bookingByTime = new Dictionary<TimeOnly, CVenueSlotBooking>();
+            foreach (var booking in bookings)
+            {
+                bookingByTime[booking.SlotTime] = booking;
+            }
+
             //現在的時間,只有targetDate是今天時才會用來判斷IsPast
             TimeOnly now = TimeOnly.FromDateTime(currentTime);
 
@@ -999,6 +1009,17 @@ namespace VenueGo.Controllers
                 else
                 {
                     row.IsPast = false;
+                }
+
+                //有預約就帶入預約資訊,預約狀態轉成中文(跟預約管理頁同一套 Display 名稱)
+                if (bookingByTime.ContainsKey(time))
+                {
+                    CVenueSlotBooking booking = bookingByTime[time];
+                    row.ReservationId = booking.ReservationId;
+                    row.OrderNo = booking.OrderNo;
+                    row.MemberName = booking.MemberName;
+                    row.MemberEmail = booking.MemberEmail;
+                    row.ReservationStatusText = ((ReservationStatus)booking.ReservationStatus).GetDisplayName();
                 }
 
                 vm.Hours.Add(row);

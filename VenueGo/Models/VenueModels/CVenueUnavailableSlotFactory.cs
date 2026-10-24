@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 using VenueGo.Models.Entities;
 
@@ -27,6 +28,35 @@ namespace VenueGo.Models.VenueModels
             }
 
             return list;
+        }
+
+
+        //查詢某場地某天被預約佔用的所有時段 >> 給VenueUnavailableSlotManage頁面提醒後台人員,只讀不寫
+        //1. 用 ReservationSlots 判斷佔用,跟前台選時段(TimeSlotService)一樣:預約取消或逾期時那一列會被刪掉,查得到就是目前佔用中
+        //2. 一筆預約跨多個時段時,每個時段各回傳一筆,資料相同
+        //3. Orders 用 left join,訂單查不到時 OrderNo 為 null,頁面改顯示預約編號
+        public List<CVenueSlotBooking> QueryBookingsByVenueAndDate(int venueId, DateOnly date)
+        {
+            using (dbVenueContext db = new dbVenueContext())
+            {
+                var datas = from s in db.ReservationSlots.AsNoTracking()
+                            join r in db.Reservations.AsNoTracking() on s.ReservationId equals r.ReservationId
+                            join u in db.Users.AsNoTracking() on r.UserId equals u.UserId
+                            join o in db.Orders.AsNoTracking() on (int?)r.ReservationId equals o.ReservationId into orderGroup
+                            from o in orderGroup.DefaultIfEmpty()
+                            where s.VenueId == venueId && s.BookingDate == date
+                            select new CVenueSlotBooking
+                            {
+                                SlotTime = s.SlotTime,
+                                ReservationId = r.ReservationId,
+                                OrderNo = o == null ? null : o.OrderNo,
+                                MemberName = u.Name,
+                                MemberEmail = u.Email,
+                                ReservationStatus = r.ReservationStatus
+                            };
+
+                return datas.ToList();
+            }
         }
 
 

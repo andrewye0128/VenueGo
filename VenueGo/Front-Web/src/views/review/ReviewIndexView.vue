@@ -443,7 +443,7 @@ const mentionTabs = computed(() =>
           @go="goPage"
         >
           <div
-            class="grid gap-4 lg:grid-cols-2"
+            class="grid grid-cols-1 gap-4 lg:grid-cols-2"
             :class="
               loading
                 ? 'opacity-50 transition-opacity duration-150'

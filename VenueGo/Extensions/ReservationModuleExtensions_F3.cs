@@ -17,6 +17,9 @@ namespace VenueGo.Extensions
             // 球館預約的業務規則（appsettings.json 的 ReservationRules）
             services.Configure<ReservationRulesOptions>(configuration.GetSection(ReservationRulesOptions.SectionName));
 
+            // 綠界金流的設定（appsettings.Local.json 的 Ecpay；沒設定也能啟動，只是不能線上付款）
+            services.Configure<EcpayOptions>(configuration.GetSection(EcpayOptions.SectionName));
+
             // 訂位草稿（存在 Session）
             services.AddScoped<IReservationDraftStore, SessionReservationDraftStore>();
 

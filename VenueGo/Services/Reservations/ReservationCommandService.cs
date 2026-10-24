@@ -118,7 +118,7 @@ namespace VenueGo.Services.Reservations
             }
 
             // 收到款項後要建立「預約評論憑證」，讓使用者可以在評論頁面留下評價。
-            await _bookingFactory.CreateReviewPerBookingAsync(order.OrderId);
+            //await _bookingFactory.CreateReviewPerBookingAsync(order.OrderId);
 
             return ReservationCommandResult.Success(
                 $"已將訂單 {order.OrderNo} 標記為已付款，預約狀態更新為已確認，已產生 {ticketResult.TicketCount} 張票券。");

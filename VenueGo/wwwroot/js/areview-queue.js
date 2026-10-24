@@ -3,6 +3,8 @@
    放置路徑：wwwroot/js/areview-queue.js
    相依：axios、Bootstrap 5（Collapse、Modal）
 
+   10/24 沒送出的回覆不會因為清單重新載入而消失（說明在「沒送出的回覆」那一段）。
+
    ⚠️ 清單會被整塊換掉（重新載入 Partial），所以事件一律掛在
       外層的 #queueRoot 上，再判斷實際點到的是誰（事件委派）。
       如果直接掛在清單裡的按鈕上，換掉之後新的按鈕就沒有事件了。
@@ -22,7 +24,10 @@
 
       // 所有會進網址、也會送給後端的條件
       // 9/29：多了運動類型與場地。dataset 會把 data-sport-type-id 轉成 sportTypeId。
-      const FILTER_KEYS = ['tab', 'source', 'range', 'field', 'keyword', 'grouped', 'sportTypeId', 'venueId'];
+      // 10/23：多了 page（分頁）。換任何篩選條件都回到第 1 頁：篩選連結的網址本來就不帶 page，
+      //        下拉選單、搜尋那幾個地方則在送出前把 page 清掉（見 uiFilter）。
+      //        處理完一則評論（置頂、回覆、標記垃圾）後重新載入時用 currentFilter，會留在同一頁。
+      const FILTER_KEYS = ['tab', 'source', 'range', 'field', 'keyword', 'grouped', 'sportTypeId', 'venueId', 'page'];
 
       /* ── 共用工具 ─────────────────────────────────────── */
 
@@ -36,7 +41,112 @@
     const AI_DRAFT_LIMIT = 3;
     const aiDraftCount = new Map();
 
-    function pageToken() {
+      /* ── 10/24：沒送出的回覆 ─────────────────────────────
+         換頁、換篩選、處理完別則評論之後，清單會整塊換掉，回覆框裡打到一半的字原本會跟著不見，也沒有任何提醒。
+         - 打字時把內容記在 replyDrafts（評論編號 → 內容）。清單換掉之後，那則評論還在畫面上就把內容填回去，
+           摘要列加上「未送出的回覆」標籤；原本展開的那一則也重新展開。
+         - 那則評論不在新的這一頁（例如換頁了）：內容繼續留著，回到那則評論就會填回去；離開時提示一次。
+         - 送出成功、標記垃圾成功才刪掉。那則評論已經被別人處理掉（畫面上有它，但沒有回覆框）也刪掉。
+         - 重新整理整頁、關掉分頁的話記憶體裡的內容會不見，所以還有沒送出的回覆時，用瀏覽器內建的「確定要離開嗎？」攔一下。
+           （這個對話框的文字瀏覽器不讓網頁改，固定是瀏覽器自己的說法。） */
+      const replyDrafts = new Map();   // reviewId → { text, ai }（ai：「這段草稿由 AI 產生」的提示是不是亮著）
+
+      // 評論編號從網址最後一段拿：/AReview/Reply/123、/AReview/MarkSpam/123
+      function reviewIdOfUrl(url) {
+            const m = new URL(url, location.href).pathname.match(/(\d+)\/?$/);
+            return m ? m[1] : null;
+      }
+      function reviewIdOfForm(form) {
+            return reviewIdOfUrl(form.getAttribute('action') || form.action);
+      }
+
+      function draftBadge(form, show) {
+            const item = form.closest('.accordion-item');
+            const row = item && item.querySelector('.accordion-button .d-flex');
+            if (!row) return;
+            let badge = row.querySelector('.js-draft-badge');
+            if (show && !badge) {
+                  badge = document.createElement('span');
+                  badge.className = 'badge rounded-pill text-bg-warning js-draft-badge';
+                  badge.innerHTML = '<i class="bi bi-pencil"></i> 未送出的回覆';
+                  row.appendChild(badge);
+            } else if (!show && badge) {
+                  badge.remove();
+            }
+      }
+
+      function rememberDraft(textarea) {
+            const form = textarea.closest('form');
+            const id = form && reviewIdOfForm(form);
+            if (!id) return;
+            if (textarea.value.trim()) {
+                  const note = form.querySelector('.js-ai-note');
+                  replyDrafts.set(id, { text: textarea.value, ai: !!note && !note.classList.contains('d-none') });
+            } else {
+                  replyDrafts.delete(id);
+                  draftBadge(form, false);
+            }
+      }
+
+      // 清單換掉之前：記下哪一則是展開的、這一頁有哪些沒送出的回覆
+      function captureBeforeRender() {
+            const open = root.querySelector('.accordion-collapse.show');
+            const onPage = [];
+            root.querySelectorAll('.js-reply-form').forEach(function (form) {
+                  const id = reviewIdOfForm(form);
+                  if (id && replyDrafts.has(id)) onPage.push(id);
+            });
+            return { openId: open ? open.id : null, onPage: onPage };
+      }
+
+      // 清單換掉之後：填回去、重新展開、提示不在這一頁的
+      function restoreAfterRender(before) {
+            const restored = new Set();
+            root.querySelectorAll('.js-reply-form').forEach(function (form) {
+                  const id = reviewIdOfForm(form);
+                  const draft = id && replyDrafts.get(id);
+                  if (!draft) return;
+                  const textarea = form.querySelector('.js-reply-text');
+                  textarea.value = draft.text;
+                  const note = form.querySelector('.js-ai-note');
+                  if (note && draft.ai) note.classList.remove('d-none');
+                  textarea.dispatchEvent(new Event('input', { bubbles: true }));   // 字數、自動長高跟著更新
+                  draftBadge(form, true);
+                  restored.add(id);
+            });
+
+            // 畫面上有這則評論、卻沒有回覆框：已經被處理掉了（例如別的員工回覆了），草稿留著也送不出去
+            root.querySelectorAll('.accordion-collapse[id^="rev-"]').forEach(function (el) {
+                  const id = el.id.slice(4);
+                  if (replyDrafts.has(id) && !el.querySelector('.js-reply-form')) replyDrafts.delete(id);
+            });
+
+            // 原本展開的那一則重新展開（直接加 class，不播動畫，也不會再送一次「已閱覽」）
+            if (before.openId) {
+                  const collapse = document.getElementById(before.openId);
+                  if (collapse && root.contains(collapse) && !collapse.classList.contains('show')) {
+                        collapse.classList.add('show');
+                        const btn = root.querySelector('[data-bs-target="#' + before.openId + '"]');
+                        if (btn) {
+                              btn.classList.remove('collapsed');
+                              btn.setAttribute('aria-expanded', 'true');
+                        }
+                  }
+            }
+
+            const gone = before.onPage.filter(function (id) { return !restored.has(id) && replyDrafts.has(id); });
+            if (gone.length) {
+                  flash('有 ' + gone.length + ' 則還沒送出的回覆不在這一頁。內容已經幫你留著，回到那則評論就會自動填回。', 'warning');
+            }
+      }
+
+      window.addEventListener('beforeunload', function (e) {
+            if (replyDrafts.size === 0) return;
+            e.preventDefault();
+            e.returnValue = '';   // 舊版瀏覽器要設這個才會跳出確認
+      });
+
+      function pageToken() {
         const input = document.querySelector('input[name="__RequestVerificationToken"]');
         return input ? input.value : '';
     }
@@ -122,6 +232,7 @@
             const f = currentFilter();
             const box = root.querySelector('#searchKeyword');
             if (box) f.keyword = box.value;
+            f.page = '';   // 10/23：換篩選條件就回到第 1 頁（第 5 頁的位置對新條件沒有意義）
             return f;
       }
 
@@ -133,7 +244,7 @@
                   return JSON.parse(st.dataset.defaults);
             } catch (e) {
                   // 萬一讀不到也要有得用，不能讓「重置」整個壞掉
-                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'false', sportTypeId: '', venueId: '' };
+                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'false', sportTypeId: '', venueId: '', page: '' };
             }
       }
 
@@ -183,9 +294,13 @@
                           return;
                     }
 
+                    const draftsBefore = captureBeforeRender();   // 10/24：沒送出的回覆
                     root.innerHTML = res.data;
+                    restoreAfterRender(draftsBefore);
                     highlight();
                     syncUrl(filter);
+                    // 10/23：換頁之後，如果清單開頭已經捲到畫面外（例如在最後一則按了下一頁），捲回清單開頭
+                    if (options.revealList) revealListTop();
 
                     // 清單整塊被換掉，剛才操作的那個控制項也跟著不見了，
                     // 焦點會掉到 body。把焦點還給它，鍵盤操作才不會斷掉。
@@ -205,8 +320,33 @@
               })
             .catch(function (err) {
                 flash(errorMessage(err), 'danger');
-            });
-    }
+            })
+                  // 10/23：告訴 areview-pager.js「載入結束了」（成功或失敗都要），它才會把快轉時預覽的頁碼清掉
+                  .finally(function () {
+                        document.dispatchEvent(new CustomEvent('queue:rendered'));
+                  });
+      }
+
+      /* ── 換頁（10/23）──────────────────────────────────
+         換頁 Bar、Page Up／Page Down、長按快轉都在 areview-pager.js，
+         它決定好要去第幾頁之後發出 queue:go-page，由這裡用目前的條件載入那一頁。 */
+      document.addEventListener('queue:go-page', function (e) {
+            const f = currentFilter();
+            f.page = String(e.detail.page);
+            loadList(f, { revealList: true });
+      });
+
+            // 頁首（.admin-header）是黏在上方的，要扣掉它的高度，清單開頭才不會被蓋住。
+            // 清單開頭還看得到時不捲：例如人在篩選列上方，畫面不該突然往下跳。
+            function revealListTop() {
+                  const el = root.querySelector('#queueListArea');
+                  if (!el) return;
+                  const header = document.querySelector('.admin-header');
+                  const offset = (header ? header.offsetHeight : 0) + 12;
+                  const top = el.getBoundingClientRect().top;
+                  if (top >= offset) return;
+                  window.scrollTo({ top: window.scrollY + top - offset });
+            }
 
     function adjustCount(name, delta) {
         const badge = root.querySelector('[data-count-for="' + name + '"]');
@@ -530,6 +670,8 @@
         counter.textContent = len;
         // 罐頭回覆是程式插入的，maxlength 擋不住，超過時要看得出來
         counter.parentElement.classList.toggle('text-danger', len > e.target.maxLength);
+
+          rememberDraft(e.target);   // 10/24：沒送出的回覆
     });
 
     /* ── 送出回覆 ─────────────────────────────────────── */
@@ -554,7 +696,8 @@
 
         // new FormData(form) 會包含表單裡自動產生的防偽 token
         post(form.action, new FormData(form))
-            .then(function (res) {
+              .then(function (res) {
+                    replyDrafts.delete(reviewIdOfForm(form));   // 10/24：送出了，草稿不用留
                 flash(res.data.message || '回覆已送出');
                 return loadList(currentFilter());
             })
@@ -601,7 +744,8 @@
         spamConfirm.disabled = true;
 
         post(spamUrl, { reason: reason })
-            .then(function (res) {
+              .then(function (res) {
+                    replyDrafts.delete(reviewIdOfUrl(spamUrl));   // 10/24：標記成垃圾了，草稿不用留
                 spamModal.hide();
                 flash(res.data.message || '已標記為垃圾');
                 return loadList(currentFilter());

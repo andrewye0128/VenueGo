@@ -431,6 +431,7 @@
      data-grouped="@(Model.Grouped ? "true" : "false")"
      data-sport-type-id="@Model.SportTypeId"
      data-venue-id="@Model.VenueId"
+     data-page="@Model.Page"
      data-keywords="@System.Text.Json.JsonSerializer.Serialize(Model.Keywords)"
      data-defaults="@defaults"
      hidden></div>
@@ -598,7 +599,8 @@
             {
                   <span class="badge text-bg-light border me-1">@kw</span>
             }
-            <span>（全部都要符合）· 找到 @Model.Items.Count 則</span>
+            @* 10/23：分頁之後 Items 只有這一頁，總數改看 TotalItemCount *@
+            <span>（全部都要符合）· 找到 @Model.TotalItemCount 則</span>
       </p>
 }
 @if (Model.Tab == QueueTab.Unread)
@@ -609,6 +611,10 @@
             後就不會出現在這裡。
       </p>
 }
+
+@* 10/23 分頁：清單外面包一層，長按快轉的遮罩蓋在這一層上（只蓋清單，不蓋篩選列）。
+   換頁之後，如果清單開頭已經捲到畫面外，JS 會捲回這裡。 *@
+<div id="queueListArea" class="position-relative">
 
 @* ── 空清單 ── *@
 @if (Model.IsEmpty)
@@ -650,7 +656,16 @@ else if (Model.Grouped || Model.GroupByVenue)
                                           <i class="bi bi-receipt"></i>
                                           <span>訂單 <span class="fw-semibold js-hl">@group.OrderNo</span></span>
                                     }
-                                    <span class="text-muted ms-2">共 @group.Items.Count 則評論</span>
+                                    @* 10/23 分頁：同一組可能被切到兩頁，則數看整組的；被切開時標出來 *@
+                                    <span class="text-muted ms-2">共 @group.AllCount 則評論</span>
+                                    @if (group.ContinuedFromPrevious)
+                                    {
+                                          <span class="badge text-bg-light border ms-2"><i class="bi bi-arrow-up-short"></i> 接上一頁</span>
+                                    }
+                                    @if (group.ContinuesOnNext)
+                                    {
+                                          <span class="badge text-bg-light border ms-2"><i class="bi bi-arrow-down-short"></i> 下一頁還有</span>
+                                    }
                                     @if (isVenue && Model.VenueId == null)
                                     {
                                           <a class="ms-2 js-queue-link" href="@Url.Action("Index", RouteForVenue(group.VenueId!.Value))">
@@ -686,5 +701,49 @@ else
             {
                   await RenderItem(item);
             }
+      </div>
+}
+
+@* 長按快轉時的遮罩：10/24 改由 areview-pager.js 建立、放在 <body> 最後面再對齊到這一層上。
+   放在這裡的話，清單一載入就會跟著被換掉，放開後的打勾動畫會從頭重畫。 *@
+</div>
+
+@* ── 換頁 Bar（10/23）──────────────────────────────────
+   只有 1 頁時不出現。黏在畫面底部（sticky），寬度跟著內容區，側邊欄收合或展開都不用另外算。
+   Page Up／Page Down 換頁；長按（按鈕或按鍵）快轉，放開才載入。行為都在 wwwroot/js/areview-pager.js。
+   data-marks：每一頁第一則的排序時間（已完成是回覆時間、垃圾桶是標記時間，其餘是評論時間）。 *@
+@if (Model.TotalPages > 1)
+{
+      var pageMarks = System.Text.Json.JsonSerializer.Serialize(
+            Model.PageMarks.Select(m => new { time = m.Time.ToString("yyyy-MM-ddTHH:mm"), pinned = m.IsPinned }));
+      <div id="queuePager" class="queue-pager"
+           data-page="@Model.Page"
+           data-total-pages="@Model.TotalPages"
+           data-marks="@pageMarks">
+            <div class="queue-pager-bar">
+                  <button type="button" class="queue-pager-btn" data-pager-collapse aria-label="收合換頁列" title="收合換頁列">
+                        <i class="bi bi-chevron-down"></i>
+                  </button>
+                  <div class="queue-pager-center">
+                        <button type="button" class="queue-pager-btn queue-pager-step" data-pager-dir="prev"
+                                aria-label="上一頁" title="長按可快轉（鍵盤：Page Up）"
+                                aria-disabled="@(Model.Page <= 1 ? "true" : null)">
+                              <i class="bi bi-chevron-left"></i>
+                        </button>
+                        <span class="queue-pager-num" role="status" aria-live="polite">
+                              <span data-pager-current>@Model.Page</span> / @Model.TotalPages
+                        </span>
+                        <button type="button" class="queue-pager-btn queue-pager-step" data-pager-dir="next"
+                                aria-label="下一頁" title="長按可快轉（鍵盤：Page Down）"
+                                aria-disabled="@(Model.Page >= Model.TotalPages ? "true" : null)">
+                              <i class="bi bi-chevron-right"></i>
+                        </button>
+                  </div>
+                  <span aria-hidden="true"></span>
+            </div>
+            @* 收合後只留這顆，跟收合按鈕同一個位置 *@
+            <button type="button" class="queue-pager-expand" data-pager-expand aria-label="展開換頁列" title="展開換頁列">
+                  <i class="bi bi-chevron-up"></i>
+            </button>
       </div>
 }

@@ -133,6 +133,16 @@ namespace VenueGo.ViewModels.ReviewViewModels
         /// <summary>組內只要有一則被置頂，整組就浮到最上面。</summary>
         public bool HasPinned => Items.Any(i => i.IsPinned);
 
+        // ── 10/23 分頁：同一組可能被切到兩頁 ──
+        /// <summary>這組在整份清單裡共有幾則（Items 只有這一頁的）。沒分頁時是 0，看 Items.Count。</summary>
+        public int TotalCount { get; init; }
+        /// <summary>這組前面還有評論在上一頁（組的標題標「接上一頁」）。</summary>
+        public bool ContinuedFromPrevious { get; init; }
+        /// <summary>這組後面還有評論在下一頁（組的標題標「下一頁還有」）。</summary>
+        public bool ContinuesOnNext { get; init; }
+        /// <summary>整組的則數：分頁時看 TotalCount，沒分頁時看 Items.Count。</summary>
+        public int AllCount => Math.Max(TotalCount, Items.Count);
+
         /// <summary>
         /// 要不要畫框。
         ///   依訂單：只有一則的時候不畫框——框起來是為了表達「這些是一起的」。
@@ -141,7 +151,8 @@ namespace VenueGo.ViewModels.ReviewViewModels
         /// </summary>
         public bool IsRealGroup => Kind switch
         {
-            QueueGroupKind.Order => OrderId != null && Items.Count > 1,
+            // 10/23：分頁後這一頁可能只剩這組的其中一則，所以看整組的則數（AllCount），不看這一頁的
+            QueueGroupKind.Order => OrderId != null && AllCount > 1,
             QueueGroupKind.Venue => VenueId != null,
             _ => throw new ArgumentOutOfRangeException(nameof(Kind), Kind, "未定義的分組依據")
         };
@@ -149,6 +160,12 @@ namespace VenueGo.ViewModels.ReviewViewModels
 
     /// <summary>運動類型下拉選單的一個選項。</summary>
     public sealed record SportTypeOption(int SportTypeId, string Text);
+
+    /// <summary>
+    /// 某一頁第一則的「排序依據時間」與是否置頂（10/23，評論管理長按快轉時顯示）。
+    /// Time：已完成是回覆時間、垃圾桶是標記時間，其餘是評論時間（跟清單的排序一致）。
+    /// </summary>
+    public sealed record QueuePageMark(DateTime Time, bool IsPinned);
 
     /// <summary>館方評論清單的整頁資料。Index 與 QueueList 共用同一份。</summary>
     public sealed record ReviewQueueVM
@@ -215,6 +232,16 @@ namespace VenueGo.ViewModels.ReviewViewModels
         public int UnreadCount  { get; init; }
         public int PendingCount { get; init; }
         public int SpamCount    { get; init; }
+
+        // ── 10/23 分頁（每頁幾則在 AReviewController.PageSize）──
+        /// <summary>目前是第幾頁（後端調整過，一定在 1～TotalPages 之間）。</summary>
+        public int Page { get; init; } = 1;
+        /// <summary>總頁數，至少 1。</summary>
+        public int TotalPages { get; init; } = 1;
+        /// <summary>每一頁第一則的排序時間，第 n 頁是 PageMarks[n - 1]。</summary>
+        public List<QueuePageMark> PageMarks { get; init; } = new();
+        /// <summary>符合條件的總則數（Items 只有這一頁）。</summary>
+        public int TotalItemCount { get; init; }
 
         /// <summary>已經打亂順序的罐頭回覆，整頁共用一組。</summary>
         public List<CannedReply> CannedReplies { get; init; } = new();

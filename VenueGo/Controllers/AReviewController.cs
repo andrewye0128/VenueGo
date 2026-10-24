@@ -571,10 +571,27 @@ namespace VenueGo.Controllers
             return (null, null, null);
         }
 
+        /// <summary>評論管理每頁幾則（10/23）。要改只改這裡，畫面上的頁數、快轉資訊都跟著算。</summary>
+        private const int PageSize = 10;
+
+        /// <summary>
+        /// 這一則在目前清單裡「排序依據」的時間（10/23，長按快轉時顯示）。
+        /// 跟 ApplyTab 的排序一致：已完成看回覆時間、垃圾桶看標記時間，其餘看評論時間。
+        /// </summary>
+        private static DateTime SortTimeOf(ReviewQueueItemVM item, string tab) => tab switch
+        {
+            QueueTab.All       => item.CreatedAt,
+            QueueTab.Unread    => item.CreatedAt,
+            QueueTab.Pending   => item.CreatedAt,
+            QueueTab.Completed => item.RepliedAt ?? item.CreatedAt,
+            QueueTab.Spam      => item.SpamMarkedAt ?? item.CreatedAt,
+            _ => throw new ArgumentOutOfRangeException(nameof(tab), tab, "未定義的清單")
+        };
+
         private ReviewQueueVM BuildQueueVm(
             string? tab, string? source, string? range,
             string? field, string? keyword, bool grouped,
-            int? sportTypeId, int? venueId)
+            int? sportTypeId, int? venueId, int? page)
         {
             string t = NormalizeTab(tab);
             string s = NormalizeSource(source);
@@ -609,11 +626,61 @@ namespace VenueGo.Controllers
                                ApplyRange(bySource, rg, byRepliedAt: t == QueueTab.Completed, todayStart),
                                f, keywords);
 
-            // ⚠️ 期中沒有分頁。資料量變大之後要補 Skip / Take。
+            // 10/23 分頁：先把整份清單照畫面上的順序排好，再切出這一頁。
+            //   不能先切再分組：同一筆訂單的兩則評論可能隔很久（例如現場評論在第 1 頁、預約評論在第 3 頁），
+            //   先切的話兩則會被拆到不同頁，分組就失去「放在一起看」的意義。
+            //   所以有分組時，用「分組之後」的順序切頁；同一組被切到兩頁時，組的標題會標「接上一頁／下一頁還有」。
+            //   目前資料量小，整份在記憶體裡排；資料量變大之後，不分組的情況可以改成在資料庫 Skip / Take。
             var reviews = ApplyTab(listBase, t).ToList();
             var refs = LoadRefs(reviews);   // 原本：var lookups = LoadLookups(reviews);
 
             var items = reviews.Select(r => BuildItem(r, refs, now)).ToList();
+
+            bool hasGroups = groupByVenue || groupByOrder;
+            List<ReviewQueueGroupVM> allGroups = [];
+            if (groupByVenue) allGroups = BuildVenueGroups(items, t);
+            else if (groupByOrder) allGroups = BuildGroups(items, t);
+            else if (!hasGroups) allGroups = [];   // 沒分組：不需要組
+
+            // 畫面上的順序：有分組時是分組之後的順序，沒分組時就是清單原本的順序
+            List<ReviewQueueItemVM> ordered = [];
+            if (hasGroups) ordered = allGroups.SelectMany(g => g.Items).ToList();
+            else if (!hasGroups) ordered = items;
+
+            int totalPages = Math.Max(1, (ordered.Count + PageSize - 1) / PageSize);
+            // 超出範圍（手動改網址、處理完最後一頁的評論）調整到範圍內，不回錯誤
+            int currentPage = Math.Clamp(page ?? 1, 1, totalPages);
+            int skip = (currentPage - 1) * PageSize;
+            var pageItems = ordered.Skip(skip).Take(PageSize).ToList();
+
+            // 這一頁有出現的組，只留這一頁的評論；記下這組有沒有被切到上一頁或下一頁
+            List<ReviewQueueGroupVM> pageGroups = [];
+            if (hasGroups)
+            {
+                var onPage = pageItems.Select(i => i.ReviewId).ToHashSet();
+                int start = 0;
+                foreach (var g in allGroups)
+                {
+                    int end = start + g.Items.Count;   // 這組在整份清單裡的位置：[start, end)
+                    var mine = g.Items.Where(i => onPage.Contains(i.ReviewId)).ToList();
+                    if (mine.Count > 0)
+                    {
+                        pageGroups.Add(g with
+                        {
+                            Items = mine,
+                            TotalCount = g.Items.Count,
+                            ContinuedFromPrevious = start < skip,
+                            ContinuesOnNext = end > skip + PageSize
+                        });
+                    }
+                    start = end;
+                }
+            }
+
+            // 每一頁第一則的排序時間（長按快轉時顯示「正在經過哪裡」）
+            var pageMarks = ordered.Where((_, i) => i % PageSize == 0)
+                                   .Select(i => new QueuePageMark(SortTimeOf(i, t), i.IsPinned))
+                                   .ToList();
 
             return new ReviewQueueVM
             {
@@ -638,10 +705,13 @@ namespace VenueGo.Controllers
                                           st.IsActive ? st.SportName : st.SportName + "（已停用）"))
                                       .ToList(),
 
-                Items  = items,
-                Groups = groupByVenue ? BuildVenueGroups(items, t)
-                       : groupByOrder ? BuildGroups(items, t)
-                       : new List<ReviewQueueGroupVM>(),
+                // 10/23 分頁：Items、Groups 都只有這一頁
+                Items  = pageItems,
+                Groups = pageGroups,
+                Page       = currentPage,
+                TotalPages = totalPages,
+                PageMarks  = pageMarks,
+                TotalItemCount = ordered.Count,
 
                 UnreadCount  = countBase.Count(UnreadRule),
                 PendingCount = countBase.Count(PendingRule),
@@ -668,18 +738,18 @@ namespace VenueGo.Controllers
         [HttpGet]
         public IActionResult Index(string? tab, string? source, string? range,
                                    string? field, string? keyword, bool grouped = false,
-                                   int? sportTypeId = null, int? venueId = null)
+                                   int? sportTypeId = null, int? venueId = null, int? page = null)
         {
-            return View(BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId));
+            return View(BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page));
         }
 
         /// <summary>只有清單那一塊。切換篩選、搜尋、處理完一則之後，由 axios 呼叫。</summary>
         [HttpGet]
         public IActionResult QueueList(string? tab, string? source, string? range,
                                        string? field, string? keyword, bool grouped = false,
-                                       int? sportTypeId = null, int? venueId = null)
+                                       int? sportTypeId = null, int? venueId = null, int? page = null)
         {
-            return PartialView("_QueueList", BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId));
+            return PartialView("_QueueList", BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page));
         }
 
         /// <summary>

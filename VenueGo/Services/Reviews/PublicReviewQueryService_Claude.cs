@@ -26,6 +26,12 @@ namespace VenueGo.Services.Reviews
         /// <summary>take 的上限（10/13）：首頁 Slide 用不到這麼多，擋住有人傳一個很大的數字。</summary>
         private const int MaxTake = 50;
 
+        /// <summary>
+        /// 評論專區每頁幾則（10/23）：電腦版兩欄，12 則剛好排成 6 列；以後改成三欄也是整數列。
+        /// 要改每頁幾則只改這裡，前台不用跟著改（總頁數、每頁第一則都由這裡算好給前台）。
+        /// </summary>
+        private const int PageSize = 12;
+
         /// <summary>首頁輪播最多幾張（10/15）：手機 1、平板 2、電腦 3 張一頁都整除。</summary>
         private const int FeaturedCount = 12;
 
@@ -34,7 +40,7 @@ namespace VenueGo.Services.Reviews
 
         /// <inheritdoc/>
         public async Task<PublicReviewListDto> GetPublicReviewsAsync(
-            int? sportTypeId, string? range, int? star, string? mention, string? sort, int? take = null)
+            int? sportTypeId, string? range, int? star, string? mention, string? sort, int? take = null, int? page = null)
         {
             string rg = ReviewRange.Normalize(range);
             string mn = ReviewMention.Normalize(mention);
@@ -78,11 +84,33 @@ namespace VenueGo.Services.Reviews
                 }
             }
 
-            // ⚠️ 還沒有分頁。資料量變大之後要補 Skip / Take（規格已經預留 page／totalPages）。
             // 10/13：take 有給就只取前幾則（首頁 Slide）。排序之後才取，取到的才會是「最新的幾則」
             var sorted = ApplyCardSort(listQuery, so);
-            var limited = take is int t ? sorted.Take(Math.Clamp(t, 1, MaxTake)) : sorted;
-            var reviews = await limited.ToListAsync();
+
+            // 10/23 分頁。兩種情況都明確寫出來：
+            //   有給 take（首頁 Slide）：照舊只取前幾則，不分頁
+            //   沒給 take（評論專區）：每頁 PageSize 則
+            List<VReviewPublicCard> reviews = [];
+            int currentPage = 1;
+            int totalPages = 1;
+            List<PageMarkDto> pageMarks = [];
+            if (take is int t)
+            {
+                reviews = await sorted.Take(Math.Clamp(t, 1, MaxTake)).ToListAsync();
+            }
+            else if (take is null)
+            {
+                // 每一則只取星等和建立時間（兩個小欄位），用來算總頁數和「每一頁的第一則」。
+                // 這樣快轉時要顯示的資料一次給齊，前台不必一頁一頁來問。
+                var keys = await sorted.Select(r => new { r.StarRating, r.CreatedAt }).ToListAsync();
+                totalPages = Math.Max(1, (keys.Count + PageSize - 1) / PageSize);
+                // 超出範圍的頁碼（手動改網址、或篩選後頁數變少）調整到範圍內，不回錯誤
+                currentPage = Math.Clamp(page ?? 1, 1, totalPages);
+                pageMarks = keys.Where((_, i) => i % PageSize == 0)
+                                .Select(k => new PageMarkDto(k.StarRating, DateOnly.FromDateTime(k.CreatedAt)))
+                                .ToList();
+                reviews = await sorted.Skip((currentPage - 1) * PageSize).Take(PageSize).ToListAsync();
+            }
 
             return new PublicReviewListDto(
                 Filter: new ReviewFilterDto(sportTypeId, rg, st, mn, so),
@@ -94,8 +122,9 @@ namespace VenueGo.Services.Reviews
                 SportTabs: sportTabs,
                 Summary: ReviewMapper.ToRatingSummary(countByStar),
                 Items: reviews.Select(ReviewMapper.ToPublicCard).ToList(),
-                Page: 1,
-                TotalPages: 1,
+                Page: currentPage,
+                TotalPages: totalPages,
+                PageMarks: pageMarks,
                 RatingOnlyHidden: ratingOnlyHidden);
         }
 

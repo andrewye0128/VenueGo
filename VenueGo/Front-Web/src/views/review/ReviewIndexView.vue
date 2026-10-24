@@ -1,6 +1,7 @@
 <!--
-    ReviewIndexView.vue — 評論專區（取代 Views/CReview/Index.cshtml；導覽列「會員評價」連到這裡）
-    路由：/reviews?sportTypeId=&range=&star=&mention=&sort=
+    ReviewIndexView.vue — 評論專區（取代 Views/CReview/Index.cshtml；導覽列「顧客評價」連到這裡）
+    路由：/reviews?sportTypeId=&range=&star=&mention=&sort=&page=
+    （10/23：加上分頁，每頁 12 則。換頁的樣子、長按快轉都在 components/review/ReviewPager.vue）
     （10/17：hasContentOnly 拿掉了，改成「沒選星等就只列有文字的」，由後端決定；舊連結帶著它也沒關係，會被忽略）
 
     ── 篩選條件放在網址上，不是放在元件的變數裡 ─────────────
@@ -20,6 +21,7 @@ import { useRoute, useRouter, RouterLink } from "vue-router";
 import { getPublicReviews } from "@/api/reviewApi";
 import StarView from "@/components/review/StarView.vue";
 import ReviewCard from "@/components/review/ReviewCard.vue";
+import ReviewPager from "@/components/review/ReviewPager.vue";
 import { MENTION_TAGS } from "@/constants/review";
 
 const route = useRoute();
@@ -38,6 +40,7 @@ function filterFromQuery(q) {
   if (q.star) f.star = q.star;
   if (q.mention) f.mention = q.mention;
   if (q.sort) f.sort = q.sort;
+  if (q.page) f.page = q.page; // 10/23：超出範圍的頁碼由後端調整到第 1 頁或最後一頁
   return f;
 }
 
@@ -61,6 +64,13 @@ function queryFor(changes = {}) {
   if (merged.star != null) q.star = String(merged.star);
   q.mention = merged.mention;
   q.sort = merged.sort;
+  // 10/23 分頁：
+  //   換了任何篩選條件 → 回到第 1 頁（第 5 頁的位置對新條件沒有意義）
+  //   什麼都沒改（例如「補齊網址」）→ 保留後端確認過的目前頁碼
+  //   第 1 頁不寫進網址：跟運動類型、星等一樣，「沒有值」本身就是明確的狀態（＝第 1 頁），不是落到「否則」
+  const page =
+    "page" in changes ? changes.page : Object.keys(changes).length > 0 ? 1 : vm.value.page;
+  if (page > 1) q.page = String(page);
   return q;
 }
 
@@ -88,6 +98,26 @@ function linkFor(changes) {
   return { name: "review-index", query: queryFor(changes) };
 }
 
+// ── 換頁（10/23）──
+// 跟篩選一樣走網址：push 一筆紀錄，上一頁可以回到前一頁。長按快轉時 ReviewPager 放開才呼叫，所以只會記最後一頁
+function goPage(page) {
+  router.push(linkFor({ page }));
+}
+
+// 換頁之後，如果評論卡的開頭已經捲到畫面上方外面（例如在最後一張卡按了下一頁），捲回評論卡開頭。
+// 路由的 scrollBehavior 是「只換查詢字串就不捲動」（換篩選時畫面才不會跳），所以換頁要自己捲。
+// 開頭還看得到時不動：例如人在篩選列換了排序，畫面不該突然往下跳。
+const listTop = ref(null);
+function revealListTop() {
+  const el = listTop.value;
+  if (!el) return;
+  // 頁首（天氣列＋導覽列）是固定在上方的，要扣掉它的高度，評論卡開頭才不會被蓋住
+  const offset = (document.querySelector("header")?.offsetHeight ?? 0) + 16;
+  const top = el.getBoundingClientRect().top;
+  if (top >= offset) return;
+  window.scrollTo({ top: window.scrollY + top - offset });
+}
+
 // ── 載入 ──
 //  使用者連續快速點好幾個篩選時，回應回來的順序不一定跟送出的順序一樣。
 //  用流水號記住「最後一次送出的是哪一次」，比較早的回應回來了就丟掉，
@@ -103,9 +133,13 @@ async function load() {
   try {
     const data = await getPublicReviews(filterFromQuery(route.query));
     if (mine !== seq) return;
+    const previousPage = vm.value?.page; // 10/23：判斷這次是不是換了頁
     vm.value = data;
     listVersion.value++;
-    nextTick(revealActiveTab);
+    nextTick(() => {
+      revealActiveTab();
+      if (previousPage != null && previousPage !== data.page) revealListTop();
+    });
 
     const full = queryFor();
     if (!sameQuery(full, route.query)) {
@@ -363,11 +397,20 @@ const mentionTabs = computed(() =>
       </p>
 
       <!-- ── 卡片 ── -->
-      <!-- 換篩選時先讓舊清單變淡，不要整塊清空再長回來，畫面才不會閃 -->
-      <div :class="loading ? 'opacity-50 transition-opacity' : ''" :aria-busy="loading">
+      <!-- 換篩選時先讓舊清單變淡，不要整塊清空再長回來，畫面才不會閃
+           10/23：變淡改寫在下面的空清單、卡片上。寫在外層的話，固定在畫面上的頁碼、換頁 Bar 也會跟著變淡
+           10/24：transition 改成一直都在，變淡（淡出 0.15 秒）和恢復（淡入 0.3 秒）都有動畫。
+                  原本載入完成時連 transition 一起拿掉，新的一頁瞬間全亮，看起來像閃一下。
+                  外框沒有換掉、只換裡面的卡片，所以新的卡片一出現就跟著外框一樣淡，再一起淡入 -->
+      <div ref="listTop" :aria-busy="loading">
         <div
           v-if="vm.items.length === 0"
           class="rounded-lg border border-neutral-border bg-neutral-surface py-12 text-center text-neutral-text-secondary"
+          :class="
+            loading
+              ? 'opacity-50 transition-opacity duration-150'
+              : 'transition-opacity duration-300'
+          "
         >
           <UIcon
             name="i-lucide-message-square-text"
@@ -389,12 +432,30 @@ const mentionTabs = computed(() =>
              10/14：拿掉 items-start，改成同一列等高（grid 預設 stretch）。
              items-start 讓每張卡片照自己的內容高度，短的那張下面會空出一塊，卡片之間的空隙就大小不一。
              等高之後空隙一律是 gap-4；卡片內容固定截斷，長的評論按「閱讀全文」開視窗看（ReviewCard 檔頭第 6 點）。 -->
-        <div v-else class="grid gap-4 lg:grid-cols-2">
-          <!-- ⚠️ 卡片資料刻意不含 reviewId（連號整數，不能外流），
-               所以 key 用「第幾次載入 + 第幾張」。每次換資料都會整批重建，
-               上一批「閱讀全文」的狀態不會殘留到下一批。 -->
-          <ReviewCard v-for="(item, i) in vm.items" :key="`${listVersion}-${i}`" :item="item" />
-        </div>
+        <!-- 10/23：外面包一層分頁（左右換頁區、頁碼、換頁 Bar、長按快轉的遮罩都在 ReviewPager 裡） -->
+        <ReviewPager
+          v-else
+          :page="vm.page"
+          :total-pages="vm.totalPages"
+          :marks="vm.pageMarks"
+          :sort="vm.filter.sort"
+          :loading="loading"
+          @go="goPage"
+        >
+          <div
+            class="grid gap-4 lg:grid-cols-2"
+            :class="
+              loading
+                ? 'opacity-50 transition-opacity duration-150'
+                : 'transition-opacity duration-300'
+            "
+          >
+            <!-- ⚠️ 卡片資料刻意不含 reviewId（連號整數，不能外流），
+                 所以 key 用「第幾次載入 + 第幾張」。每次換資料都會整批重建，
+                 上一批「閱讀全文」的狀態不會殘留到下一批。 -->
+            <ReviewCard v-for="(item, i) in vm.items" :key="`${listVersion}-${i}`" :item="item" />
+          </div>
+        </ReviewPager>
       </div>
     </template>
   </main>

@@ -30,9 +30,23 @@
      - 箭頭一次移一張。
      不用 drag-free（完全自由滑動）：它會停在兩張卡片中間，卡片被切一半，看起來像沒滑好。
   9. 卡片本身不能點；評論或回覆被截斷時，卡片裡才有「閱讀全文」，開中央視窗看（ReviewCard 檔頭第 6 點）。
+  ── 10/23：箭頭可以長按 ──────────────────────────────────────
+  11. 按住箭頭：0.5 秒後開始，每 0.5 秒再換一張（跟評論專區的換頁一樣，composables/useRepeatPress.js）。
+      10/24 改成「拉霸」：按住 0.2 秒後開始，每 0.1 秒換一張，連續快速轉動，跟按住鍵盤 ← → 的感覺一樣。
+      評論專區按住時有遮罩告訴你「正在快轉」，這裡沒有，0.8 秒才開始動會讓人以為沒反應；
+      而且這個輪播本來就要給人「抽獎」的感覺，轉的時候看不清楚沒關係，停下來那張才是重點。
+      箭頭沿用 UCarousel 內建的那兩顆，外觀跟其他輪播（例如場地介紹）完全一樣，只是在它們身上加了長按的監聽。
+  ── 10/24：箭頭「亮起來」要跟實際方向一致 ─────────────────────
+  12. 原本用滑鼠點了左箭頭，焦點會留在左箭頭上；接著按鍵盤 →，瀏覽器判斷「現在用鍵盤了」，
+      就在左箭頭上畫出藍色焦點框——看起來像左邊亮了，實際卻往右轉；放開按鍵之後框也一直留著。
+      - 用滑鼠、手指按箭頭時，不讓箭頭拿到焦點，改成讓整個輪播拿到焦點（UCarousel 的外框本來就可以拿焦點、
+        也沒有焦點框）。← → 照樣能換張，箭頭也不會冒出藍框。
+      - 按住鍵盤 ← 時左箭頭亮、→ 時右箭頭亮，放開就恢復；用滑鼠、手指按住箭頭時也一樣亮著。
+      - 用 Tab 移到箭頭上的人（只用鍵盤的人），焦點框照常顯示：他們要靠這個框知道自己在哪。
 -->
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { useRepeatPress } from "@/composables/useRepeatPress";
 import { RouterLink } from "vue-router";
 import { getFeaturedReviews } from "@/api/reviewApi";
 import ReviewCard from "@/components/review/ReviewCard.vue";
@@ -82,6 +96,114 @@ function goToGroup(g) {
   carouselRef.value?.emblaApi?.scrollTo(Math.floor((from + to) / 2));
 }
 
+// ── 箭頭長按（檔頭第 11 點）──
+//  按一下：交給內建的 click 換一張，跟原本一模一樣。
+//  按住：一段時間後由這裡連續換（速度見下面的 SPIN_）。放開時瀏覽器還會補送一次 click，
+//        那一次要吃掉，不然放開的瞬間會多換一張。
+//  內建的箭頭沒有開放「長按」的設定，所以等輪播畫出來之後，直接在那兩顆按鈕上加監聽
+//  （它們的 data-slot 是 prev／next，這是 Nuxt UI 原始碼裡固定的名稱）。
+const sectionEl = ref(null);
+let swallowClick = false;
+// 10/24：拉霸的速度（檔頭第 11 點）。評論專區的換頁維持原本的 0.3 秒＋每 0.5 秒
+const SPIN_HOLD_MS = 200;
+const SPIN_INTERVAL_MS = 100;
+const arrowPress = useRepeatPress({
+  holdDelay: SPIN_HOLD_MS,
+  interval: SPIN_INTERVAL_MS,
+  step(dir, isRepeat) {
+    if (!isRepeat) return; // 第一下交給內建的 click
+    const api = carouselRef.value?.emblaApi;
+    if (dir === "prev") api?.scrollPrev();
+    else if (dir === "next") api?.scrollNext();
+  },
+  finish(dir, repeated) {
+    swallowClick = repeated;
+  },
+});
+
+const arrowListeners = new AbortController();
+let arrowsReady = false;
+function attachArrowPress() {
+  for (const dir of ["prev", "next"]) {
+    const el = sectionEl.value?.querySelector(`[data-slot="${dir}"]`);
+    if (!el) continue;
+    const opt = { signal: arrowListeners.signal };
+    el.title = "長按可快轉";
+    el.addEventListener(
+      "pointerdown",
+      (e) => {
+        if (e.pointerType === "mouse" && e.button !== 0) return;
+        // 10/24：不讓箭頭拿到焦點，改成整個輪播拿焦點（檔頭第 12 點）。click 不受影響，照樣會換張
+        e.preventDefault();
+        carouselRoot()?.focus({ preventScroll: true });
+        el.setPointerCapture?.(e.pointerId);
+        arrowPress.start(dir);
+      },
+      opt,
+    );
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+      el.addEventListener(type, () => arrowPress.stop(), opt);
+    }
+    // capture：比內建的 @click 先收到，才擋得住它
+    el.addEventListener(
+      "click",
+      (e) => {
+        if (!swallowClick) return;
+        swallowClick = false;
+        e.stopImmediatePropagation();
+      },
+      { ...opt, capture: true },
+    );
+    arrowsReady = true;
+  }
+  // 10/24：按住鍵盤 ← → 時，對應的箭頭亮起來（檔頭第 12 點）。換張本身是 UCarousel 內建的，這裡只負責亮
+  const root = carouselRoot();
+  if (!root) return;
+  const opt = { signal: arrowListeners.signal };
+  root.addEventListener(
+    "keydown",
+    (e) => {
+      const dir = KEY_DIR[e.key];
+      if (dir && !e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey) keyDir.value = dir;
+    },
+    opt,
+  );
+  root.addEventListener(
+    "keyup",
+    (e) => {
+      if (KEY_DIR[e.key] === keyDir.value) keyDir.value = null;
+    },
+    opt,
+  );
+  // 焦點離開輪播、切到別的視窗時可能收不到 keyup，一律當成放開
+  root.addEventListener("focusout", () => (keyDir.value = null), opt);
+  window.addEventListener("blur", () => (keyDir.value = null), opt);
+}
+
+// ── 10/24：箭頭亮起來（檔頭第 12 點）──
+// UCarousel 的外框（role="region" 那一層）：可以拿焦點、← → 由它處理
+function carouselRoot() {
+  return sectionEl.value?.querySelector('[aria-roledescription="carousel"]');
+}
+const KEY_DIR = { ArrowLeft: "prev", ArrowRight: "next" };
+const keyDir = ref(null); // 鍵盤正按著哪個方向
+// 亮哪一顆：鍵盤按著的方向優先，其次是滑鼠、手指按住的箭頭。用 data-pressed 標記，樣式寫在 carouselUi
+watch([keyDir, () => arrowPress.activeDir.value], ([key, pointer]) => {
+  const lit = key ?? pointer;
+  for (const dir of ["prev", "next"]) {
+    sectionEl.value
+      ?.querySelector(`[data-slot="${dir}"]`)
+      ?.toggleAttribute("data-pressed", dir === lit);
+  }
+});
+// 卡片載入完、輪播畫出來之後才找得到箭頭
+watch(cards, async (list) => {
+  if (arrowsReady || list.length === 0) return;
+  await nextTick();
+  attachArrowPress();
+});
+onBeforeUnmount(() => arrowListeners.abort());
+
 const averageText = computed(() => (vm.value ? vm.value.summary.average.toFixed(1) : ""));
 const averageStars = computed(() => (vm.value ? Math.round(vm.value.summary.average) : 0));
 
@@ -93,14 +215,18 @@ const carouselUi = {
   // 箭頭跟場地卡不同：評論卡是文字，箭頭放在卡片內側會蓋住內容，所以移到卡片外側（壓在版面左右的留白上）。
   // 平板以下用滑的、不顯示箭頭：那時左右留白不夠放。左右都不能按（張數不超過一頁）時整組隱藏。
   arrows: "max-lg:hidden has-[[data-slot=prev]:disabled]:has-[[data-slot=next]:disabled]:hidden",
-  prev: "-start-5 sm:-start-5 rounded text-neutral-text-primary",
-  next: "-end-5 sm:-end-5 rounded text-neutral-text-primary",
+  // 10/24：data-pressed＝正在按（鍵盤 ← → 或按住箭頭），淡淡的品牌藍底，跟評論專區換頁按鈕按住時一樣（檔頭第 12 點）
+  // 底色要不透明：箭頭壓在卡片區（白）和版面留白（灰）的交界上，半透明的藍會透出兩種底色，看起來一半一半。
+  // 所以用 color-mix 把 10% 的品牌藍混進白色，算出一個實心的淡藍
+  prev: "-start-5 sm:-start-5 rounded text-neutral-text-primary data-pressed:bg-[color-mix(in_srgb,var(--color-brand-primary)_10%,var(--color-neutral-surface))] data-pressed:text-brand-primary",
+  next: "-end-5 sm:-end-5 rounded text-neutral-text-primary data-pressed:bg-[color-mix(in_srgb,var(--color-brand-primary)_10%,var(--color-neutral-surface))] data-pressed:text-brand-primary",
 };
 </script>
 
 <template>
   <!-- 檔頭第 10 點：挑不到評價就整個區塊不顯示 -->
-  <section v-if="isLoading || errorMessage || cards.length > 0">
+  <!-- 10/23：加 ref，找箭頭用（檔頭第 11 點） -->
+  <section v-if="isLoading || errorMessage || cards.length > 0" ref="sectionEl">
     <!-- 區塊標題（首頁的 h1 在 HomeView）＋「看全部」
          10/17：items-center → items-baseline，「看全部評價」的字跟「顧客評價」的字對齊同一條底線 -->
     <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">

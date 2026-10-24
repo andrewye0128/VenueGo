@@ -23,6 +23,9 @@
         IReadOnlyList<PublicReviewCardDto> Items,
         int Page,
         int TotalPages,
+        // 10/23 分頁：每一頁第一則的星等與日期，第 n 頁是 PageMarks[n - 1]。
+        // 長按快轉換頁時，前台用它顯示「正在經過哪裡」，不必一頁一頁去要資料。首頁 Slide（有給 take）時是空的。
+        IReadOnlyList<PageMarkDto> PageMarks,
         // 10/17：沒選星等時，只給星等的評論不列在 Items 裡，這裡是沒列出的則數（前台顯示「另有 N 則」）。
         // 選了星等、或符合條件的評論一則有文字的都沒有時，全部都會列出，這裡是 0。
         int RatingOnlyHidden);

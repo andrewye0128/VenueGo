@@ -163,7 +163,9 @@ namespace VenueGo.Controllers.Api
         /// - 星等分布用「套用星等篩選之前」的結果計算，所以切換星等時分布圖不會變。
         /// - **只給星等的評論**（10/17）：沒有指定 `star` 時不列在 `items` 裡，則數放在 `ratingOnlyHidden`；
         ///   指定了 `star`，或符合條件的評論一則有文字的都沒有時，全部列出。星等分布、平均分數一律包含它們。
-        /// - 還沒有分頁，`page`、`totalPages` 目前固定是 1。
+        /// - **分頁**（10/23）：每頁 12 則。`page` 超出範圍時自動調整到第 1 頁或最後一頁，回應的 `page` 是實際的頁碼。
+        ///   `pageMarks` 是每一頁第一則的 `star` 與 `date`（第 n 頁是第 n - 1 個），長按快轉時顯示用。
+        ///   有給 `take` 時不分頁：`page`、`totalPages` 是 1，`pageMarks` 是空陣列。
         /// - 不認得的 `range`、`mention`、`sort` 一律改用預設值，不回錯誤。
         /// - `take`（10/13，首頁評價 Slide 用）只限制 `items` 的筆數；星等分布、平均分數仍然用全部符合條件的評論計算。
         /// </remarks>
@@ -171,15 +173,17 @@ namespace VenueGo.Controllers.Api
         /// <param name="range" example="year">時間範圍：`7days`、`30days`、`year`、`all`；預設 `year`</param>
         /// <param name="star" example="5">只看幾顆星（1～5）；不給代表全部</param>
         /// <param name="mention" example="venue">提及：`all`、`venue`（場地設施）、`staff`（人員服務）；預設 `all`</param>
-        /// <param name="sort" example="newest">排序：`newest`、`highest`、`lowest`；預設 `newest`</param>
+        /// <param name="sort" example="newest">排序：`newest`、`highest`、`lowest`；預設 `highest`</param>
         /// <param name="take" example="10">最多回傳幾則卡片（1～50）；不給代表全部，超出範圍會自動調整到範圍內</param>
+        /// <param name="page" example="2">第幾頁（每頁 12 則）；不給是第 1 頁。有給 `take` 時不分頁</param>
         /// <response code="200">成功</response>
         [HttpGet("")]
         [ProducesResponseType<ApiResult<PublicReviewListDto>>(StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPublicReviews(
-            int? sportTypeId, string? range, int? star, string? mention = null, string? sort = null, int? take = null)
+            int? sportTypeId, string? range, int? star, string? mention = null, string? sort = null, int? take = null,
+            int? page = null)
         {
-            var data = await _publicReviews.GetPublicReviewsAsync(sportTypeId, range, star, mention, sort, take);
+            var data = await _publicReviews.GetPublicReviewsAsync(sportTypeId, range, star, mention, sort, take, page);
             return Ok(ApiResult<PublicReviewListDto>.Ok(data));
         }
 

@@ -37,6 +37,11 @@
     color: var(--color-neutral-text-primary);
     background-color: var(--color-brand-background);
   }
+  /* 10/23 防跑版保險：內容比畫面寬時裁掉，不要把整頁撐寬（手機會整頁縮小、右邊多一塊空白） */
+  html,
+  body {
+    overflow-x: clip;
+  }
 }
 
 /* #app {

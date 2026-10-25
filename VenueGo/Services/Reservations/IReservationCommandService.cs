@@ -62,5 +62,17 @@ namespace VenueGo.Services.Reservations
         Task<ReservationCommandResult> VoidAsync(
             int reservationId, string reason, int operatorUserId,
             CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// 場館取消（館方因素，例如場地維修、活動借用），供場地不開放時段管理使用（HungYu 新增）。
+        /// 與 CancelAsync／VoidAsync 共用同一套取消流程，取消流程（含退款）有調整時請一併處理。
+        /// </summary>
+        /// <param name="reservationId">預約 Id。</param>
+        /// <param name="reason">取消原因，必填，寫入 Reservations.CancelReason。</param>
+        /// <param name="operatorUserId">操作人員的 Users.UserId，寫入稽核紀錄。</param>
+        /// <param name="cancellationToken">使用者中斷請求（例如關閉頁面）時，取消進行中的資料庫操作。</param>
+        Task<ReservationCommandResult> CancelByVenueAsync(
+            int reservationId, string reason, int operatorUserId,
+            CancellationToken cancellationToken = default);
     }
 }

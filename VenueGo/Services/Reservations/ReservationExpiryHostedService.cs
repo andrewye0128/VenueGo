@@ -16,7 +16,7 @@
     /// </summary>
     public class ReservationExpiryHostedService : BackgroundService
     {
-        /// <summary>多久檢查一次。線上付款期限只有 35 分鐘，間隔要短，時段才會盡快釋放。</summary>
+        /// <summary>多久檢查一次。線上付款期限只有 50 分鐘，間隔要短，時段才會盡快釋放。</summary>
         private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
 
         private readonly IServiceScopeFactory _scopeFactory;

@@ -27,6 +27,15 @@
   ── 為什麼沒用 components/list/ListTable.vue ──────────────────
   ListTable 是「寬螢幕表格、窄螢幕卡片」的列表。這一頁不管多寬都是卡片，而且已評論要能展開，
   用表格反而要把展開的內容塞進表格列裡。標籤則用了同一組的 StatusBadge。
+
+  ── 10/25：分頁上的數字要提醒人 ─────────────────────────────
+  1. 待評論有快到期的：數字的底色變成橘色（品牌的 action 色）；沒有快到期的是白底。
+     不加鬧鐘：進來預設就是待評論，下面清單的快到期那幾列已經有鬧鐘了，分頁上再放一個是重複的。
+  2. 已評論有館方新回覆（顧客還沒看過）：不顯示數字，只顯示藍色的「新」；新回覆都看過之後，恢復成白底的數字。
+  4. 分頁文字加大到 16px，下面的分隔線加粗到 2px。
+  5. 會員中心左邊選單的「我的評論」也有提醒（components/review/MemberReviewsMarker.vue），規則寫在那個檔。
+  3. 已評論清單裡，有新回覆的那幾則排到最上面（其他照原本的順序，新的在前）。
+     只在讀進來的時候排一次：展開看過之後，那一則不會馬上跳回原位，免得畫面在眼前跳動；下次進來才回到原位。
 -->
 <script setup>
 import { ref, reactive, computed, onMounted } from "vue";
@@ -77,7 +86,13 @@ async function loadPending() {
 async function loadReviewed() {
   reviewedError.value = "";
   try {
-    reviewed.value = await listReviewedReviews();
+    // 10/25 原本：reviewed.value = await listReviewedReviews();
+    // 有館方新回覆的排到最上面（檔頭 10/25 第 3 點）。filter 會保留原本的順序，兩段各自還是新的在前
+    const items = await listReviewedReviews();
+    reviewed.value = [
+      ...items.filter((item) => item.hasUnviewedReply),
+      ...items.filter((item) => !item.hasUnviewedReply),
+    ];
   } catch (e) {
     reviewedError.value = e.message;
   }
@@ -86,7 +101,17 @@ async function loadReviewed() {
 // 兩份一起載入：分頁上的數字一開始就要對
 onMounted(() => Promise.all([loadPending(), loadReviewed()]));
 
+// 10/25：快到期的則數、館方新回覆的則數（檔頭 10/25）
+const expiringCount = computed(
+  () => pending.value?.filter((item) => item.deadline.expiringSoon).length ?? 0,
+);
+const newReplyCount = computed(
+  () => reviewed.value?.filter((item) => item.hasUnviewedReply).length ?? 0,
+);
+
 // 分頁上的數字。還沒載入好時不顯示（undefined），不要先顯示 0 再跳成 3
+// 10/25：badge 改成物件時，會蓋掉 UTabs 預設的樣子（灰色外框）。expiring／newReplies 給下面的 #trailing 用
+/* 10/25 原本：
 const tabs = computed(() => [
   {
     label: "待評論",
@@ -99,6 +124,23 @@ const tabs = computed(() => [
     value: "reviewed",
     icon: "i-lucide-message-square-text",
     badge: reviewed.value?.length || undefined,
+  },
+]);
+*/
+const tabs = computed(() => [
+  {
+    label: "待評論",
+    value: "pending",
+    icon: "i-lucide-pen-line",
+    badge: pending.value?.length || undefined,
+    expiring: expiringCount.value,
+  },
+  {
+    label: "已評論",
+    value: "reviewed",
+    icon: "i-lucide-message-square-text",
+    badge: reviewed.value?.length || undefined,
+    newReplies: newReplyCount.value,
   },
 ]);
 
@@ -171,7 +213,46 @@ const keyOf = (item) => `${item.kind}-${item.ticket}`;
     <h1 class="mb-6 text-2xl font-bold text-neutral-text-primary">我的評論</h1>
 
     <!-- content=false：分頁只負責切換，內容放在下面自己排，兩個分頁的載入與錯誤處理才看得清楚 -->
-    <UTabs v-model="tab" :items="tabs" :content="false" variant="link" class="mb-4" />
+    <!-- 10/25 原本：<UTabs v-model="tab" :items="tabs" :content="false" variant="link" class="mb-4" />
+         改成自己畫數字（#trailing）：快到期時數字變橘色，有新回覆時只顯示藍色的「新」（檔頭 10/25）。
+         :ui：分頁文字從 14px 加大到 16px，下面的分隔線從 1px 加粗到 2px（藍色的目前分頁線跟著變 2px，才蓋得住） -->
+    <UTabs
+      v-model="tab"
+      :items="tabs"
+      :content="false"
+      variant="link"
+      class="mb-4"
+      :ui="{
+        trigger: 'text-base',
+        list: 'border-b-2',
+        indicator: '-bottom-0.5 h-0.5',
+      }"
+    >
+      <template #trailing="{ item }">
+        <!-- 已評論、有館方新回覆：只顯示藍色的「新」，不顯示數字；都看過之後恢復成白底的數字 -->
+        <template v-if="item.newReplies">
+          <UBadge
+            label="新"
+            color="primary"
+            variant="solid"
+            class="shrink-0"
+            :title="`${item.newReplies} 則有館方新回覆`"
+          />
+          <span class="sr-only">，{{ item.newReplies }} 則有館方新回覆</span>
+        </template>
+        <!-- 待評論、有快到期的：數字的底色變橘色；沒有快到期的就是白底 -->
+        <template v-else-if="item.badge">
+          <UBadge
+            :label="item.badge"
+            :color="item.expiring ? 'action' : 'neutral'"
+            :variant="item.expiring ? 'solid' : 'outline'"
+            class="shrink-0"
+            :title="item.expiring ? `其中 ${item.expiring} 則快到期` : undefined"
+          />
+          <span v-if="item.expiring" class="sr-only">，其中 {{ item.expiring }} 則快到期</span>
+        </template>
+      </template>
+    </UTabs>
 
     <!-- ════════ 待評論 ════════ -->
     <section v-if="tab === 'pending'" role="tabpanel" aria-label="待評論">

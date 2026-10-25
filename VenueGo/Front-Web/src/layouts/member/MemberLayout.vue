@@ -6,6 +6,8 @@ import { RouterLink, RouterView, useRoute, useRouter } from "vue-router";
 import { computed } from "vue";
 import { useMemberStore } from "@/stores/member";
 import { nextTick, onMounted, ref, watch } from "vue";
+// 10/25 評論組（昱）新增：選單「我的評論」右邊的提醒（快到期的則數／館方新回覆），規則寫在那個元件的檔頭
+import MemberReviewsMarker from "@/components/review/MemberReviewsMarker.vue";
 const memberStore = useMemberStore();
 const route = useRoute();
 const router = useRouter();
@@ -105,6 +107,8 @@ watch(
           >
             <UIcon :name="item.icon" class="hidden size-5 lg:block" />
             {{ item.label }}
+            <!-- 10/25 評論組（昱）新增：「我的評論」右邊的提醒 -->
+            <MemberReviewsMarker v-if="item.to === '/member/reviews'" />
           </RouterLink>
 
           <button

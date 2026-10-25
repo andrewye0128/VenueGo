@@ -19,6 +19,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
+@if (TempData["VenueWarningMessage"] != null)
+{
+    <!-- 關閉時段成功但有步驟沒做完(取消票券失敗、寄信失敗),提醒後台人員手動處理 -->
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["VenueWarningMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
 @if (TempData["VenueErrorMessage"] != null)
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -159,11 +167,12 @@
                                     else
                                     {
                                         //目前開放,點下去先跳Modal詢問並填原因,不直接送出表單
-                                        //data-booked 讓 Modal 開啟時判斷要用哪一句詢問文字
+                                        //data-booked 讓 Modal 開啟時判斷要用哪一句詢問文字;data-booking-range 是整筆預約的使用時間
                                         <button type="button" class="btn btn-outline-danger btn-sm"
                                                 data-bs-toggle="modal" data-bs-target="#unavailableReasonModal"
                                                 data-time="@timeText"
-                                                data-booked="@(hour.IsBooked ? "true" : "false")">
+                                                data-booked="@(hour.IsBooked ? "true" : "false")"
+                                                data-booking-range="@hour.ReservationTimeRange">
                                             關閉時段
                                         </button>
                                     }
@@ -191,6 +200,10 @@
                             </div>
                             <div class="modal-body">
                                 <p class="fw-semibold mb-2" id="unavailableConfirmQuestion">確認關閉該時段？</p>
+                                <!-- 有預約時才顯示:關閉會取消整筆預約並寄信,且無法復原 -->
+                                <p class="text-danger small mb-2 d-none" id="unavailableBookedNotice">
+                                    關閉後會取消整筆預約（<span id="unavailableBookedRange"></span>）並寄信通知會員，恢復開放也不會恢復預約。
+                                </p>
                                 <p class="mb-3">日期：@Model.Date.ToString("yyyy-MM-dd")　時段：<strong id="unavailableReasonTimeText"></strong></p>
 
                                 <label for="unavailableReasonInput" class="form-label">不開放原因</label>
@@ -240,7 +253,8 @@
     <script>
         //Modal開啟時,把觸發它的按鈕(event.relatedTarget)身上的data-*讀出來,塞進Modal裡的隱藏欄位跟顯示文字
         //1. data-time >> 隱藏欄位與顯示的時段
-        //2. data-booked >> 有預約時換成提醒已有預約的詢問文字,沒有預約用一般詢問文字
+        //2. data-booked >> 有預約時換成提醒已有預約的詢問文字,並顯示「會取消整筆預約」的提醒;沒有預約就隱藏提醒
+        //3. data-booking-range >> 整筆預約的使用時間,用 textContent 塞入
         const unavailableReasonModal = document.getElementById('unavailableReasonModal');
         if (unavailableReasonModal) {
             unavailableReasonModal.addEventListener('show.bs.modal', function (event) {
@@ -251,7 +265,10 @@
 
                 const isBooked = button.getAttribute('data-booked') === 'true';
                 const question = document.getElementById('unavailableConfirmQuestion');
+                const bookedNotice = document.getElementById('unavailableBookedNotice');
                 question.textContent = isBooked ? '該時段已有預約，確認要關閉該時段嗎？' : '確認關閉該時段？';
+                document.getElementById('unavailableBookedRange').textContent = button.getAttribute('data-booking-range');
+                bookedNotice.classList.toggle('d-none', !isBooked);
             });
         }
 

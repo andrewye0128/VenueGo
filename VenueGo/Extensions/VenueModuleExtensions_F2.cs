@@ -18,6 +18,9 @@ namespace VenueGo.Extensions
             // 場地時段（場地模組提供：營業時段、不開放時段、尖峰、單價、可使用的場地）
             services.AddScoped<IVenueScheduleService, VenueScheduleService>();
 
+            // 關閉時段（後台不開放時段管理：有預約時場館取消、取消票券、寄信通知會員）
+            services.AddScoped<IVenueSlotClosingService, VenueSlotClosingService>();
+
             return services;
         }
     }

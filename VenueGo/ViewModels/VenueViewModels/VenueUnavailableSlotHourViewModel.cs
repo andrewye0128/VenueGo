@@ -22,6 +22,8 @@ namespace VenueGo.ViewModels.VenueViewModels
 
         public string? ReservationStatusText { get; set; }   //預約狀態中文,例如「已確認」
 
+        public string? ReservationTimeRange { get; set; }    //整筆預約的使用時間,例如「20:00–23:00」,關閉時段的確認視窗提醒會取消整筆
+
         public bool IsBooked => ReservationId.HasValue;
     }
 }

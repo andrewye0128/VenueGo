@@ -13,6 +13,7 @@ using VenueGo.Services.Auth;
 using VenueGo.Constants;
 using VenueGo.Filters;
 using VenueGo.Services.Time;
+using VenueGo.Services.VenueSchedules;
 namespace VenueGo.Controllers
 {
     [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
@@ -29,12 +30,16 @@ namespace VenueGo.Controllers
         private readonly ITimeService _timeService;
         //取得目前登入者資訊(Controller建構子注入)
         private readonly ICurrentUserService _currentUser;
+        //關閉時段(有預約時場館取消、取消票券、寄信通知會員,Controller建構子注入)
+        private readonly IVenueSlotClosingService _venueSlotClosingService;
 
-        public VenueController(IWebHostEnvironment env, ITimeService timeService, ICurrentUserService currentUser)
+        public VenueController(IWebHostEnvironment env, ITimeService timeService, ICurrentUserService currentUser,
+            IVenueSlotClosingService venueSlotClosingService)
         {
             _env = env;
             _timeService = timeService;
             _currentUser = currentUser;
+            _venueSlotClosingService = venueSlotClosingService;
         }
 
 
@@ -1020,6 +1025,7 @@ namespace VenueGo.Controllers
                     row.MemberName = booking.MemberName;
                     row.MemberEmail = booking.MemberEmail;
                     row.ReservationStatusText = ((ReservationStatus)booking.ReservationStatus).GetDisplayName();
+                    row.ReservationTimeRange = $"{booking.StartTime:HH:mm}–{booking.EndTime:HH:mm}";
                 }
 
                 vm.Hours.Add(row);
@@ -1029,13 +1035,13 @@ namespace VenueGo.Controllers
         }
 
 
-        //場地不開放時段切換 >> 開放變不開放就新增一筆,不開放變開放就刪除那一筆
+        //場地不開放時段切換 >> 開放變不開放就交給 IVenueSlotClosingService 關閉,不開放變開放就刪除那一筆
         //完全不信任前端傳來的「目前是開放還是不開放」,每次都自己用FindByKey重新查一次DB決定
         [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
         [HttpPost]
-        public IActionResult VenueUnavailableSlotToggle(int venueId, DateOnly date, TimeOnly time, string? reason)
+        public async Task<IActionResult> VenueUnavailableSlotToggle(int venueId, DateOnly date, TimeOnly time, string? reason)
         {
-            //今天跟現在時間都從同一個校時後的時間拆出來,新增時的 CreatedAt 也用同一個值
+            //今天跟現在時間都從同一個校時後的時間拆出來
             DateTime currentTime = _timeService.Now;
             DateOnly today = DateOnly.FromDateTime(currentTime);
             TimeOnly now = TimeOnly.FromDateTime(currentTime);
@@ -1067,22 +1073,30 @@ namespace VenueGo.Controllers
             }
             else
             {
-                //目前是開放,切換成不開放 >> 新增一筆,必須要有原因
+                //目前是開放,切換成不開放 >> 必須要有原因
                 if (string.IsNullOrWhiteSpace(reason))
                 {
                     TempData["VenueErrorMessage"] = "請填寫不開放原因";
                     return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });
                 }
 
-                CVenueUnavailableSlotWrap wrap = new CVenueUnavailableSlotWrap();
-                wrap.VenueId = venueId;
-                wrap.UnavailableDate = date;
-                wrap.UnavailableTime = time;
-                wrap.Reason = reason;
-                wrap.CreatedAt = currentTime;
-                wrap.CreatedBy = userId.Value;
+                //交給關閉時段服務:沒有預約就直接關閉;有預約就先場館取消,再關閉、取消票券、寄信
+                VenueSlotClosingResult result = await _venueSlotClosingService.CloseSlotAsync(
+                    venueId, date, time, reason.Trim(), userId.Value);
 
-                VenueUnavailableSlotFactory.Create(wrap);
+                //依結果顯示訊息:失敗顯示紅色;成功顯示綠色,有沒做完的步驟另外顯示黃色警告
+                if (result.IsSuccess)
+                {
+                    TempData["VenueSuccessMessage"] = result.Message;
+                    if (result.Warnings.Count > 0)
+                    {
+                        TempData["VenueWarningMessage"] = string.Join(" ", result.Warnings);
+                    }
+                }
+                else
+                {
+                    TempData["VenueErrorMessage"] = result.Message;
+                }
             }
 
             return RedirectToAction("VenueUnavailableSlotManage", new { venueId, date });

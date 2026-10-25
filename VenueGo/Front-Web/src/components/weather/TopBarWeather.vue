@@ -26,9 +26,14 @@
      - 觸控（pointer-coarse）：沒有「移上去」這件事，所以小視窗的圖示下面直接寫出天氣文字；
        TopBar 按鈕本來就是點了打開小視窗，小視窗第一行就寫著現在的天氣，不用另外處理。
        手機以外的觸控螢幕（平板）也一樣，看的是「主要的指標是不是手指」，不是螢幕寬度。
+  9. 10/25 改：小視窗的天氣文字一律直接寫在圖示下面（電腦也是），不用移上去才看得到。
+     滑鼠移到某一天上，改成顯示那一天的「降雨機率 60%」（後端取那天各段 12 小時降雨機率的最高值）。
+     觸控螢幕沒有「移上去」，不顯示提示框；讀螢幕的人另外會聽到降雨機率。
+     TopBar 按鈕的提示（現在的天氣・點一下看三天預報）不變。
 -->
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from "vue";
+import { useMediaQuery } from "@vueuse/core";
 import { useRoute } from "vue-router";
 import { getWeather } from "@/api/weatherApi";
 import { weatherIcon, isNightNow } from "@/utils/weather/weatherIcon";
@@ -121,6 +126,10 @@ const observedText = computed(() => {
   return Number.isNaN(d.getTime()) ? "" : `${pad(d.getHours())}:${pad(d.getMinutes())} 觀測`;
 });
 
+// 10/25：能用滑鼠移上去的裝置才顯示降雨機率的提示框（檔頭第 9 點）
+const canHover = useMediaQuery("(hover: hover) and (pointer: fine)");
+const rainText = (d) => (d.rainChance != null ? `降雨機率 ${d.rainChance}%` : "");
+
 // 最低、最高都有才寫「21°～27°」；只有一個就只寫那一個
 function rangeText(d) {
   if (d.min != null && d.max != null) return `${d.min}°～${d.max}°`;
@@ -190,6 +199,7 @@ const buttonTip = computed(() => {
 
         <!-- 三欄、沒有分隔線（檔頭第 2 點） -->
         <div class="mt-2.5 grid grid-cols-3 gap-6 md:mt-3 md:gap-8">
+          <!-- 10/25 改（檔頭第 9 點）。原本：圖示掛天氣文字的提示框，天氣文字只有觸控螢幕直接顯示
           <div v-for="d in days" :key="d.date" class="flex flex-col items-center gap-1 md:gap-1.5">
             <span class="text-sm text-neutral-text-secondary md:text-base">{{ d.label }}</span>
             <UTooltip v-if="weatherIcon(d.weather, false)" :text="d.weather">
@@ -201,7 +211,6 @@ const buttonTip = computed(() => {
                 />
               </span>
             </UTooltip>
-            <!-- 天氣文字：滑鼠的人看提示框，這行只給螢幕閱讀器；觸控的人直接顯示（檔頭第 8 點） -->
             <span
               v-if="d.weather"
               class="sr-only text-center text-xs leading-tight text-neutral-text-secondary pointer-coarse:not-sr-only"
@@ -210,6 +219,35 @@ const buttonTip = computed(() => {
             </span>
             <span class="font-semibold whitespace-nowrap tabular-nums">{{ rangeText(d) }}</span>
           </div>
+          -->
+          <!-- 整欄都是提示框的觸發範圍：滑鼠移到那一天的任何地方都看得到降雨機率。
+               觸控螢幕、沒有降雨機率時不顯示提示框 -->
+          <UTooltip
+            v-for="d in days"
+            :key="d.date"
+            :text="rainText(d)"
+            :disabled="!canHover || d.rainChance == null"
+          >
+            <div class="flex flex-col items-center gap-1 md:gap-1.5">
+              <span class="text-sm text-neutral-text-secondary md:text-base">{{ d.label }}</span>
+              <UIcon
+                v-if="weatherIcon(d.weather, false)"
+                :name="weatherIcon(d.weather, false)"
+                class="size-9 text-brand-primary md:size-11"
+                aria-hidden="true"
+              />
+              <!-- 天氣文字：一律直接顯示（電腦也是） -->
+              <span
+                v-if="d.weather"
+                class="max-w-24 text-center text-xs leading-tight text-neutral-text-secondary md:text-sm"
+              >
+                {{ d.weather }}
+              </span>
+              <span class="font-semibold whitespace-nowrap tabular-nums">{{ rangeText(d) }}</span>
+              <!-- 讀螢幕的人：提示框唸不到，另外寫一份 -->
+              <span v-if="d.rainChance != null" class="sr-only">{{ rainText(d) }}</span>
+            </div>
+          </UTooltip>
         </div>
 
         <p class="mt-3 text-xs text-neutral-text-secondary md:mt-4 md:text-sm">

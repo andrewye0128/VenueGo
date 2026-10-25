@@ -66,6 +66,7 @@ namespace VenueGo.Services.Weather
             public int? Min { get; set; }
             public int? Temperature { get; set; }
             public string? Weather { get; set; }
+            public int? RainChance { get; set; }   // 10/25：12 小時降雨機率（%）
         }
 
         /// <summary>
@@ -75,6 +76,8 @@ namespace VenueGo.Services.Weather
         ///         今天另外加上「已經開始、還沒結束」的那一段（例如凌晨兩點時，昨晚 18:00 開始的那段）。</item>
         ///   <item>最高溫取當天各段的最高、最低溫取各段的最低；資料只有「溫度」（逐 3 小時的資料集）時，用溫度的最高、最低代替。</item>
         ///   <item>天氣取白天那一段（06:00 開始），沒有白天那段（例如今天晚上才看）就取第一段。</item>
+        ///   <item>10/25：降雨機率取當天各段的最高值（白天 20%、晚上 60% → 60%）：
+        ///         TopBar 只有一個數字，用最高的才不會讓人以為那天不會下雨。氣象署給 "-"（沒有預報）就當成沒有。</item>
         /// </list>
         /// </summary>
         public static IReadOnlyList<DailyForecastDto> ParseForecast(JsonElement root, string locationName, DateTimeOffset now)
@@ -99,8 +102,9 @@ namespace VenueGo.Services.Weather
                 int? max = Max(mine.Select(p => p.Max)) ?? Max(mine.Select(p => p.Temperature));
                 int? min = Min(mine.Select(p => p.Min)) ?? Min(mine.Select(p => p.Temperature));
                 string? weather = (mine.FirstOrDefault(p => p.Start.Hour == 6) ?? mine[0]).Weather;
+                int? rainChance = Max(mine.Select(p => p.RainChance));   // 10/25
 
-                days.Add(new DailyForecastDto(date, labels[i], min, max, weather));
+                days.Add(new DailyForecastDto(date, labels[i], min, max, weather, rainChance));
             }
             return days;
         }
@@ -150,6 +154,8 @@ namespace VenueGo.Services.Weather
                         period.Min ??= Integer(Get(v, "MinTemperature"));
                         period.Temperature ??= Integer(Get(v, "Temperature"));
                         period.Weather ??= NonEmpty(Text(Get(v, "Weather")));
+                        // 10/25：12 小時降雨機率。欄位名稱是照 10/18 存下來的樣本（預報(1週).json）確認的
+                        period.RainChance ??= Integer(Get(v, "ProbabilityOfPrecipitation"));
                     }
                 }
             }

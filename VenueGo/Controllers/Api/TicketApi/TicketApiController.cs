@@ -1,6 +1,7 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using VenueGo.Dtos;
 using VenueGo.Dtos.TicketDtos;
 using VenueGo.Extensions;
@@ -52,6 +53,27 @@ namespace VenueGo.Controllers.Api.TicketApi
             return Ok(ApiResult<List<MemberTicketDto>>.Ok(tickets));
         }
 
+        // 前台「收到的轉讓」>> GET /api/tickets/incoming
+        // 別人轉給我、還沒領的票（不含驗證碼，碼只在信裡）
+        [Authorize(
+      AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        [HttpGet("incoming")]
+        public async Task<IActionResult> GetIncoming(
+            [FromQuery] int? testUserId, CancellationToken cancellationToken)
+        {
+            int? userId = User.GetUserId();
+
+            if (userId is null && _env.IsDevelopment())
+                userId = testUserId;
+
+            if (userId is null)
+                return Unauthorized(ApiResult.Fail("請先登入", "UNAUTHORIZED"));
+
+            var list = await _ticketQuery.GetIncomingTransfersAsync(userId.Value, cancellationToken);
+
+            return Ok(ApiResult<List<IncomingTransferDto>>.Ok(list));
+        }
+
 
         // 前台「使用票券」視窗 >> GET /api/tickets/{id}/qr
         // 回傳動態 QR（每 30 秒換一次），只有票的現在持有人拿得到
@@ -86,7 +108,8 @@ namespace VenueGo.Controllers.Api.TicketApi
       AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         //POST /api/tickets/{id}/transfer
         [HttpPost("{id:int}/transfer")]
-        public async Task<IActionResult> CreateCode(int id, [FromQuery] int? testUserId)
+        [EnableRateLimiting("TransferCreate")]
+        public async Task<IActionResult> CreateCode(int id, [FromQuery] int? testUserId, [FromBody] CreateTransferRequestDto input)
         {
             int? userId = User.GetUserId();
 
@@ -96,20 +119,44 @@ namespace VenueGo.Controllers.Api.TicketApi
             if (userId is null)
                 return Unauthorized(ApiResult.Fail("請先登入", "UNAUTHORIZED"));
 
-            TransferCodeResult result = await _entryTicketService.TransferCreateAsync(id, userId!.Value);
+            if(string.IsNullOrWhiteSpace(input.Email))
+            {
+                return BadRequest(ApiResult.Fail("請輸入對方的 Email", "TRANSFER_FAILED"));
+            }
+
+            TicketTransferResult result = await _entryTicketService.TransferCreateAsync(id, userId!.Value, input.Email);
 
             if (!result.Success)
             {
-                return BadRequest(ApiResult.Fail(result.Reason ?? "產生驗證碼失敗", "TRANSFER_FAILED"));
+                return BadRequest(ApiResult.Fail(result.Reason ?? "轉發票券失敗", "TRANSFER_FAILED"));
             }
 
-            var dto = new TransferCodeDto
-            {
-                Code = result.Code!,
-                ExpiresAt = result.ExpiresAt!.Value
-            };
+            return Ok(ApiResult.Ok("若對方是會員，已寄出通知"));
+        }
 
-            return Ok(ApiResult<TransferCodeDto>.Ok(dto));
+        [Authorize(
+     AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
+        [EnableRateLimiting("TransferCreate")]
+        // POST /api/tickets/{id}/transfer/resend
+        [HttpPost("{id:int}/transfer/resend")]
+        public async Task<IActionResult> ResendTransfer(int id, [FromQuery] int? testUserId)
+        {
+            int? userId = User.GetUserId();
+
+            if (userId is null && _env.IsDevelopment())
+                userId = testUserId;
+
+            if (userId is null)
+                return Unauthorized(ApiResult.Fail("請先登入", "UNAUTHORIZED"));
+
+            TicketTransferResult result = await _entryTicketService.TransferResendAsync(id, userId!.Value);
+
+            if (!result.Success)
+            {
+                return BadRequest(ApiResult.Fail(result.Reason ?? "重新寄送失敗", "RESEND_FAILED"));
+            }
+
+            return Ok(ApiResult.Ok("已重新寄出通知信"));
         }
 
         [Authorize(
@@ -141,6 +188,7 @@ namespace VenueGo.Controllers.Api.TicketApi
      AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme)]
         // POST /api/tickets/redeem
         [HttpPost("redeem")]
+        [EnableRateLimiting("TransferRedeem")]
         public async Task<IActionResult> RedeemTransfer([FromBody] RedeemTicketRequest request, [FromQuery] int? testUserId)
         {
             int? userId = User.GetUserId();

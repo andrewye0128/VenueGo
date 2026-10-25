@@ -68,6 +68,28 @@ builder.Services.AddRateLimiter(options =>
                 "TooManyRequests"),
             cancellationToken);
     };
+
+    options.AddPolicy("TransferCreate", httpContext =>
+       RateLimitPartition.GetFixedWindowLimiter(
+           partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+           factory: _ => new FixedWindowRateLimiterOptions
+           {
+               PermitLimit = 10,
+               Window = TimeSpan.FromMinutes(10),
+               QueueLimit = 0,
+               AutoReplenishment = true
+           }));
+
+    options.AddPolicy("TransferRedeem", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
 });
 
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>

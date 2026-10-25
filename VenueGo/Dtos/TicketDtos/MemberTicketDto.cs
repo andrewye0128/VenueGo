@@ -10,7 +10,8 @@
         public string Status { get; set; } = null!;      // available / inside / used / expired / transferred
 
         // 轉發
-        public string? TransferCode { get; set; }          // 只有持有人本人看得到
+        //public string? TransferCode { get; set; }          // 只有持有人本人看得到
+        public string? TransferToMasked { get; set; }      // 例如 b***@gmail.com
         public DateTime? TransferExpiresAt { get; set; }
     }
 }

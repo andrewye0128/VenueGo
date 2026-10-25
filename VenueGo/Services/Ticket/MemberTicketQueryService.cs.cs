@@ -59,6 +59,14 @@ namespace VenueGo.Services.Ticket
                     && p.ExpiresAt > now)
                 .ToDictionaryAsync(p => p.TicketId, cancellationToken);
 
+            var toIds = pendingMap.Values
+                .Where(p => p.ToUserId != null)
+                .Select(p => p.ToUserId!.Value)
+                .Distinct().ToList();
+            var toEmails = await _db.Users.AsNoTracking()
+                .Where(u => toIds.Contains(u.UserId))
+                .ToDictionaryAsync(u => u.UserId, u => u.Email, cancellationToken);
+
             return rows.Select(x =>
             {
                 string status = ToMemberStatus(
@@ -66,6 +74,12 @@ namespace VenueGo.Services.Ticket
                     x.BookingDate.ToDateTime(x.EndTime), now);
 
                 pendingMap.TryGetValue(x.TicketId, out var pending);
+                string? maskedTo = null;
+                if (status == "available" && pending?.ToUserId != null
+                    && toEmails.TryGetValue(pending.ToUserId.Value, out var toEmail))
+                {
+                    maskedTo = MaskEmail(toEmail);
+                }
                 return new MemberTicketDto
                 {
                     Id = x.TicketId,
@@ -74,10 +88,60 @@ namespace VenueGo.Services.Ticket
                     Date = x.BookingDate.ToString("yyyy/MM/dd"),
                     TimeRange = $"{x.StartTime:HH\\:mm}-{x.EndTime:HH\\:mm}",
                     Status = status,
-                    TransferCode = status == "available" ? pending?.TransferCode : null,
+                    TransferToMasked = maskedTo,
                     TransferExpiresAt = status == "available" ? pending?.ExpiresAt : null,
                 };
             }).ToList();            
+        }
+
+        private static string MaskEmail(string email)
+        {
+            int at = email.IndexOf('@');
+            if (at <= 0) return "***";
+            return email[0] + "***" + email[at..];
+        }
+
+
+        public async Task<List<IncomingTransferDto>> GetIncomingTransfersAsync(
+            int userId, CancellationToken cancellationToken = default)
+        {
+            var now = _time.Now;
+
+            var rows = await (from tr in _db.TicketTransfers
+                              join t in _db.EntryTickets on tr.TicketId equals t.TicketId
+                              join o in _db.Orders on t.OrderId equals o.OrderId
+                              join r in _db.Reservations on o.ReservationId equals r.ReservationId
+                              join v in _db.Venues on r.VenueId equals v.VenueId
+                              join s in _db.SportTypes on v.SportTypeId equals s.SportTypeId
+                              join u in _db.Users on tr.FromUserId equals u.UserId
+                              where tr.ToUserId == userId
+                                 && tr.Status == (byte)TicketTransferStatus.Pending
+                                 && tr.ExpiresAt > now
+                                 && t.Status == (byte)EntryTicketStatus.Valid
+                                 && t.UserId == tr.FromUserId
+                              orderby tr.ExpiresAt
+                              select new
+                              {
+                                  FromName = u.Name,
+                                  v.VenueName,
+                                  s.SportName,
+                                  r.BookingDate,
+                                  r.StartTime,
+                                  r.EndTime,
+                                  tr.ExpiresAt
+                              })
+                             .AsNoTracking()
+                             .ToListAsync(cancellationToken);
+
+            return rows.Select(x => new IncomingTransferDto
+            {
+                FromName = x.FromName,
+                VenueName = x.VenueName,
+                SportType = x.SportName,
+                Date = x.BookingDate.ToString("yyyy/MM/dd"),
+                TimeRange = $"{x.StartTime:HH\\:mm}-{x.EndTime:HH\\:mm}",
+                ExpiresAt = x.ExpiresAt
+            }).ToList();
         }
 
 

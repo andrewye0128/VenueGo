@@ -8,9 +8,10 @@ using VenueGo.Constants;
 using VenueGo.Data;
 using VenueGo.Enums;
 using VenueGo.Models.Entities;
+using VenueGo.Models.PaymentModels;
 using VenueGo.Models.ReservationModels;
-using VenueGo.Services.ReviewTickets;
-using VenueGo.Services.Ticket;
+using VenueGo.Services.Payments;
+using VenueGo.Services.Time;
 
 namespace VenueGo.Services.Reservations
 {
@@ -23,23 +24,20 @@ namespace VenueGo.Services.Reservations
         private const int MaxReasonLength = 200;
 
         private readonly dbVenueContext _db;
-
-        private readonly IBookingReviewTicketFactory _bookingFactory;
-
-        private readonly IEntryTicketService _entryTicketService;
+        private readonly IPaymentConfirmationService _paymentConfirmation;
+        private readonly ITimeService _timeService;
 
         public ReservationCommandService(
             dbVenueContext db,
-            IBookingReviewTicketFactory bookingFactory,
-            IEntryTicketService entryTicketService)
+            IPaymentConfirmationService paymentConfirmation,
+            ITimeService timeService)
         {
             _db = db;
 
-            // 注入 IBookingReviewTicketFactory 介面，讓這裡可以呼叫 CreateReviewPerBookingAsync 建立評論憑證。
-            _bookingFactory = bookingFactory;
+            // 收款確認（改狀態、建票券、評論憑證）跟綠界共用，放在 PaymentConfirmationService
+            _paymentConfirmation = paymentConfirmation;
 
-            // 注入 IEntryTicketService 介面，讓標記已付款時可以一併建立入場票券。
-            _entryTicketService = entryTicketService;
+            _timeService = timeService;
         }
 
         // ══ 標記為已付款 ═══════════════════════════════
@@ -47,6 +45,7 @@ namespace VenueGo.Services.Reservations
         public async Task<ReservationCommandResult> MarkAsPaidAsync(
             int reservationId, int operatorUserId, CancellationToken cancellationToken = default)
         {
+            // 前面的檢查留在這裡：錯誤訊息是給後台員工看的，跟原本一樣
             var reservation = await FindReservationAsync(reservationId, cancellationToken);
             if (reservation is null)
             {
@@ -76,52 +75,18 @@ namespace VenueGo.Services.Reservations
                 return ReservationCommandResult.Fail("此訂單已是已付款狀態。");
             }
 
-            // 記下變更前的狀態，稽核紀錄要記「從什麼變成什麼」
-            var oldValue = SerializeStatuses(
-                reservation.ReservationStatus, order.OrderStatus, payment.PaymentStatus);
+            // 改狀態、建票券、操作紀錄交給共用的收款確認（綠界付款成功也走同一段）
+            var result = await _paymentConfirmation.ConfirmPaidAsync(
+                new PaymentConfirmRequest(payment.PaymentId, PaymentConfirmSource.Staff, operatorUserId),
+                cancellationToken);
 
-            (string Message, int TicketCount) ticketResult = default;
-
-            var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
-            await using (transaction)
+            if (result.Outcome != PaymentConfirmOutcome.Confirmed)
             {
-                var now = DateTime.Now;
-
-                payment.PaymentStatus = (byte)PaymentStatus.Paid;
-                payment.PaidAt = now;
-
-                order.OrderStatus = (byte)OrderStatus.Paid;
-
-                // 收到款項後預約才算真正確認，兩個狀態必須一起改
-                reservation.ReservationStatus = (byte)ReservationStatus.Confirmed;
-
-                var newValue = SerializeStatuses(
-                    reservation.ReservationStatus, order.OrderStatus, payment.PaymentStatus);
-
-                AddAuditLog(
-                    reservationId, operatorUserId,
-                    AuditActions.MarkOrderAsPaid, oldValue, newValue);
-
-                await _db.SaveChangesAsync(cancellationToken);
-
-                // 建立入場票券。票券是會員實際進場使用場地的憑證，
-                // 建立失敗時整個操作都不算數：不呼叫 CommitAsync，
-                // using 區塊結束時交易會自動回滾，剛剛改的付款/訂單/預約狀態也會一併復原，
-                // 不會出現「已標記付款，但票券建立失敗」這種不一致的狀態。
-                ticketResult = await _entryTicketService.CreateForOrderAsync(order.OrderId);
-                if (ticketResult.TicketCount == 0)
-                {
-                    return ReservationCommandResult.Fail(ticketResult.Message);
-                }
-
-                await transaction.CommitAsync(cancellationToken);
+                return ReservationCommandResult.Fail(result.Message);
             }
 
-            // 收到款項後要建立「預約評論憑證」，讓使用者可以在評論頁面留下評價。
-            //await _bookingFactory.CreateReviewPerBookingAsync(order.OrderId);
-
             return ReservationCommandResult.Success(
-                $"已將訂單 {order.OrderNo} 標記為已付款，預約狀態更新為已確認，已產生 {ticketResult.TicketCount} 張票券。");
+                $"已將訂單 {order.OrderNo} 標記為已付款，預約狀態更新為已確認，已產生 {result.TicketCount} 張票券。");
         }
 
         // ══ 取消與作廢 ════════════════════════════════
@@ -195,7 +160,7 @@ namespace VenueGo.Services.Reservations
             var transaction = await _db.Database.BeginTransactionAsync(cancellationToken);
             await using (transaction)
             {
-                var now = DateTime.Now;
+                var now = _timeService.Now;
 
                 reservation.ReservationStatus = (byte)targetStatus;
                 reservation.CancelledBy = operatorUserId;
@@ -229,7 +194,7 @@ namespace VenueGo.Services.Reservations
                 var newValue = SerializeStatuses(
                     reservation.ReservationStatus, order?.OrderStatus, payment?.PaymentStatus);
 
-                AddAuditLog(reservationId, operatorUserId, auditAction, oldValue, newValue);
+                AddAuditLog(reservationId, operatorUserId, auditAction, oldValue, newValue, now);
 
                 await _db.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -266,10 +231,16 @@ namespace VenueGo.Services.Reservations
         private Task<Order?> FindOrderAsync(int reservationId, CancellationToken ct)
             => _db.Orders.FirstOrDefaultAsync(o => o.ReservationId == reservationId, ct);
 
+        /// <summary>
+        /// 取最新一筆付款（CreatedAt 最晚），跟「我的預約」「訂單與付款」、逾期排程同一個規則。
+        /// 原本取最舊的一筆：一筆訂單有多筆付款時，會改到舊的那筆
+        /// </summary>
         private Task<Payment?> FindPaymentAsync(int orderId, CancellationToken ct)
             => _db.Payments
-                .OrderBy(p => p.PaymentId)
-                .FirstOrDefaultAsync(p => p.OrderId == orderId, ct);
+                .Where(p => p.OrderId == orderId)
+                .OrderByDescending(p => p.CreatedAt)
+                .ThenByDescending(p => p.PaymentId)
+                .FirstOrDefaultAsync(ct);
 
         /// <summary>刪除該筆預約的所有佔位資料，釋放時段。</summary>
         private async Task ReleaseSlotsAsync(int reservationId, CancellationToken ct)
@@ -312,7 +283,7 @@ namespace VenueGo.Services.Reservations
         /// </summary>
         private void AddAuditLog(
             int reservationId, int operatorUserId,
-            string action, string oldValue, string newValue)
+            string action, string oldValue, string newValue, DateTime now)
         {
             _db.AuditLogs.Add(new AuditLog
             {
@@ -322,7 +293,7 @@ namespace VenueGo.Services.Reservations
                 EntityId = reservationId.ToString(),
                 OldValue = oldValue,
                 NewValue = newValue,
-                CreatedAt = DateTime.Now
+                CreatedAt = now
             });
         }
     }

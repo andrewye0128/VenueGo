@@ -32,6 +32,12 @@
         /// <summary>預約逾期：超過付款期限仍未付款，由排程自動取消（AuditLogs.UserId 為 NULL）。</summary>
         public const string ExpireReservation = "ExpireReservation";
 
+        /// <summary>逾期後才收到線上付款，時段還空著：重新佔位、恢復成已確認（AuditLogs.UserId 為 NULL）。</summary>
+        public const string ConfirmLatePayment = "ConfirmLatePayment";
+
+        /// <summary>預約已失效（逾期後時段被訂走、時段已開始、已取消）才收到線上付款：付款改成退款處理中（AuditLogs.UserId 為 NULL）。</summary>
+        public const string RefundLatePayment = "RefundLatePayment";
+
         /// <summary>編輯預約（修改日期、場地或時段）。期末功能。</summary>
         public const string UpdateReservation = "UpdateReservation";
 

@@ -1,5 +1,6 @@
 ﻿using VenueGo.Models.Options;
 using VenueGo.Services.Orders;
+using VenueGo.Services.Payments;
 using VenueGo.Services.Reservations;
 using VenueGo.Services.TimeSlots;
 
@@ -44,6 +45,9 @@ namespace VenueGo.Extensions
 
             // 前台會員「訂單與付款」：訂單列表、明細
             services.AddScoped<IMemberOrderQueryService, MemberOrderQueryService>();
+
+            // 收款確認：後台標記已付款、綠界付款成功共用（改狀態、建票券、逾期後收款的處理）
+            services.AddScoped<IPaymentConfirmationService, PaymentConfirmationService>();
 
             // 逾期排程：每 1 分鐘把超過付款期限、還沒付款的預約改成已逾期，並釋放時段
             services.AddScoped<IReservationExpiryService, ReservationExpiryService>();

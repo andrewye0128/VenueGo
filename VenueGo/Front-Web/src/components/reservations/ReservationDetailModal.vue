@@ -18,6 +18,9 @@ import StatusBadge from "@/components/list/StatusBadge.vue";
 import { PAYMENT_STATUS, RESERVATION_STATUS } from "@/constants/statuses";
 import { formatAmount, formatDate, formatDateTime, formatTimeRange } from "@/utils/format";
 import { formatPersonCount } from "@/utils/reservation";
+// 10/25 評論組（昱）新增：預約評論的按鈕（立刻評論／查看評論）
+import { useRouter } from "vue-router";
+import { useReviewStatuses } from "@/composables/useReviewStatuses";
 
 const props = defineProps({
   reservation: { type: Object, required: true },
@@ -27,6 +30,16 @@ const props = defineProps({
 const emit = defineEmits(["close"]);
 
 const r = computed(() => props.reservation);
+
+// 10/25 評論組（昱）新增：這筆預約的評論按鈕，沒有就是 null（說明在 composables/useReviewStatuses.js）。
+// 按了先關掉視窗再換頁：視窗是用 useOverlay 開的，換頁時不會自己關
+const router = useRouter();
+const reviewStatus = useReviewStatuses();
+const reviewButton = computed(() => reviewStatus.bookingFor(r.value.reservationId));
+function goReview() {
+  emit("close");
+  router.push(reviewButton.value.to);
+}
 
 // 一般欄位：左邊欄位名稱、右邊值
 const rows = computed(() => [
@@ -95,6 +108,15 @@ const extraRows = computed(() =>
           variant="outline"
           class="w-full md:w-auto"
           @click="emit('close', 'cancel')"
+        />
+        <!-- 10/25 評論組（昱）新增：第 3 顆，預約評論的按鈕 -->
+        <UButton
+          v-if="reviewButton"
+          :label="reviewButton.label"
+          :color="reviewButton.color"
+          :variant="reviewButton.variant"
+          class="w-full md:w-auto"
+          @click="goReview"
         />
       </div>
     </template>

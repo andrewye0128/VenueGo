@@ -1,5 +1,7 @@
 <script setup>
 import { computed, onUnmounted, ref, watch } from "vue";
+// 10/25 評論組（昱）新增：已使用的票券，「轉贈票券」的位置改放現場評論的按鈕（立刻評論／查看評論）
+import { useReviewStatuses } from "@/composables/useReviewStatuses";
 
 const props = defineProps({
   ticket: { type: Object, required: true },
@@ -7,6 +9,13 @@ const props = defineProps({
 });
 
 const emit = defineEmits(["view-qr", "transfer", "cancel-transfer", "transfer-expired"]);
+
+// 10/25 評論組（昱）新增：已使用、而且這張票可以評論（或已經評過）時才有值；其他情況是 null，維持原本的「轉贈票券」。
+// 一筆訂單有好幾張票時，只有判斷資格用的那一張有按鈕（每筆訂單只能評一次），說明在 composables/useReviewStatuses.js
+const reviewStatus = useReviewStatuses();
+const reviewButton = computed(() =>
+  props.ticket.status === "used" ? reviewStatus.visitFor(props.ticket.id) : null,
+);
 
 const statusMap = {
   available: { label: "可使用", class: "bg-blue-800 text-white" },
@@ -180,19 +189,34 @@ function onCancel() {
         >
           查看 QR Code
         </button>
-        <button
-          type="button"
-          :disabled="!canUse || busy"
-          class="py-2 text-sm font-medium rounded border transition-colors"
-          :class="
-            canUse && !busy
-              ? 'bg-white text-gray-900 border-gray-400 hover:bg-gray-100'
-              : 'bg-white text-gray-300 border-gray-200 cursor-not-allowed'
-          "
-          @click="emit('transfer')"
-        >
-          {{ busy ? "處理中…" : "轉贈票券" }}
-        </button>
+        <!-- 10/25 評論組（昱）新增：已使用的票券，轉贈的位置改放評論按鈕（已使用的票本來就不能轉贈，兩顆不會同時需要）。
+             顏色跟我的預約、我的評論一樣：立刻評論＝橘色實心、查看評論＝藍色外框（見 useReviewStatuses.js）。
+             不用這張卡片的黑色：那是報到組給「查看 QR Code」用的，兩顆一樣黑會分不出來。
+             h-auto py-2：高度跟旁邊的「查看 QR Code」一樣（UButton 預設高 40px，這張卡片的按鈕是 38px） -->
+        <UButton
+          v-if="reviewButton"
+          :to="reviewButton.to"
+          :color="reviewButton.color"
+          :variant="reviewButton.variant"
+          :label="reviewButton.label"
+          block
+          class="h-auto py-2"
+        />
+        <template v-else>
+          <button
+            type="button"
+            :disabled="!canUse || busy"
+            class="py-2 text-sm font-medium rounded border transition-colors"
+            :class="
+              canUse && !busy
+                ? 'bg-white text-gray-900 border-gray-400 hover:bg-gray-100'
+                : 'bg-white text-gray-300 border-gray-200 cursor-not-allowed'
+            "
+            @click="emit('transfer')"
+          >
+            {{ busy ? "處理中…" : "轉贈票券" }}
+          </button>
+        </template>
       </template>
     </div>
   </div>

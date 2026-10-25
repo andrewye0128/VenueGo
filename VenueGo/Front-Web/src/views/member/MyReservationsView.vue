@@ -29,6 +29,8 @@ import {
 } from "@/constants/statuses";
 import { formatAmount, formatDate, formatDateTime, formatTimeRange } from "@/utils/format";
 import { canCancel, formatPersonCount } from "@/utils/reservation";
+// 10/25 評論組（昱）新增：預約評論的按鈕（立刻評論／查看評論），放在「取消」的位置（不能取消的時候才出現）
+import { useReviewStatuses } from "@/composables/useReviewStatuses";
 
 const PAGE_SIZE = 10;
 
@@ -39,6 +41,9 @@ const memberStore = useMemberStore();
 // 判斷「還沒到開始時間、可以取消」要用它，前後端對「現在」的認定才會一致
 const { now } = useSiteClock();
 const isCancellable = (reservation) => canCancel(reservation, now.value);
+
+// 10/25 評論組（昱）新增：這一列的預約評論按鈕，沒有就是 null（說明在 composables/useReviewStatuses.js）
+const reviewStatus = useReviewStatuses();
 
 // ── 篩選條件 ──
 // filters 是「已套用」的條件；欄位正在編輯的草稿由 ListFilterPanel 管理，按查詢才會改到這裡
@@ -380,6 +385,20 @@ async function openCancel(reservation) {
           >
             取消
           </UButton>
+          <!-- 10/25 評論組（昱）新增：不能取消的時候（已報到、已退款⋯），取消的位置改放預約評論的按鈕。
+               能取消的時候不放：位置是預約組給的「取消」那一格。隨時都看得到的入口在「查看」打開的明細視窗裡。
+               顏色：立刻評論＝橘色實心、查看評論＝藍色外框（跟「我的評論」頁一致，見 useReviewStatuses.js） -->
+          <UButton
+            v-else-if="reviewStatus.bookingFor(row.original.reservationId)"
+            :to="reviewStatus.bookingFor(row.original.reservationId).to"
+            :color="reviewStatus.bookingFor(row.original.reservationId).color"
+            :variant="reviewStatus.bookingFor(row.original.reservationId).variant"
+            size="sm"
+            class="whitespace-nowrap"
+            :aria-label="`${reviewStatus.bookingFor(row.original.reservationId).label}：${rowName(row.original)}`"
+          >
+            {{ reviewStatus.bookingFor(row.original.reservationId).label }}
+          </UButton>
         </div>
       </template>
 
@@ -433,6 +452,16 @@ async function openCancel(reservation) {
                 @click="openCancel(row)"
               >
                 取消
+              </UButton>
+              <!-- 10/25 評論組（昱）新增：手機卡片也一樣，不能取消的時候，取消的位置改放預約評論的按鈕 -->
+              <UButton
+                v-else-if="reviewStatus.bookingFor(row.reservationId)"
+                :to="reviewStatus.bookingFor(row.reservationId).to"
+                :color="reviewStatus.bookingFor(row.reservationId).color"
+                :variant="reviewStatus.bookingFor(row.reservationId).variant"
+                :aria-label="`${reviewStatus.bookingFor(row.reservationId).label}：${rowName(row)}`"
+              >
+                {{ reviewStatus.bookingFor(row.reservationId).label }}
               </UButton>
             </div>
           </div>

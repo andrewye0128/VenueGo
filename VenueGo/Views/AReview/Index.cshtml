@@ -7,6 +7,7 @@
 
     這一頁只放「不會跟著清單變的東西」：
       標題、訊息區、標記垃圾的 modal、樣式、腳本。
+      10/23 多了：回覆預覽的 modal（樣式在 wwwroot/css/site.css 最後面，10/25 搬過去集中管理）。
     會變的部分（搜尋列、篩選列、清單）全部在 _QueueList.cshtml。
 *@
 
@@ -35,11 +36,20 @@
             <div class="modal-content">
                   <div class="modal-header">
                         <h5 class="modal-title" id="spamModalTitle">
+                              @* 10/23：確認畫面時標題會換字，所以文字包一層 span 給 JS 換。原本：
                               <i class="bi bi-trash me-2"></i>標記為垃圾評論
+                              *@
+                              <i class="bi bi-trash me-2"></i><span id="spamModalTitleText">標記為垃圾評論</span>
                         </h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
                   </div>
                   <div class="modal-body">
+                        @* ── 10/23：視窗分成兩個畫面 ──
+                           第 1 個畫面（#spamStepReason）選理由，按「確定標記」換到第 2 個畫面（#spamStepConfirm）再確認一次，
+                           按「確定，標記為垃圾」才真的送出。標記之後不能復原，所以多給一次反悔的機會；
+                           確認畫面只有「返回」和「確定」，不做別的事。按「返回」回到第 1 個畫面，選好的理由還在。
+                           不另開第二個視窗：Bootstrap 不支援兩個 modal 疊在一起（背景遮罩、焦點都會亂）。 *@
+                        <div id="spamStepReason">
                         @* 9/29：下拉選單改成單選清單，每個理由底下附上判斷標準（ReviewPolicy.SpamReasonInfos 的 StaffHint）。
                            下拉選單沒辦法在每個選項底下放說明，員工只看得到「謾罵」兩個字，
                            很難判斷一則激烈的負評到底算不算。
@@ -62,11 +72,56 @@
                         <div class="form-text">
                               標記後這則評論會強制不公開，也不能再回覆。<strong>此操作無法復原。</strong>
                         </div>
+                        </div>
+                        @* 第 2 個畫面：理由由 JS 放進 #spamConfirmReason *@
+                        <div id="spamStepConfirm" class="d-none">
+                              <p class="mb-2">理由：<span id="spamConfirmReason" class="badge rounded-pill text-bg-dark"></span></p>
+                              <ul class="small mb-0 ps-3">
+                                    <li>這則評論會強制不公開（評論專區不會顯示），也不能再回覆。</li>
+                                    <li>顧客會在「我的評論」看到「這則評論未通過審核，已下架」和這個理由。</li>
+                                    <li><strong>標記之後沒有辦法復原。</strong></li>
+                              </ul>
+                        </div>
                         <div id="spamError" class="text-danger small mt-2"></div>
                   </div>
                   <div class="modal-footer">
+                        @* 10/23：第 1 個畫面用原本的「取消」「確定標記」（確定標記改成換到確認畫面，不送出）；
+                           第 2 個畫面用「返回」「確定，標記為垃圾」。切換畫面時由 JS 換 d-none。原本的兩行沒有改。 *@
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
                         <button type="button" class="btn btn-danger" id="spamConfirm">確定標記</button>
+                        <button type="button" class="btn btn-outline-secondary d-none" id="spamBack">返回</button>
+                        <button type="button" class="btn btn-danger d-none" id="spamFinal">確定，標記為垃圾</button>
+                  </div>
+            </div>
+      </div>
+</div>
+
+@* ── 10/23 回覆預覽 ────────────────────────────────────
+   按回覆表單的「預覽並送出」打開。內容由 JS 從那則評論的 <template class="js-preview-src"> 複製過來，
+   送出回覆的按鈕只有這裡的「確定送出」一顆。
+   - 點視窗外、按 Esc、按「返回修改」都會關掉，輸入框的內容保留，表單下方提示「回覆還沒送出」。
+   - 送出中不能關（JS 攔 hide.bs.modal），免得員工以為取消了，其實已經送出。
+   - 跟標記垃圾的視窗一樣放在 queueRoot 外面，重新載入清單時才不會被換掉。 *@
+<div class="modal fade" id="replyPreviewModal" tabindex="-1" aria-labelledby="replyPreviewTitle" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
+            <div class="modal-content">
+                  <div class="modal-header">
+                        <h5 class="modal-title" id="replyPreviewTitle">
+                              <i class="bi bi-eye me-2"></i>送出前預覽
+                        </h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
+                  </div>
+                  <div class="modal-body">
+                        <p class="small text-muted mb-2">顧客看到的樣子（示意，實際版面以顧客端為準）</p>
+                        <div id="replyPreviewBody"></div>
+                        <div id="replyPreviewError" class="text-danger small mt-2"></div>
+                  </div>
+                  <div class="modal-footer">
+                        <span class="small text-muted me-auto">送出後無法修改或刪除</span>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">返回修改</button>
+                        <button type="button" class="btn btn-primary" id="replyPreviewSend">
+                              <i class="bi bi-send"></i> 確定送出
+                        </button>
                   </div>
             </div>
       </div>
@@ -76,6 +131,7 @@
       @* axios 版本請改成課堂上用的版本，並寫死，不要用 latest *@
       <script src="https://cdn.jsdelivr.net/npm/axios@@1.20.0/dist/axios.min.js"></script>
       @* <script src="https://unpkg.com/axios/dist/axios.min.js"></script> *@
+      @* 10/23 分頁後台：換頁 Bar（分頁_1023 的說明要加的那 1 行，這份已經包含） *@
       <script src="~/js/areview-pager.js" asp-append-version="true"></script>
       <script src="~/js/areview-queue.js" asp-append-version="true"></script>
 }

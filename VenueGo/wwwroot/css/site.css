@@ -200,3 +200,70 @@ body {
     padding: .05em .15em;
     border-radius: .15em;
 }
+
+/* ══ 10/25：評論管理（員工預覽、館方小修正）的樣式，原本寫在 Views/AReview/Index.cshtml 的 <style>，搬來這裡集中管理 ══ */
+
+/* 評論展開時，標題列整條（含左邊的置頂按鈕那一格）都換成展開的淡藍。
+   置頂按鈕放在 accordion-button 的旁邊（按鈕裡不能再放按鈕），原本只有 accordion-button 會變色，左邊那一格維持白色。
+   border-top-left-radius: inherit：第一則評論的左上角是圓的，底色不要超出圓角。 */
+#reviewQueue .accordion-header:has(> .accordion-button:not(.collapsed)) {
+    background-color: var(--bs-accordion-active-bg);
+    border-top-left-radius: inherit;
+}
+
+/* 點評論展開時的藍色焦點框，框住整條標題列（含置頂按鈕那一格），跟淡藍底的範圍一致。
+   Bootstrap 原本把焦點框畫在 accordion-button 上，置頂按鈕在它旁邊，框就少了左邊那一格。
+   做法：按鈕本身不畫框，標題列在「裡面的按鈕有焦點」時畫同一個框（顏色、粗細取自 Bootstrap 的變數）。
+   展開狀態原本那條底線（inset 的 box-shadow）照留。 */
+#reviewQueue .accordion-header > .accordion-button:focus {
+    box-shadow: none;
+}
+
+#reviewQueue .accordion-header > .accordion-button:not(.collapsed):focus {
+    box-shadow: inset 0 calc(-1 * var(--bs-accordion-border-width)) 0 var(--bs-accordion-border-color);
+}
+
+#reviewQueue .accordion-header:has(> .accordion-button:focus) {
+    position: relative;
+    z-index: 3;
+    box-shadow: var(--bs-accordion-btn-focus-box-shadow);
+}
+
+/* 依場地分組的外框：淡紫。藍＝展開中、青＝依訂單分組、紅黃＝逾期提醒、綠＝顧客滿意、灰＝封存，
+   紫色在這一頁沒有其他意思，看得出「這只是分組」。Bootstrap 沒有現成的淡紫 class，取它的 indigo 色系。 */
+.queue-group.queue-group-venue {
+    border-color: #d0bfff;
+    background: #f3f0ff;
+}
+
+    .queue-group.queue-group-venue .queue-group-head {
+        color: #5f3dc4;
+    }
+
+/* 回覆送出前的預覽視窗（Index.cshtml 的 #replyPreviewModal）：仿顧客端「我的評論」的樣子。顏色取自前台設計規範的品牌藍 */
+#replyPreviewModal .rp-text {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+#replyPreviewModal .rp-brand {
+    color: #1d5faf;
+}
+
+#replyPreviewModal .rp-avatar {
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #1d5faf;
+    color: #fff;
+    font-size: .875rem;
+    font-weight: 700;
+}
+
+#replyPreviewModal .rp-bubble {
+    border-top-left-radius: 0 !important;
+}

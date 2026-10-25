@@ -2,6 +2,8 @@
 @using Microsoft.AspNetCore.Routing
 @using VenueGo.Helpers
 @using VenueGo.Models.ReviewModels
+@* 10/23 員工預覽：預覽視窗要顯示顧客看到的版本（遮蔽個資、不雅字詞之後的內文） *@
+@using VenueGo.Services.ReviewScreening
 @using VenueGo.ViewModels.ReviewViewModels
 
 @*
@@ -252,7 +254,11 @@
 
                               @* ── 系統資訊 ── *@
                               <div class="small text-muted border-top pt-2 mb-3">
+                                    @* 10/25：預約評論評的是「預約流程」，跟場地、使用時段無關；場地篩選也只會列出現場評論，
+                                       在預約評論上放「只看這個場地」的按鈕會誤導。所以預約評論不顯示這一行，改顯示付款方式（下面）。原本：
                                     @if (item.VenueName != null)
+                                    *@
+                                    @if (!item.IsBookingReview && item.VenueName != null)
                                     {
                                           @* 場地名稱做成按鈕：點了只看這個場地的評論（9/29）。
                                              漏斗圖示＝篩選，跟顧客端評論專區的星等提示用同一個符號。
@@ -281,6 +287,11 @@
                                     @if (item.OrderNo != null)
                                     {
                                           <div><i class="bi bi-receipt"></i> 訂單 <span class="js-hl">@item.OrderNo</span></div>
+                                    }
+                                    @* 10/25：預約評論顯示付款方式（現場櫃台／信用卡／LINE Pay），跟顧客端撰寫頁的確認區塊一樣 *@
+                                    @if (item.IsBookingReview)
+                                    {
+                                          <div><i class="bi bi-credit-card"></i> 付款方式 @(item.PaymentChannelName ?? "查無付款紀錄")</div>
                                     }
                                     <div>
                                           評論時間
@@ -386,6 +397,8 @@
                                                 <span class="js-ai-note text-muted d-none" aria-live="polite">
                                                       <i class="bi bi-info-circle"></i> 這段草稿由 AI 產生，送出前請確認內容
                                                 </span>
+                                                @* 10/23：罐頭回覆、AI 草稿填入之後出現幾秒，告訴員工可以收回。文字由 JS 放（Mac 是 ⌘Z） *@
+                                                <span class="js-undo-hint text-muted d-none" aria-live="polite"></span>
                                                 <span class="ms-auto">
                                                       <span class="js-count">0</span> / @ReviewPolicy.ReplyMaxLength
                                                 </span>
@@ -393,13 +406,128 @@
 
                                           <div class="js-error text-danger small mb-2"></div>
 
+                                          @* 10/23：預覽視窗關掉之後出現，提醒員工回覆還沒送出（輸入框的內容保留） *@
+                                          <div class="js-unsent small text-warning-emphasis mb-2 d-none" aria-live="polite">
+                                                <i class="bi bi-exclamation-circle"></i> 回覆還沒送出。改好之後再按「預覽並送出」。
+                                          </div>
+
+                                          @* ── 10/23 員工預覽：顧客會看到的樣子 ──────────────────
+                                             template 不會顯示在畫面上；按「預覽並送出」時，JS 複製一份放進預覽視窗（Index.cshtml 的 #replyPreviewModal），
+                                             再把輸入框的內容填進 .js-preview-reply。用 textContent 填，員工打的 &lt;script&gt; 也只會是文字。
+                                             版面仿顧客端「我的評論」（MyReviewDetail.vue）：評論卡片，下面接館方回覆的對話泡泡。
+                                             內文用遮蔽後的版本，因為顧客本人和評論專區看到的都是遮蔽後的。 *@
+                                          <template class="js-preview-src">
+                                                <div class="rp-review border rounded-3 p-3">
+                                                      <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+                                                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                                                  <span class="star-view">
+                                                                        @for (int i = 1; i <= 5; i++)
+                                                                        {
+                                                                              <i class="@(i <= item.StarRating ? "bi bi-star-fill" : "bi bi-star empty")"></i>
+                                                                        }
+                                                                  </span>
+                                                                  <span class="fw-semibold">@item.DisplayName</span>
+                                                                  @if (item.IsAnonymous)
+                                                                  {
+                                                                        <span class="badge rounded-pill text-bg-light border"><i class="bi bi-incognito"></i> 匿名</span>
+                                                                  }
+                                                            </div>
+                                                            <span class="small text-muted">@TimeAgo.Full(item.CreatedAt)</span>
+                                                      </div>
+                                                      @if (item.IsRatingOnly)
+                                                      {
+                                                            <p class="text-muted fst-italic mb-2">（只給了星等，沒有留下文字）</p>
+                                                      }
+                                                      else
+                                                      {
+                                                            <p class="rp-text mb-2">@ReviewTextGuard.MaskForPublic(item.Content)</p>
+                                                      }
+                                                      @if (item.MentionsVenue || item.MentionsStaff)
+                                                      {
+                                                            <div class="mb-2">
+                                                                  @if (item.MentionsVenue)
+                                                                  {
+                                                                        <span class="badge rounded-pill text-bg-light border me-1"><i class="bi bi-hash"></i> 場地設施</span>
+                                                                  }
+                                                                  @if (item.MentionsStaff)
+                                                                  {
+                                                                        <span class="badge rounded-pill text-bg-light border"><i class="bi bi-hash"></i> 人員服務</span>
+                                                                  }
+                                                            </div>
+                                                      }
+                                                      <div class="small text-muted border-top pt-2">
+                                                            @if (item.IsBookingReview)
+                                                            {
+                                                                  <span><i class="bi bi-receipt"></i> 預約評論</span>
+                                                                  @if (item.OrderNo != null)
+                                                                  {
+                                                                        <span class="ms-2">訂單 @item.OrderNo</span>
+                                                                  }
+                                                                  @* 10/25：顧客端「我的評論」的預約評論，第二行就是付款方式 *@
+                                                                  @if (item.PaymentChannelName != null)
+                                                                  {
+                                                                        <span class="ms-2">@item.PaymentChannelName</span>
+                                                                  }
+                                                            }
+                                                            else
+                                                            {
+                                                                  <span><i class="bi bi-geo-alt"></i> @(item.VenueName ?? "（查無場地）")</span>
+                                                                  @if (item.RentStartTime != null)
+                                                                  {
+                                                                        <span class="ms-2">@item.RentStartTime.Value.ToString("M/d HH:mm") 使用</span>
+                                                                  }
+                                                            }
+                                                      </div>
+                                                </div>
+
+                                                <div class="rp-reply d-flex gap-2 mt-3">
+                                                      <span class="rp-avatar" aria-hidden="true">館</span>
+                                                      <div class="rp-bubble flex-grow-1 border rounded-3 p-3">
+                                                            <div class="d-flex flex-wrap justify-content-between gap-2 mb-1">
+                                                                  <span class="fw-semibold rp-brand">館方回覆</span>
+                                                                  <span class="small text-muted">送出的時間</span>
+                                                            </div>
+                                                            <p class="rp-text mb-0 js-preview-reply"></p>
+                                                      </div>
+                                                </div>
+
+                                                @* 送出之後誰看得到。公開規則：現場評論＋顧客選公開＋（已回覆，或超過 PublicBufferDays 天）。
+                                                   還沒公開的評論，一回覆就會立刻公開，這一點員工最容易沒想到，所以用黃色提醒。 *@
+                                                @if (item.IsBookingReview || !item.IsPublic)
+                                                {
+                                                      <div class="alert alert-secondary small mt-3 mb-0">
+                                                            <i class="bi bi-lock"></i>
+                                                            @(item.IsBookingReview ? "預約評論不會公開" : "顧客選擇不公開")，只有顧客本人會在「我的評論」看到這則回覆。
+                                                      </div>
+                                                }
+                                                else if (item.IsAutoPublished)
+                                                {
+                                                      <div class="alert alert-info small mt-3 mb-0">
+                                                            <i class="bi bi-globe2"></i>
+                                                            這則評論已經公開在評論專區，回覆送出後會立刻顯示在評論下面。顧客也會在「我的評論」看到。
+                                                      </div>
+                                                }
+                                                else
+                                                {
+                                                      <div class="alert alert-warning small mt-3 mb-0">
+                                                            <i class="bi bi-globe2"></i>
+                                                            這則評論<strong>還沒公開</strong>。回覆送出後，評論會連同回覆<strong>立刻公開</strong>在評論專區。顧客也會在「我的評論」看到。
+                                                      </div>
+                                                }
+                                          </template>
+
                                           <div class="d-flex justify-content-between">
                                                 <button type="button" class="btn btn-outline-danger btn-sm js-spam-open"
                                                         data-url="@Url.Action("MarkSpam", new { id = item.ReviewId })">
                                                       <i class="bi bi-trash"></i> 標記垃圾
                                                 </button>
+                                                @* 10/23 員工預覽：送出的按鈕只在預覽視窗裡，這裡改成「預覽並送出」。原本：
                                                 <button type="submit" class="btn btn-primary btn-sm">
                                                       <i class="bi bi-send"></i> 送出回覆
+                                                </button>
+                                                *@
+                                                <button type="submit" class="btn btn-primary btn-sm">
+                                                      <i class="bi bi-eye"></i> 預覽並送出
                                                 </button>
                                           </div>
                                     </form>
@@ -644,8 +772,13 @@ else if (Model.Grouped || Model.GroupByVenue)
                   if (group.IsRealGroup)
                   {
                         bool isVenue = group.Kind == QueueGroupKind.Venue;
+                        @* 10/25：依場地分組的外框從淡藍改成淡紫（顏色寫在 Index.cshtml 的 .queue-group-venue）。淡藍跟「展開中」的評論標題同一個顏色，框和展開的那一則分不出來；淡灰又容易聯想到「封存」。
+                           依訂單分組維持原本的淡青色（site.css 的 .queue-group）。原本：
                         <div class="queue-group mb-3 @(isVenue ? "border-primary-subtle bg-primary-subtle" : "")">
                               <div class="queue-group-head small @(isVenue ? "text-primary-emphasis" : "")">
+                        *@
+                        <div class="queue-group mb-3 @(isVenue ? "queue-group-venue" : "")">
+                              <div class="queue-group-head small">
                                     @if (isVenue)
                                     {
                                           <i class="bi bi-geo-alt-fill"></i>

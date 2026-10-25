@@ -1,15 +1,17 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;   // 新增：Database.SqlQuery<T> 在這個命名空間
+using VenueGo.Constants;
 using VenueGo.Data;
 using VenueGo.Dtos;
+using VenueGo.Enums;        // 10/25 新增：PaymentChannel（預約評論的付款方式）
+using VenueGo.Extensions;   // 10/25 新增：GetDisplayName（列舉上的中文名稱）
 using VenueGo.Models.Entities;
 using VenueGo.Models.ReviewModels;
-using static VenueGo.Models.ReviewModels.ReviewQueueRules;   // 10/6 新增：規則搬出去之後，呼叫的地方不用改名字
 using VenueGo.Services.Auth;
-using VenueGo.ViewModels.ReviewViewModels;
 using VenueGo.Services.Time;
-using VenueGo.Constants;
+using VenueGo.ViewModels.ReviewViewModels;
+using static VenueGo.Models.ReviewModels.ReviewQueueRules;   // 10/6 新增：規則搬出去之後，呼叫的地方不用改名字
 
 namespace VenueGo.Controllers
 {
@@ -409,6 +411,28 @@ namespace VenueGo.Controllers
             //    （STRING_SPLIT 需要 SQL Server 2016 以上，且資料庫相容性層級 130 以上。）
         }
 
+        /// <summary>
+        /// 10/25：每筆訂單「用什麼付的」，回傳「OrderId → 付款方式的中文名稱」。
+        /// 跟顧客端撰寫頁的確認區塊同一個規則（MemberReviewService.PaymentChannelsAsync）：
+        /// 取最早一筆已付款紀錄的 PaymentChannel。一筆訂單的付款紀錄很少，整批讀回來再分組。
+        /// 查不到的訂單不放進結果（不要用列舉的預設值 0，那會變成「現場櫃台」，顯示錯的付款方式）。
+        /// </summary>
+        private Dictionary<int, string> PaymentChannelNames(IEnumerable<int> orderIds)
+        {
+            var ids = orderIds.Distinct().ToList();
+            if (ids.Count == 0) return [];
+
+            var rows = _db.Payments
+                          .Where(p => ids.Contains(p.OrderId) && p.PaidAt != null)
+                          .Select(p => new { p.OrderId, p.PaidAt, p.PaymentId, p.PaymentChannel })
+                          .ToList();
+
+            return rows.GroupBy(p => p.OrderId)
+                       .ToDictionary(g => g.Key,
+                                     g => ((PaymentChannel)g.OrderBy(p => p.PaidAt).ThenBy(p => p.PaymentId).First().PaymentChannel)
+                                              .GetDisplayName());
+        }
+
         // 10/15 Reviews 重構，原本：private static ReviewQueueItemVM BuildItem(ReviewMain r, Dictionary<int, ReviewRefRow> refs, DateTime now)
         private static ReviewQueueItemVM BuildItem(Review r, Dictionary<int, ReviewRefRow> refs, DateTime now)
         {
@@ -635,6 +659,15 @@ namespace VenueGo.Controllers
             var refs = LoadRefs(reviews);   // 原本：var lookups = LoadLookups(reviews);
 
             var items = reviews.Select(r => BuildItem(r, refs, now)).ToList();
+
+            // 10/25：預約評論補上付款方式（View 對預約評論不顯示場地、使用時段，改顯示這個）
+            var channelNames = PaymentChannelNames(items.Where(i => i.IsBookingReview && i.OrderId != null)
+                                                        .Select(i => i.OrderId!.Value));
+            items = items.Select(i => i.IsBookingReview && i.OrderId is int orderId
+                                      && channelNames.TryGetValue(orderId, out var channelName)
+                                          ? i with { PaymentChannelName = channelName }
+                                          : i)
+                         .ToList();
 
             bool hasGroups = groupByVenue || groupByOrder;
             List<ReviewQueueGroupVM> allGroups = [];

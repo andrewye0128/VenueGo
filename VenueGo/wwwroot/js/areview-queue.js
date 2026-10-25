@@ -5,6 +5,11 @@
 
    10/24 沒送出的回覆不會因為清單重新載入而消失（說明在「沒送出的回覆」那一段）。
 
+   10/23 員工預覽改版：
+     - 「送出回覆」改成「預覽並送出」：先打開預覽視窗（顧客看到的樣子＋送出後誰看得到），送出鈕只在視窗裡。
+     - 標記垃圾分成兩個畫面：選理由 → 再確認一次，才送出。
+     - 罐頭回覆、AI 草稿改用瀏覽器的「插入文字」指令填入，Ctrl+Z 可以收回、Ctrl+Y 可以重做。
+
    ⚠️ 清單會被整塊換掉（重新載入 Partial），所以事件一律掛在
       外層的 #queueRoot 上，再判斷實際點到的是誰（事件委派）。
       如果直接掛在清單裡的按鈕上，換掉之後新的按鈕就沒有事件了。
@@ -14,13 +19,13 @@
    ============================================================ */
 
 (function () {
-    'use strict';
+      'use strict';
 
-    const root = document.getElementById('queueRoot');
-    if (!root) return;
+      const root = document.getElementById('queueRoot');
+      if (!root) return;
 
-    const listUrl = root.dataset.listUrl;
-    const flashBox = document.getElementById('queueFlash');
+      const listUrl = root.dataset.listUrl;
+      const flashBox = document.getElementById('queueFlash');
 
       // 所有會進網址、也會送給後端的條件
       // 9/29：多了運動類型與場地。dataset 會把 data-sport-type-id 轉成 sportTypeId。
@@ -31,15 +36,15 @@
 
       /* ── 共用工具 ─────────────────────────────────────── */
 
-    /* AI 草稿的重複產生上限。
-       這是「防手滑」不是「防惡意」——會按到這顆按鈕的人本來就得先有員工帳號，
-       真正的成本控制在後端。這裡只是避免有人連點十次把額度燒光。
-
-       ⚠️ Map 存在模組層級，清單被整塊換掉（切分頁、重新篩選）時不會清空，
-          這是刻意的：如果切個分頁再回來就能重刷，這個限制等於不存在。
-          重新整理整頁才會歸零，那不值得為它寫進資料庫。 */
-    const AI_DRAFT_LIMIT = 3;
-    const aiDraftCount = new Map();
+      /* AI 草稿的重複產生上限。
+         這是「防手滑」不是「防惡意」——會按到這顆按鈕的人本來就得先有員工帳號，
+         真正的成本控制在後端。這裡只是避免有人連點十次把額度燒光。
+  
+         ⚠️ Map 存在模組層級，清單被整塊換掉（切分頁、重新篩選）時不會清空，
+            這是刻意的：如果切個分頁再回來就能重刷，這個限制等於不存在。
+            重新整理整頁才會歸零，那不值得為它寫進資料庫。 */
+      const AI_DRAFT_LIMIT = 3;
+      const aiDraftCount = new Map();
 
       /* ── 10/24：沒送出的回覆 ─────────────────────────────
          換頁、換篩選、處理完別則評論之後，清單會整塊換掉，回覆框裡打到一半的字原本會跟著不見，也沒有任何提醒。
@@ -146,22 +151,102 @@
             e.returnValue = '';   // 舊版瀏覽器要設這個才會跳出確認
       });
 
-      function pageToken() {
-        const input = document.querySelector('input[name="__RequestVerificationToken"]');
-        return input ? input.value : '';
-    }
+      /* 10/23：把文字填進輸入框，而且 Ctrl+Z 收得回來。
+       直接設定 textarea.value 的話，瀏覽器的「復原」紀錄會整個斷掉：按 Ctrl+Z 什麼事都不會發生，
+       員工手滑按錯罐頭回覆，只能自己一個字一個字刪。
+       document.execCommand('insertText') 等於「替使用者打字」，會照常記進復原紀錄，也會自己觸發 input 事件
+       （字數計數、自動長高都會更新）。這個指令已經被標成不建議使用，但目前還沒有替代品，
+       主流瀏覽器（Chrome、Edge、Firefox、Safari）都還支援；萬一不支援就退回原本的寫法，文字一樣會進去，只是不能收回。
+       10/24 評估過其他做法：
+       - 自己發 TextEvent（textInput）：TextEvent 一樣被標成不建議使用，而且實測 Chrome 141 發出去之後一個字都不會插入
+         （程式自己發的事件，瀏覽器不會當成真的打字）。
+       - 改 value 再自己記一份復原紀錄：等於重做瀏覽器的 Ctrl+Z，員工手打的字和罐頭回覆會變成兩套紀錄，容易亂。
+       MDN 也寫明：要保留復原紀錄的情況「目前沒有可行的替代方案，可以繼續使用」。哪天瀏覽器真的拿掉，也只是退回下面的寫法。
+       mode：'end' 接在最後面（罐頭回覆）；'replace' 取代全部（AI 草稿）。 */
+      function insertTextUndoable(textarea, text, mode) {
+            textarea.focus();
+            if (mode === 'replace') {
+                  textarea.select();
+            } else {
+                  textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            }
+            // 「替使用者打字」會被 maxlength 擋住，超過的字直接被切掉、不會有任何提示（實測 Chrome）。
+            // 原本的寫法是讓它超過、字數變紅、送出時擋下來，所以插入的這一下先拿掉 maxlength，插完放回去。
+            const maxLength = textarea.getAttribute('maxlength');
+            // 10/25：先把上限記在 data-max-length。插入時會同步觸發 input 事件，那時 maxlength 已經拿掉了，
+            //        字數計數要從這裡讀上限（原本讀 maxLength 會得到 -1，字數一律變紅）
+            if (maxLength !== null) textarea.dataset.maxLength = maxLength;
+            if (maxLength !== null) textarea.removeAttribute('maxlength');
+            let ok = false;
+            try {
+                  ok = document.execCommand('insertText', false, text);
+            } catch (e) {
+                  ok = false;
+            } finally {
+                  if (maxLength !== null) textarea.setAttribute('maxlength', maxLength);
+            }
+            if (!ok) {
+                  textarea.value = mode === 'replace' ? text : textarea.value + text;
+                  textarea.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+      }
 
-    /* 送 POST。
-       用「表單格式」而不是 JSON：Action 的參數是 int id、bool isPinned 這種單一值，
-       表單格式送上去就能直接繫結；送 JSON 的話要另外在 C# 端加 [FromBody] 和一個類別。
-       axios 看到 URLSearchParams 會自動設定對應的 Content-Type。 */
-    function post(url, data) {
-        const body = new URLSearchParams(data || {});
-        if (!body.has('__RequestVerificationToken')) {
-            body.append('__RequestVerificationToken', pageToken());
-        }
-          return axios.post(url, body).then(assertJson);
-    }
+      // 10/23：填入之後在輸入框下方提示幾秒「可按 Ctrl+Z 收回」（Mac 是 ⌘Z）
+      const UNDO_KEY = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent) ? '⌘Z' : 'Ctrl+Z';
+      const UNDO_HINT_MS = 5000;
+      const undoHintTimers = new WeakMap();
+      function showUndoHint(form) {
+            const hint = form.querySelector('.js-undo-hint');
+            if (!hint) return;
+            hint.textContent = '可按 ' + UNDO_KEY + ' 收回';
+            hint.classList.remove('d-none');
+            clearTimeout(undoHintTimers.get(hint));
+            undoHintTimers.set(hint, setTimeout(function () { hint.classList.add('d-none'); }, UNDO_HINT_MS));
+      }
+
+      /* 10/25：回覆的字數上限。平常讀 maxlength；insertTextUndoable 插入的那一下 maxlength 暫時拿掉了，改讀 data-max-length。
+         兩個都沒有就當成沒有上限。 */
+      function replyMax(textarea) {
+            const max = Number(textarea.getAttribute('maxlength') || textarea.dataset.maxLength || 0);
+            return max > 0 ? max : Infinity;
+      }
+
+      /* 10/25：罐頭回覆放不放得下。放不下的按鈕變淡（aria-disabled），還是可以按，按了會說明為什麼沒有加進去。
+         不用 disabled：停用的按鈕不會觸發點擊，也不會顯示提示文字，員工只會覺得「按了沒反應」。 */
+      function cannedInsertText(textarea, canned) {
+            return textarea.value ? '\n' + canned.dataset.text : canned.dataset.text;
+      }
+      function updateCannedFit(form) {
+            const textarea = form.querySelector('.js-reply-text');
+            if (!textarea) return;
+            const room = replyMax(textarea) - textarea.value.length;
+            form.querySelectorAll('.js-canned').forEach(function (btn) {
+                  const fits = cannedInsertText(textarea, btn).length <= room;
+                  btn.classList.toggle('opacity-50', !fits);
+                  if (fits) btn.removeAttribute('aria-disabled');
+                  else btn.setAttribute('aria-disabled', 'true');
+            });
+      }
+
+      // 10/23：記住 AI 草稿填入前後的內容，Ctrl+Z 回到填入前時，「這段草稿由 AI 產生」的提示要跟著拿掉
+      const aiUndoState = new WeakMap();
+
+      function pageToken() {
+            const input = document.querySelector('input[name="__RequestVerificationToken"]');
+            return input ? input.value : '';
+      }
+
+      /* 送 POST。
+         用「表單格式」而不是 JSON：Action 的參數是 int id、bool isPinned 這種單一值，
+         表單格式送上去就能直接繫結；送 JSON 的話要另外在 C# 端加 [FromBody] 和一個類別。
+         axios 看到 URLSearchParams 會自動設定對應的 Content-Type。 */
+      function post(url, data) {
+            const body = new URLSearchParams(data || {});
+            if (!body.has('__RequestVerificationToken')) {
+                  body.append('__RequestVerificationToken', pageToken());
+            }
+            return axios.post(url, body).then(assertJson);
+      }
 
       /* ⚠️ 登入逾時的陷阱：
          Cookie 過期之後，伺服器會把請求 302 導向 /Account/Login，
@@ -187,21 +272,21 @@
             return '操作失敗，請稍後再試';
       }
 
-    function flash(message, type) {
-        const div = document.createElement('div');
-        div.className = 'alert alert-' + (type || 'success') + ' alert-dismissible fade show';
-        div.textContent = message;     // 用 textContent，訊息裡有特殊字元也不會被當成 HTML
+      function flash(message, type) {
+            const div = document.createElement('div');
+            div.className = 'alert alert-' + (type || 'success') + ' alert-dismissible fade show';
+            div.textContent = message;     // 用 textContent，訊息裡有特殊字元也不會被當成 HTML
 
-        const close = document.createElement('button');
-        close.type = 'button';
-        close.className = 'btn-close';
-        close.setAttribute('data-bs-dismiss', 'alert');
-        close.setAttribute('aria-label', '關閉');
-        div.appendChild(close);
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'btn-close';
+            close.setAttribute('data-bs-dismiss', 'alert');
+            close.setAttribute('aria-label', '關閉');
+            div.appendChild(close);
 
-        flashBox.replaceChildren(div);
-        setTimeout(function () { div.remove(); }, 4000);
-    }
+            flashBox.replaceChildren(div);
+            setTimeout(function () { div.remove(); }, 4000);
+      }
 
       /* ── 目前的條件 ────────────────────────────────────
          全部存在 #queueState 的 data-* 上，由後端每次一起吐出來。 */
@@ -236,8 +321,8 @@
             return f;
       }
 
-    /* 「重置」要回到的值。由後端吐在 data-defaults 上，
-   前端不自己記一份，後端改了預設值這裡就跟著改，不會走鐘。 */
+      /* 「重置」要回到的值。由後端吐在 data-defaults 上，
+     前端不自己記一份，後端改了預設值這裡就跟著改，不會走鐘。 */
       function defaultFilter() {
             const st = stateEl();
             try {
@@ -285,42 +370,42 @@
       function loadList(filter, options) {
             options = options || {};
 
-        return axios.get(listUrl, { params: filter, responseType: 'text' })
-              .then(function (res) {
-                    // 同樣的登入逾時陷阱：這裡拿回來的本來就是 HTML，
-                    // 所以改用「裡面有沒有 queueState」來判斷是不是真的清單。
-                    if (typeof res.data !== 'string' || res.data.indexOf('id="queueState"') === -1) {
-                          flash('登入可能已經逾時，請重新整理頁面後再試一次', 'warning');
-                          return;
-                    }
+            return axios.get(listUrl, { params: filter, responseType: 'text' })
+                  .then(function (res) {
+                        // 同樣的登入逾時陷阱：這裡拿回來的本來就是 HTML，
+                        // 所以改用「裡面有沒有 queueState」來判斷是不是真的清單。
+                        if (typeof res.data !== 'string' || res.data.indexOf('id="queueState"') === -1) {
+                              flash('登入可能已經逾時，請重新整理頁面後再試一次', 'warning');
+                              return;
+                        }
 
-                    const draftsBefore = captureBeforeRender();   // 10/24：沒送出的回覆
-                    root.innerHTML = res.data;
-                    restoreAfterRender(draftsBefore);
-                    highlight();
-                    syncUrl(filter);
-                    // 10/23：換頁之後，如果清單開頭已經捲到畫面外（例如在最後一則按了下一頁），捲回清單開頭
-                    if (options.revealList) revealListTop();
+                        const draftsBefore = captureBeforeRender();   // 10/24：沒送出的回覆
+                        root.innerHTML = res.data;
+                        restoreAfterRender(draftsBefore);
+                        highlight();
+                        syncUrl(filter);
+                        // 10/23：換頁之後，如果清單開頭已經捲到畫面外（例如在最後一則按了下一頁），捲回清單開頭
+                        if (options.revealList) revealListTop();
 
-                    // 清單整塊被換掉，剛才操作的那個控制項也跟著不見了，
-                    // 焦點會掉到 body。把焦點還給它，鍵盤操作才不會斷掉。
-                    if (options.focusId) {
-                          const el = root.querySelector('#' + options.focusId);
-                          if (el) {
-                                el.focus();
-                                if (el.tagName === 'INPUT') {
-                                      // 游標移到最後：重新 render 之後游標預設會停在最前面，
-                                      // 想接著改關鍵字的人要先按 End，很煩。
-                                      const v = el.value;
-                                      el.value = '';
-                                      el.value = v;
-                                }
-                          }
-                    }
-              })
-            .catch(function (err) {
-                flash(errorMessage(err), 'danger');
-            })
+                        // 清單整塊被換掉，剛才操作的那個控制項也跟著不見了，
+                        // 焦點會掉到 body。把焦點還給它，鍵盤操作才不會斷掉。
+                        if (options.focusId) {
+                              const el = root.querySelector('#' + options.focusId);
+                              if (el) {
+                                    el.focus();
+                                    if (el.tagName === 'INPUT') {
+                                          // 游標移到最後：重新 render 之後游標預設會停在最前面，
+                                          // 想接著改關鍵字的人要先按 End，很煩。
+                                          const v = el.value;
+                                          el.value = '';
+                                          el.value = v;
+                                    }
+                              }
+                        }
+                  })
+                  .catch(function (err) {
+                        flash(errorMessage(err), 'danger');
+                  })
                   // 10/23：告訴 areview-pager.js「載入結束了」（成功或失敗都要），它才會把快轉時預覽的頁碼清掉
                   .finally(function () {
                         document.dispatchEvent(new CustomEvent('queue:rendered'));
@@ -336,22 +421,22 @@
             loadList(f, { revealList: true });
       });
 
-            // 頁首（.admin-header）是黏在上方的，要扣掉它的高度，清單開頭才不會被蓋住。
-            // 清單開頭還看得到時不捲：例如人在篩選列上方，畫面不該突然往下跳。
-            function revealListTop() {
-                  const el = root.querySelector('#queueListArea');
-                  if (!el) return;
-                  const header = document.querySelector('.admin-header');
-                  const offset = (header ? header.offsetHeight : 0) + 12;
-                  const top = el.getBoundingClientRect().top;
-                  if (top >= offset) return;
-                  window.scrollTo({ top: window.scrollY + top - offset });
-            }
+      // 頁首（.admin-header）是黏在上方的，要扣掉它的高度，清單開頭才不會被蓋住。
+      // 清單開頭還看得到時不捲：例如人在篩選列上方，畫面不該突然往下跳。
+      function revealListTop() {
+            const el = root.querySelector('#queueListArea');
+            if (!el) return;
+            const header = document.querySelector('.admin-header');
+            const offset = (header ? header.offsetHeight : 0) + 12;
+            const top = el.getBoundingClientRect().top;
+            if (top >= offset) return;
+            window.scrollTo({ top: window.scrollY + top - offset });
+      }
 
-    function adjustCount(name, delta) {
-        const badge = root.querySelector('[data-count-for="' + name + '"]');
-        if (!badge) return;
-        badge.textContent = Math.max(0, Number(badge.textContent) + delta);
+      function adjustCount(name, delta) {
+            const badge = root.querySelector('[data-count-for="' + name + '"]');
+            if (!badge) return;
+            badge.textContent = Math.max(0, Number(badge.textContent) + delta);
       }
 
       /* ── 關鍵字標註 ───────────────────────────────────────
@@ -452,137 +537,208 @@
 
       /* ── 點擊（全部委派在 root 上）──────────────────────── */
 
-    let spamUrl = null;
-    const spamModalEl = document.getElementById('spamModal');
-    const spamModal = bootstrap.Modal.getOrCreateInstance(spamModalEl);
-    // 9/29：理由改成單選清單，選中的那一個用 checked 找
-    function checkedSpamReason() {
-        const el = document.querySelector('input[name="spamReason"]:checked');
-        return el ? el.value : '';
-    }
-    const spamError = document.getElementById('spamError');
-    const spamConfirm = document.getElementById('spamConfirm');
+      let spamUrl = null;
+      const spamModalEl = document.getElementById('spamModal');
+      const spamModal = bootstrap.Modal.getOrCreateInstance(spamModalEl);
+      // 9/29：理由改成單選清單，選中的那一個用 checked 找
+      function checkedSpamReason() {
+            const el = document.querySelector('input[name="spamReason"]:checked');
+            return el ? el.value : '';
+      }
+      const spamError = document.getElementById('spamError');
+      const spamConfirm = document.getElementById('spamConfirm');
 
-    root.addEventListener('click', function (e) {
+      /* 10/23：標記垃圾分成兩個畫面（選理由 → 再確認一次），說明在 Index.cshtml。
+         「確定標記」只負責換到確認畫面，真正送出的是確認畫面的「確定，標記為垃圾」（spamFinal）。 */
+      const spamBack = document.getElementById('spamBack');
+      const spamFinal = document.getElementById('spamFinal');
+      const spamTitleText = document.getElementById('spamModalTitleText');
+      const spamCancel = spamModalEl.querySelector('.modal-footer [data-bs-dismiss="modal"]');
+      let spamSending = false;
 
-          // 1. 重置：把所有條件恢復成後端給的預設值
-          if (e.target.closest('#searchReset')) {
-                loadList(defaultFilter(), { focusId: 'searchKeyword' });
-                return;
-          }
+      /* 10/24：這支 JS 要跟 Index.cshtml 一起更新（預覽視窗、確認畫面的 HTML 在 Index.cshtml）。
+         網站還在用舊的 Index（例如換了檔案但網站沒有重新啟動）時，找不到那些元素；
+         原本會在這裡直接出錯，整支程式停掉，連換頁、篩選都跟著不能用。
+         現在改成：在 console 說明原因，回覆、標記垃圾退回 10/23 以前的做法（瀏覽器確認框、選完理由直接送出）。 */
+      const hasNewIndex = !!(document.getElementById('replyPreviewModal') && document.getElementById('spamStepConfirm'));
+      if (!hasNewIndex) {
+            console.error('評論管理：頁面上找不到回覆預覽視窗或標記垃圾的確認畫面。' +
+                  'Views/AReview/Index.cshtml 可能還是舊版：請確認檔案已經換成新版，並把網站整個停掉、重新建置、重新啟動。' +
+                  '在這之前，回覆和標記垃圾先用舊的做法。');
+      }
 
-          // 2. 篩選連結、重新整理
-        const link = e.target.closest('.js-queue-link');
-        if (link) {
-            e.preventDefault();
-                loadList(filterFromHref(link.href));
-                return;
-          }
-
-          // 3. 置頂：送出「要變成什麼」，成功後重新載入（排序會變）
-        const pin = e.target.closest('.js-pin');
-        if (pin) {
-            const willPin = pin.getAttribute('aria-pressed') !== 'true';
-            pin.disabled = true;
-            post(pin.dataset.url, { isPinned: willPin })
-                .then(function () { return loadList(currentFilter()); })
-                .catch(function (err) {
-                    flash(errorMessage(err), 'danger');
-                    pin.disabled = false;
-                });
-            return;
-        }
-
-          // 4. 罐頭回覆：點了才插入，已有文字就接在後面
-        const canned = e.target.closest('.js-canned');
-        if (canned) {
-            const textarea = canned.closest('form').querySelector('.js-reply-text');
-            textarea.value = textarea.value
-                ? textarea.value + '\n' + canned.dataset.text
-                : canned.dataset.text;
-            // 程式設定 value 不會觸發 input 事件，補發一次讓字數計數器更新
-            textarea.dispatchEvent(new Event('input', { bubbles: true }));
-            textarea.focus();
-            return;
-        }
-
-        // 4b. AI 回覆草稿：後端產生 → 填進輸入框 → 員工改完才送出
-        //     ⚠️ 這支不會送出回覆，送出走的還是原本那條路。
-        const aiBtn = e.target.closest('.js-ai-draft');
-        if (aiBtn) {
-            const form = aiBtn.closest('form');
-            const textarea = form.querySelector('.js-reply-text');
-            const errorBox = form.querySelector('.js-error');
-            const note = form.querySelector('.js-ai-note');
-            const id = aiBtn.dataset.reviewId;
-
-            const used = aiDraftCount.get(id) || 0;
-            if (used >= AI_DRAFT_LIMIT) {
-                errorBox.textContent =
-                    '這則已經產生過 ' + used + ' 次草稿了。再生一次多半還是差不多，自己寫會比較快。';
-                return;
+      function showSpamStep(step, moveFocus) {
+            if (!hasNewIndex) {
+                  spamError.textContent = '';
+                  return;
             }
-
-            /* 已經打了字就先問一聲。
-               ⚠️ 這裡跟罐頭回覆的行為刻意不同：罐頭回覆是「接在後面」，
-                  因為它是一個句子；AI 草稿是一整則完整回覆，只能「取代」。
-                  接在後面會變成兩則回覆黏在一起。 */
-            if (textarea.value.trim() &&
-                !window.confirm('要用 AI 草稿取代目前輸入的內容嗎？')) {
-                return;
-            }
-
-            // ⚠️ 防連點：每一次點擊都在花錢，而且 LLM 慢起來可以好幾秒。
-            //    按鈕沒有鎖住的話，員工會以為沒反應而連按。
-            const label = aiBtn.innerHTML;
-            aiBtn.disabled = true;
-            aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 產生中⋯';
-            errorBox.textContent = '';
-
-            // post() 已經自動帶防偽 token，也會做 assertJson（擋 302 假成功）
-            post(aiBtn.dataset.url, { id: id })
-                .then(function (res) {
-                    // 後端回的是 ApiResult<string>：success / message / data
-                    if (!res.data.success) {
-                        throw new Error(res.data.message || 'AI 草稿產生失敗');
-                    }
-
-                    textarea.value = res.data.data;
-
-                    // 程式設定 value 不會觸發 input 事件，
-                    // 補發一次讓下面的字數計數器更新（跟罐頭回覆同一個道理）
-                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
-
-                    textarea.focus();
-                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-
-                    // 標記「這段是機器寫的」。這行提示是責任界線，不是裝飾。
-                    if (note) note.classList.remove('d-none');
-
-                    aiDraftCount.set(id, used + 1);
-                })
-                .catch(function (err) {
-                    /* ⚠️ 失敗就是失敗，輸入框一個字都不要動。
-                       員工可能已經打了一半，被一個失敗的請求清空是最糟的結果。
-                       錯誤寫進表單自己的 .js-error，跟其他操作一致，不要用 alert。 */
-                    errorBox.textContent = errorMessage(err);
-                })
-                .finally(function () {
-                    aiBtn.disabled = false;
-                    aiBtn.innerHTML = label;
-                });
-            return;
-        }
-
-          // 5. 打開標記垃圾的 modal
-        const spamBtn = e.target.closest('.js-spam-open');
-        if (spamBtn) {
-            spamUrl = spamBtn.dataset.url;
-            document.querySelectorAll('input[name="spamReason"]').forEach(function (r) { r.checked = false; });
+            const isConfirm = step === 'confirm';
+            document.getElementById('spamStepReason').classList.toggle('d-none', isConfirm);
+            document.getElementById('spamStepConfirm').classList.toggle('d-none', !isConfirm);
+            spamCancel.classList.toggle('d-none', isConfirm);
+            spamConfirm.classList.toggle('d-none', isConfirm);
+            spamBack.classList.toggle('d-none', !isConfirm);
+            spamFinal.classList.toggle('d-none', !isConfirm);
+            spamTitleText.textContent = isConfirm ? '確定要標記為垃圾嗎？' : '標記為垃圾評論';
             spamError.textContent = '';
-            spamModal.show();
-        }
-    });
+            if (!moveFocus) return;
+            // 焦點放在比較安全的那一顆：確認畫面放「返回」，手滑按 Enter 不會直接標記
+            if (isConfirm) {
+                  spamBack.focus();
+            } else {
+                  const checked = document.querySelector('input[name="spamReason"]:checked');
+                  (checked || spamConfirm).focus();
+            }
+      }
+
+      function checkedSpamReasonLabel() {
+            const el = document.querySelector('input[name="spamReason"]:checked');
+            const label = el && document.querySelector('label[for="' + el.id + '"] .fw-semibold');
+            return label ? label.textContent : '';
+      }
+
+      root.addEventListener('click', function (e) {
+
+            // 1. 重置：把所有條件恢復成後端給的預設值
+            if (e.target.closest('#searchReset')) {
+                  loadList(defaultFilter(), { focusId: 'searchKeyword' });
+                  return;
+            }
+
+            // 2. 篩選連結、重新整理
+            const link = e.target.closest('.js-queue-link');
+            if (link) {
+                  e.preventDefault();
+                  loadList(filterFromHref(link.href));
+                  return;
+            }
+
+            // 3. 置頂：送出「要變成什麼」，成功後重新載入（排序會變）
+            const pin = e.target.closest('.js-pin');
+            if (pin) {
+                  const willPin = pin.getAttribute('aria-pressed') !== 'true';
+                  pin.disabled = true;
+                  post(pin.dataset.url, { isPinned: willPin })
+                        .then(function () { return loadList(currentFilter()); })
+                        .catch(function (err) {
+                              flash(errorMessage(err), 'danger');
+                              pin.disabled = false;
+                        });
+                  return;
+            }
+
+            // 4. 罐頭回覆：點了才插入，已有文字就接在後面
+            const canned = e.target.closest('.js-canned');
+            if (canned) {
+                  const textarea = canned.closest('form').querySelector('.js-reply-text');
+                  // 10/23：改用 insertTextUndoable，Ctrl+Z 可以收回。原本：
+                  // textarea.value = textarea.value
+                  //     ? textarea.value + '\n' + canned.dataset.text
+                  //     : canned.dataset.text;
+                  // // 程式設定 value 不會觸發 input 事件，補發一次讓字數計數器更新
+                  // textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                  // textarea.focus();
+                  // 10/25：加上去會超過字數上限就不加，在表單的錯誤訊息說明（原本會一直加，超過的字數只能自己刪）
+                  const cannedForm = canned.closest('form');
+                  const errorBox = cannedForm.querySelector('.js-error');
+                  const insert = cannedInsertText(textarea, canned);
+                  const max = replyMax(textarea);
+                  const room = max - textarea.value.length;
+                  if (insert.length > room) {
+                        errorBox.textContent = room <= 0
+                              ? '回覆已經 ' + max + ' 字了，罐頭回覆加不進去。'
+                              : '這句罐頭回覆加上去會超過 ' + max + ' 字（還能再打 ' + room + ' 字）。';
+                        return;
+                  }
+                  errorBox.textContent = '';
+                  insertTextUndoable(textarea, insert, 'end');
+                  showUndoHint(cannedForm);
+                  return;
+            }
+
+            // 4b. AI 回覆草稿：後端產生 → 填進輸入框 → 員工改完才送出
+            //     ⚠️ 這支不會送出回覆，送出走的還是原本那條路。
+            const aiBtn = e.target.closest('.js-ai-draft');
+            if (aiBtn) {
+                  const form = aiBtn.closest('form');
+                  const textarea = form.querySelector('.js-reply-text');
+                  const errorBox = form.querySelector('.js-error');
+                  const note = form.querySelector('.js-ai-note');
+                  const id = aiBtn.dataset.reviewId;
+
+                  const used = aiDraftCount.get(id) || 0;
+                  if (used >= AI_DRAFT_LIMIT) {
+                        errorBox.textContent =
+                              '這則已經產生過 ' + used + ' 次草稿了。再生一次多半還是差不多，自己寫會比較快。';
+                        return;
+                  }
+
+                  /* 已經打了字就先問一聲。
+                     ⚠️ 這裡跟罐頭回覆的行為刻意不同：罐頭回覆是「接在後面」，
+                        因為它是一個句子；AI 草稿是一整則完整回覆，只能「取代」。
+                        接在後面會變成兩則回覆黏在一起。 */
+                  if (textarea.value.trim() &&
+                        !window.confirm('要用 AI 草稿取代目前輸入的內容嗎？')) {
+                        return;
+                  }
+
+                  // ⚠️ 防連點：每一次點擊都在花錢，而且 LLM 慢起來可以好幾秒。
+                  //    按鈕沒有鎖住的話，員工會以為沒反應而連按。
+                  const label = aiBtn.innerHTML;
+                  aiBtn.disabled = true;
+                  aiBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 產生中⋯';
+                  errorBox.textContent = '';
+
+                  // post() 已經自動帶防偽 token，也會做 assertJson（擋 302 假成功）
+                  post(aiBtn.dataset.url, { id: id })
+                        .then(function (res) {
+                              // 後端回的是 ApiResult<string>：success / message / data
+                              if (!res.data.success) {
+                                    throw new Error(res.data.message || 'AI 草稿產生失敗');
+                              }
+
+                              // 10/23：改用 insertTextUndoable 取代全部，Ctrl+Z 可以回到產生前的內容。原本：
+                              // textarea.value = res.data.data;
+                              //
+                              // // 程式設定 value 不會觸發 input 事件，
+                              // // 補發一次讓下面的字數計數器更新（跟罐頭回覆同一個道理）
+                              // textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                              const before = textarea.value;
+                              insertTextUndoable(textarea, res.data.data, 'replace');
+                              aiUndoState.set(textarea, { before: before, draft: textarea.value });
+                              showUndoHint(form);
+
+                              textarea.focus();
+                              textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+
+                              // 標記「這段是機器寫的」。這行提示是責任界線，不是裝飾。
+                              if (note) note.classList.remove('d-none');
+
+                              aiDraftCount.set(id, used + 1);
+                        })
+                        .catch(function (err) {
+                              /* ⚠️ 失敗就是失敗，輸入框一個字都不要動。
+                                 員工可能已經打了一半，被一個失敗的請求清空是最糟的結果。
+                                 錯誤寫進表單自己的 .js-error，跟其他操作一致，不要用 alert。 */
+                              errorBox.textContent = errorMessage(err);
+                        })
+                        .finally(function () {
+                              aiBtn.disabled = false;
+                              aiBtn.innerHTML = label;
+                        });
+                  return;
+            }
+
+            // 5. 打開標記垃圾的 modal
+            const spamBtn = e.target.closest('.js-spam-open');
+            if (spamBtn) {
+                  spamUrl = spamBtn.dataset.url;
+                  document.querySelectorAll('input[name="spamReason"]').forEach(function (r) { r.checked = false; });
+                  spamError.textContent = '';
+                  showSpamStep('reason', false); // 10/23：每次打開都從選理由開始
+                  spamModal.show();
+            }
+      });
 
       /* ── 下拉選單與分組開關 ─────────────────────────────── */
 
@@ -661,102 +817,270 @@
 
       /* ── 字數計數 ─────────────────────────────────────── */
 
-    root.addEventListener('input', function (e) {
-          if (!e.target.matches('.js-reply-text')) return;
-          autoGrowReply(e.target);
-        const form = e.target.closest('form');
-        const len = e.target.value.length;
-        const counter = form.querySelector('.js-count');
-        counter.textContent = len;
-        // 罐頭回覆是程式插入的，maxlength 擋不住，超過時要看得出來
-        counter.parentElement.classList.toggle('text-danger', len > e.target.maxLength);
+      root.addEventListener('input', function (e) {
+            if (!e.target.matches('.js-reply-text')) return;
+            autoGrowReply(e.target);
+            const form = e.target.closest('form');
+            const len = e.target.value.length;
+            const counter = form.querySelector('.js-count');
+            counter.textContent = len;
+            // 罐頭回覆是程式插入的，maxlength 擋不住，超過時要看得出來
+            // 10/25：上限改用 replyMax 讀（插入的那一下 maxlength 暫時拿掉了）。原本：
+            // counter.parentElement.classList.toggle('text-danger', len > e.target.maxLength);
+            counter.parentElement.classList.toggle('text-danger', len > replyMax(e.target));
+            updateCannedFit(form);   // 10/25：放不下的罐頭回覆變淡
 
-          rememberDraft(e.target);   // 10/24：沒送出的回覆
-    });
+            rememberDraft(e.target);   // 10/24：沒送出的回覆
 
-    /* ── 送出回覆 ─────────────────────────────────────── */
+            // 10/23：Ctrl+Z 收回 AI 草稿、回到產生前的內容 → 拿掉「這段草稿由 AI 產生」；Ctrl+Y 重做回來 → 再顯示
+            const ai = aiUndoState.get(e.target);
+            const note = form.querySelector('.js-ai-note');
+            if (ai && note) {
+                  if (e.target.value === ai.before) note.classList.add('d-none');
+                  else if (e.target.value === ai.draft) note.classList.remove('d-none');
+            }
+            // 10/23：回覆清空了，「回覆還沒送出」的提示就沒有意義
+            const unsent = form.querySelector('.js-unsent');
+            if (unsent && !e.target.value.trim()) unsent.classList.add('d-none');
+      });
 
-    root.addEventListener('submit', function (e) {
-        const form = e.target.closest('.js-reply-form');
-        if (!form) return;
-        e.preventDefault();
+      /* ── 送出回覆 ─────────────────────────────────────── */
 
-        const text = form.querySelector('.js-reply-text').value.trim();
-        const errorBox = form.querySelector('.js-error');
-        errorBox.textContent = '';
+      root.addEventListener('submit', function (e) {
+            const form = e.target.closest('.js-reply-form');
+            if (!form) return;
+            e.preventDefault();
 
-        if (!text) {
-            errorBox.textContent = '請輸入回覆內容';
-            return;
-        }
-        if (!window.confirm('確定送出回覆嗎？送出後無法修改。')) return;
+            const text = form.querySelector('.js-reply-text').value.trim();
+            const errorBox = form.querySelector('.js-error');
+            errorBox.textContent = '';
 
-        const submitBtn = form.querySelector('[type="submit"]');
-        submitBtn.disabled = true;
+            if (!text) {
+                  errorBox.textContent = '請輸入回覆內容';
+                  return;
+            }
+            // 10/23：罐頭回覆是程式插入的，可能超過 maxlength；先在這裡擋，不要等後端回錯誤
+            const textarea = form.querySelector('.js-reply-text');
+            if (text.length > textarea.maxLength) {
+                  errorBox.textContent = '回覆不可超過 ' + textarea.maxLength + ' 字';
+                  return;
+            }
 
-        // new FormData(form) 會包含表單裡自動產生的防偽 token
-        post(form.action, new FormData(form))
-              .then(function (res) {
-                    replyDrafts.delete(reviewIdOfForm(form));   // 10/24：送出了，草稿不用留
-                flash(res.data.message || '回覆已送出');
-                return loadList(currentFilter());
-            })
-            .catch(function (err) {
-                errorBox.textContent = errorMessage(err);
-                submitBtn.disabled = false;
+            // 10/23 員工預覽：不直接送出，先打開預覽視窗；真正送出在 previewSend 的 click。原本：
+            // if (!window.confirm('確定送出回覆嗎？送出後無法修改。')) return;
+            //
+            // const submitBtn = form.querySelector('[type="submit"]');
+            // submitBtn.disabled = true;
+            //
+            // // new FormData(form) 會包含表單裡自動產生的防偽 token
+            // post(form.action, new FormData(form))
+            //       .then(function (res) {
+            //             replyDrafts.delete(reviewIdOfForm(form));   // 10/24：送出了，草稿不用留
+            //         flash(res.data.message || '回覆已送出');
+            //         return loadList(currentFilter());
+            //     })
+            //     .catch(function (err) {
+            //         errorBox.textContent = errorMessage(err);
+            //         submitBtn.disabled = false;
+            //     });
+            openReplyPreview(form, text);
+      });
+
+      /* ── 10/23 回覆預覽（modal 在 root 外面，直接掛）──────────
+         內容從那則評論的 <template class="js-preview-src"> 複製（Razor 已經算好遮蔽後的內文、送出後誰看得到），
+         再把回覆填進 .js-preview-reply。用 textContent 填，員工打的 HTML 只會是文字。
+         - 點視窗外、Esc、「返回修改」：關掉，輸入框的內容不動，表單下方出現「回覆還沒送出」。
+         - 送出中：攔下 hide.bs.modal，不能關；按鈕也鎖住，避免連按送出兩次。 */
+      const previewModalEl = document.getElementById('replyPreviewModal');
+      // 10/24：舊版 Index 沒有預覽視窗時是 null（見 hasNewIndex），不建立，送出時退回舊的做法
+      const previewModal = hasNewIndex ? bootstrap.Modal.getOrCreateInstance(previewModalEl) : null;
+      const previewBody = document.getElementById('replyPreviewBody');
+      const previewError = document.getElementById('replyPreviewError');
+      const previewSend = document.getElementById('replyPreviewSend');
+      const previewSendLabel = previewSend ? previewSend.innerHTML : '';
+      let previewForm = null;     // 正在預覽哪一則的表單
+      let previewSending = false;
+      let previewSent = false;
+
+      function openReplyPreview(form, text) {
+            if (!previewModal) {
+                  // 10/24：舊版 Index（沒有預覽視窗）：跟 10/23 以前一樣，用瀏覽器的確認框，確定就直接送出
+                  if (!window.confirm('確定送出回覆嗎？送出後無法修改。')) return;
+                  const errorBox = form.querySelector('.js-error');
+                  post(form.action, new FormData(form))
+                        .then(function (res) {
+                              replyDrafts.delete(reviewIdOfForm(form));
+                              flash(res.data.message || '回覆已送出');
+                              return loadList(currentFilter());
+                        })
+                        .catch(function (err) {
+                              errorBox.textContent = errorMessage(err);
+                        });
+                  return;
+            }
+            const src = form.querySelector('template.js-preview-src');
+            previewBody.replaceChildren(src.content.cloneNode(true));
+            previewBody.querySelector('.js-preview-reply').textContent = text;
+            previewError.textContent = '';
+            previewForm = form;
+            previewSent = false;
+            const unsent = form.querySelector('.js-unsent');
+            if (unsent) unsent.classList.add('d-none');
+            previewModal.show();
+      }
+
+      function setPreviewLocked(locked) {
+            previewSending = locked;
+            previewSend.disabled = locked;
+            previewSend.innerHTML = locked
+                  ? '<span class="spinner-border spinner-border-sm"></span> 送出中⋯'
+                  : previewSendLabel;
+            previewModalEl.querySelectorAll('[data-bs-dismiss="modal"]').forEach(function (b) { b.disabled = locked; });
+      }
+
+      if (hasNewIndex) {   // 10/24：舊版 Index 沒有這些元素，不掛事件（見 hasNewIndex）
+            previewSend.addEventListener('click', function () {
+                  if (!previewForm || previewSending) return;
+                  const form = previewForm;
+                  previewError.textContent = '';
+                  setPreviewLocked(true);
+
+                  // new FormData(form) 會包含表單裡自動產生的防偽 token（template 裡的東西不會被送出）
+                  post(form.action, new FormData(form))
+                        .then(function (res) {
+                              previewSent = true;
+                              replyDrafts.delete(reviewIdOfForm(form));   // 10/24：送出了，草稿不用留
+                              setPreviewLocked(false); // 先解鎖，hide 才不會被攔下來
+                              previewModal.hide();
+                              flash(res.data.message || '回覆已送出');
+                              return loadList(currentFilter());
+                        })
+                        .catch(function (err) {
+                              // 例如別的員工剛回覆或標記了這則（409）。訊息顯示在視窗裡，關掉之後輸入框的內容還在
+                              previewError.textContent = errorMessage(err);
+                              setPreviewLocked(false);
+                        });
             });
-    });
 
-    /* ── 展開時記錄閱覽 ───────────────────────────────────
-       show.bs.collapse 在「開始展開」時觸發。
-       Bootstrap 的事件會往外層傳，所以掛在 root 上就收得到。 */
-
-    root.addEventListener('show.bs.collapse', function (e) {
-        const item = e.target.closest('.accordion-item');
-        if (!item || item.dataset.read === '1') return;
-
-        item.dataset.read = '1';    // 先標記，避免收合再展開時重送
-        post(item.dataset.readUrl)
-            .then(function (res) {
-                const badge = item.querySelector('.js-read-badge');
-                if (badge) badge.classList.remove('d-none');
-
-                // data 為 true 代表這次才讀的；false 代表別人剛讀過，數字早就不對了
-                if (res.data.data === true) {
-                    adjustCount('unread', -1);
-                    adjustCount('pending', +1);
-                }
-            })
-            .catch(function (err) {
-                item.dataset.read = '0';    // 失敗就讓下次展開再試
-                flash('閱覽紀錄沒有存到：' + errorMessage(err), 'warning');
+            previewModalEl.addEventListener('hide.bs.modal', function (e) {
+                  if (previewSending) e.preventDefault();
             });
-    });
 
-    /* ── 確認標記垃圾（modal 在 root 外面，直接掛）──────── */
-
-    spamConfirm.addEventListener('click', function () {
-        const reason = checkedSpamReason();
-        if (reason === '') {
-            spamError.textContent = '請選擇理由';
-            return;
-        }
-        spamConfirm.disabled = true;
-
-        post(spamUrl, { reason: reason })
-              .then(function (res) {
-                    replyDrafts.delete(reviewIdOfUrl(spamUrl));   // 10/24：標記成垃圾了，草稿不用留
-                spamModal.hide();
-                flash(res.data.message || '已標記為垃圾');
-                return loadList(currentFilter());
-            })
-            .catch(function (err) {
-                spamError.textContent = errorMessage(err);
-            })
-            .finally(function () {
-                spamConfirm.disabled = false;
+            previewModalEl.addEventListener('hidden.bs.modal', function () {
+                  // 沒送出就關掉：提示「還沒送出」，游標放回輸入框，方便接著改
+                  if (previewForm && !previewSent && document.contains(previewForm)) {
+                        const unsent = previewForm.querySelector('.js-unsent');
+                        if (unsent) unsent.classList.remove('d-none');
+                        previewForm.querySelector('.js-reply-text').focus();
+                  }
+                  previewForm = null;
+                  previewBody.replaceChildren();
             });
-    });
+      }
+
+      /* ── 展開時記錄閱覽 ───────────────────────────────────
+         show.bs.collapse 在「開始展開」時觸發。
+         Bootstrap 的事件會往外層傳，所以掛在 root 上就收得到。 */
+
+      root.addEventListener('show.bs.collapse', function (e) {
+            const item = e.target.closest('.accordion-item');
+            if (!item || item.dataset.read === '1') return;
+
+            item.dataset.read = '1';    // 先標記，避免收合再展開時重送
+            post(item.dataset.readUrl)
+                  .then(function (res) {
+                        const badge = item.querySelector('.js-read-badge');
+                        if (badge) badge.classList.remove('d-none');
+
+                        // data 為 true 代表這次才讀的；false 代表別人剛讀過，數字早就不對了
+                        if (res.data.data === true) {
+                              adjustCount('unread', -1);
+                              adjustCount('pending', +1);
+                        }
+                  })
+                  .catch(function (err) {
+                        item.dataset.read = '0';    // 失敗就讓下次展開再試
+                        flash('閱覽紀錄沒有存到：' + errorMessage(err), 'warning');
+                  });
+      });
+
+      /* ── 確認標記垃圾（modal 在 root 外面，直接掛）──────── */
+
+      /* 10/23：改成兩個畫面，「確定標記」不送出、換到確認畫面。原本：
+      spamConfirm.addEventListener('click', function () {
+          const reason = checkedSpamReason();
+          if (reason === '') {
+              spamError.textContent = '請選擇理由';
+              return;
+          }
+          spamConfirm.disabled = true;
+  
+          post(spamUrl, { reason: reason })
+                .then(function (res) {
+                      replyDrafts.delete(reviewIdOfUrl(spamUrl));   // 10/24：標記成垃圾了，草稿不用留
+                  spamModal.hide();
+                  flash(res.data.message || '已標記為垃圾');
+                  return loadList(currentFilter());
+              })
+              .catch(function (err) {
+                  spamError.textContent = errorMessage(err);
+              })
+              .finally(function () {
+                  spamConfirm.disabled = false;
+              });
+      });
+      */
+      spamConfirm.addEventListener('click', function () {
+            if (checkedSpamReason() === '') {
+                  spamError.textContent = '請選擇理由';
+                  return;
+            }
+            // 10/24：舊版 Index 沒有確認畫面：跟 10/23 以前一樣，選完理由直接送出
+            if (!hasNewIndex) {
+                  sendSpam();
+                  return;
+            }
+            document.getElementById('spamConfirmReason').textContent = checkedSpamReasonLabel();
+            showSpamStep('confirm', true);
+      });
+
+      if (spamBack) {
+            spamBack.addEventListener('click', function () {
+                  showSpamStep('reason', true);
+            });
+      }
+
+      if (spamFinal) spamFinal.addEventListener('click', sendSpam);
+
+      // 10/24：真正送出標記。從確認畫面的「確定，標記為垃圾」呼叫；舊版 Index 時從「確定標記」直接呼叫
+      function sendSpam() {
+            if (spamSending) return;
+            const reason = checkedSpamReason();
+            const buttons = [spamFinal, spamBack, spamConfirm].filter(Boolean);
+            spamSending = true;
+            buttons.forEach(function (b) { b.disabled = true; });
+
+            post(spamUrl, { reason: reason })
+                  .then(function (res) {
+                        spamSending = false; // 先解除，hide 才不會被攔下來
+                        replyDrafts.delete(reviewIdOfUrl(spamUrl));   // 10/24：標記成垃圾了，草稿不用留
+                        spamModal.hide();
+                        flash(res.data.message || '已標記為垃圾');
+                        return loadList(currentFilter());
+                  })
+                  .catch(function (err) {
+                        spamError.textContent = errorMessage(err);
+                  })
+                  .finally(function () {
+                        spamSending = false;
+                        buttons.forEach(function (b) { b.disabled = false; });
+                  });
+      }
+
+      // 送出中不能關（跟回覆預覽一樣）
+      spamModalEl.addEventListener('hide.bs.modal', function (e) {
+            if (spamSending) e.preventDefault();
+      });
 
       /* ── 第一次進頁面 ────────────────────────────────────
          整頁是由伺服器 render 的，沒有經過 loadList，

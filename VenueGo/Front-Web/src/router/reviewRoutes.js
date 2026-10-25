@@ -13,6 +13,7 @@
 //    查看我的現場評論        → /reviews/visit/:id
 //    查看我的預約評論        → /reviews/booking/:orderId
 //    員工預覽                → /reviews/preview/:reviewId
+//  10/25：現場評論的 :id 改名 :orderId，跟預約評論一致（網址本身不變）；傳給元件的 prop 也從 ticket 改名 orderId。
 //
 //  ── 10/9 現場評論改限會員 ─────────────────────────────
 //  網址從 QRToken 改成憑證 Id，兩種評論都要會員本人登入（後端用 JWT 擋）。
@@ -49,10 +50,12 @@ export default [
   // ── 撰寫 ────────────────────────────────────────────
   {
     // 現場評論：憑證 Id，要會員本人登入
-    path: "/reviews/visit/:id(\\d+)/write",
+    // 10/25 改名 id → orderId
+    path: "/reviews/visit/:orderId(\\d+)/write",
     name: "review-write-visit",
     component: ReviewWriteView,
-    props: (route) => ({ kind: "visit", ticket: String(route.params.id) }),
+    // 10/25 改名 id → orderId, ticket → orderId
+    props: (route) => ({ kind: "visit", orderId: String(route.params.orderId) }),
     meta: { title: "撰寫評論", requiresMember: true },
   },
   {
@@ -62,23 +65,27 @@ export default [
     path: "/reviews/booking/:orderId/write",
     name: "review-write-booking",
     component: ReviewWriteView,
-    props: (route) => ({ kind: "booking", ticket: String(route.params.orderId) }),
+    // 10/25 改名 ticket → orderId
+    props: (route) => ({ kind: "booking", orderId: String(route.params.orderId) }),
     meta: { title: "撰寫評論", requiresMember: true },
   },
 
   // ── 檢視自己的評論 ──────────────────────────────────
   {
-    path: "/reviews/visit/:id(\\d+)",
+    // 10/25 改名 id → orderId
+    path: "/reviews/visit/:orderId(\\d+)",
     name: "review-mine-visit",
     component: MyReviewView,
-    props: (route) => ({ kind: "visit", ticket: String(route.params.id) }),
+    // 10/25 改名 id → orderId, ticket → orderId
+    props: (route) => ({ kind: "visit", orderId: String(route.params.orderId) }),
     meta: { title: "我的評論", requiresMember: true },
   },
   {
     path: "/reviews/booking/:orderId",
     name: "review-mine-booking",
     component: MyReviewView,
-    props: (route) => ({ kind: "booking", ticket: String(route.params.orderId) }),
+    // 10/25 改名 ticket → orderId
+    props: (route) => ({ kind: "booking", orderId: String(route.params.orderId) }),
     meta: { title: "我的評論", requiresMember: true },
   },
 
@@ -99,14 +106,20 @@ export default [
  * 依種類組出「撰寫頁」或「檢視頁」的路由位置。
  * 頁面之間互相跳轉都走這兩個函式，網址規則只寫在這個檔案。
  */
-export function writeRoute(kind, ticket) {
-  if (kind === "visit") return { name: "review-write-visit", params: { id: ticket } };
-  if (kind === "booking") return { name: "review-write-booking", params: { orderId: ticket } };
+// 10/25 改名 ticket → orderId
+export function writeRoute(kind, orderId) {
+  // 10/25 改名 orderId，原本：params: { id: ticket }
+  if (kind === "visit") return { name: "review-write-visit", params: { orderId } };
+  // 10/25 改名 orderId，原本：params: { orderId: ticket }
+  if (kind === "booking") return { name: "review-write-booking", params: { orderId } };
   throw new Error(`[reviewRoutes] 不認得的評論種類：${kind}`);
 }
 
-export function mineRoute(kind, ticket) {
-  if (kind === "visit") return { name: "review-mine-visit", params: { id: ticket } };
-  if (kind === "booking") return { name: "review-mine-booking", params: { orderId: ticket } };
+// 10/25 改名 ticket → orderId
+export function mineRoute(kind, orderId) {
+  // 10/25 改名 orderId，原本：params: { id: ticket }
+  if (kind === "visit") return { name: "review-mine-visit", params: { orderId } };
+  // 10/25 改名 orderId，原本：params: { orderId: ticket }
+  if (kind === "booking") return { name: "review-mine-booking", params: { orderId } };
   throw new Error(`[reviewRoutes] 不認得的評論種類：${kind}`);
 }

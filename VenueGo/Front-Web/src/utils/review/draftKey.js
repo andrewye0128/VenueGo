@@ -9,10 +9,13 @@
 //   v4（10/15 Reviews 重構）：現場評論的 ticket 從憑證 Id 改成訂單 Id。
 //               同一個數字的意思變了，v3 的現場評論草稿可能會跑到別筆訂單上，所以換版本號（舊草稿自然失效）。
 //   kind、ticket：同撰寫頁的網址（visit／booking，ticket 都是訂單 Id）。
+//   10/25：參數名稱 ticket 改成 orderId。只是變數改名，key 的內容一模一樣，已經存的草稿照樣找得到，所以不換版本號。
 
 /** 草稿的 key。沒登入（userId 是 null）時用 guest，跟撰寫頁原本的寫法一樣。 */
-export function reviewDraftKey(userId, kind, ticket) {
-  return `review-draft:v4:${userId ?? "guest"}:${kind}:${ticket}`;
+// 10/25 改名 ticket → orderId
+export function reviewDraftKey(userId, kind, orderId) {
+  // 10/25 改名 ticket → orderId
+  return `review-draft:v4:${userId ?? "guest"}:${kind}:${orderId}`;
 }
 
 /**
@@ -20,9 +23,11 @@ export function reviewDraftKey(userId, kind, ticket) {
  * localStorage 在無痕模式的某些設定、或被瀏覽器封鎖時會直接丟例外。
  * 「有草稿」只是提示，壞掉就當作沒有，不能讓整頁跟著壞（同 useDraft.js 的處理）。
  */
-export function hasReviewDraft(userId, kind, ticket) {
+// 10/25 改名 ticket → orderId
+export function hasReviewDraft(userId, kind, orderId) {
   try {
-    return localStorage.getItem(reviewDraftKey(userId, kind, ticket)) != null;
+    // 10/25 改名 ticket → orderId
+    return localStorage.getItem(reviewDraftKey(userId, kind, orderId)) != null;
   } catch {
     return false;
   }

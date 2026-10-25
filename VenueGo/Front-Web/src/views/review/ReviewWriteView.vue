@@ -4,6 +4,7 @@
 
     路由：/reviews/visit/:id/write      → kind='visit',   ticket=訂單 Id（10/15 起；以前是現場評論憑證 Id）
           /reviews/booking/:orderId/write → kind='booking', ticket=OrderId
+          10/25：現場評論的 :id 改名 :orderId，prop ticket 改名 orderId（網址不變）
     兩種都要會員本人登入（10/9 起現場評論也限會員）。
 
     ── 兩種評論的差別由後端決定 ─────────────────────────────
@@ -40,7 +41,8 @@ import ConfirmModal from "@/components/ConfirmModal.vue";
 
 const props = defineProps({
   kind: { type: String, required: true }, // 'visit' | 'booking'
-  ticket: { type: String, required: true }, // 訂單 Id（10/15 起現場、預約都是）
+  // 10/25 改名 ticket → orderId
+  orderId: { type: String, required: true }, // 訂單 Id（10/15 起現場、預約都是）
 });
 
 const router = useRouter();
@@ -95,7 +97,8 @@ const draft = useDraft({
   // v3（10/9）：key 加上會員 Id。共用電腦時，下一個登入的人不會看到上一個人的草稿；
   // 現場評論的 ticket 也從 QRToken 改成憑證 Id，跟 v2 的草稿對不上，所以換版本號。
   // 原本的在 10/10 格式搬到 utils/review/draftKey.js，「我的評論」清單也要用
-  key: () => reviewDraftKey(memberStore.member?.userId, props.kind, props.ticket),
+  // 10/25 改名 ticket → orderId
+  key: () => reviewDraftKey(memberStore.member?.userId, props.kind, props.orderId),
   // 只存「這一頁允許使用者改」的欄位：例如未登入時匿名是鎖死的，就不存它
   fields: () => {
     const f = setup.value?.form;
@@ -137,7 +140,8 @@ function handleEligibility(e) {
     case ErrorCodes.AlreadyReviewed:
       // 已經評過：草稿沒有用了，清掉，直接去看那則評論
       draft.discard();
-      router.replace(mineRoute(props.kind, props.ticket));
+      // 10/25 改名 ticket → orderId
+      router.replace(mineRoute(props.kind, props.orderId));
       return true;
     // 10/23：沒登入（多半是 token 過期，或在別的分頁登出了）分出來，不清草稿：
     //   登入後回到這一頁，草稿會被 draft.start() 代回來，可以接著寫。
@@ -175,7 +179,8 @@ onMounted(async () => {
   }
 
   try {
-    const data = await getWriteForm(props.kind, props.ticket);
+    // 10/25 改名 ticket → orderId
+    const data = await getWriteForm(props.kind, props.orderId);
     setup.value = data;
     state.isAnonymous = data.form.initial.isAnonymous;
     state.isPublic = data.form.initial.isPublic;
@@ -205,10 +210,12 @@ async function onSubmit() {
 
   submitting.value = true;
   try {
-    await createReview(props.kind, props.ticket, { ...state });
+    // 10/25 改名 ticket → orderId
+    await createReview(props.kind, props.orderId, { ...state });
     draft.discard(); // 先清草稿、停止攔截，下一行換頁才不會跳「尚未儲存」
     // replace 而不是 push：按上一頁不該回到一張已經送出的表單
-    router.replace(mineRoute(props.kind, props.ticket));
+    // 10/25 改名 ticket → orderId
+    router.replace(mineRoute(props.kind, props.orderId));
   } catch (e) {
     if (handleEligibility(e)) return;
     if (e.errorCode === ErrorCodes.ValidationFailed) {

@@ -7,7 +7,7 @@
     抽出來之前，清單要嘛整份複製一次（改一邊忘另一邊），要嘛只能「點了跳到另一頁」。
 
     用法：
-      <MyReviewDetail kind="visit" ticket="12" />
+      <MyReviewDetail kind="visit" order-id="12" />
       <MyReviewDetail preview-id="35" />            （員工預覽）
       <MyReviewDetail ... @reply-viewed="..." @visibility-changed="(isPublic) => ..." />
       讀取失敗時想放按鈕：<template #error-action><UButton ... /></template>
@@ -36,9 +36,11 @@ import { kindInfo } from "@/utils/review/reviewKinds";
 import StarView from "@/components/review/StarView.vue";
 
 // 顧客模式傳 kind + ticket；預覽模式只傳 previewId（種類由 API 回傳的 kind 決定）
+// 10/25：ticket 改名 orderId（訂單 Id）
 const props = defineProps({
   kind: { type: String, default: null },
-  ticket: { type: String, default: null },
+  // 10/25 改名 ticket → orderId
+  orderId: { type: String, default: null },
   previewId: { type: String, default: null },
   // 10/12：「我的評論」清單展開時用，不重複清單那一列已經顯示的資訊
   compact: { type: Boolean, default: false },
@@ -61,9 +63,10 @@ const isPreview = computed(() => props.previewId != null);
 
 // 錯誤由呼叫端處理：onMounted 顯示在整頁，rate() 顯示在操作區
 async function load() {
+  // 10/25 改名 ticket → orderId
   return isPreview.value
     ? await getReviewPreview(props.previewId)
-    : await getMyReview(props.kind, props.ticket);
+    : await getMyReview(props.kind, props.orderId);
 }
 
 // 滿意度的三個選項在 constants/review.js
@@ -84,7 +87,8 @@ onMounted(async () => {
     showNewReplyBanner.value = true;
     if (!isPreview.value) {
       try {
-        await markReplyViewed(props.kind, props.ticket);
+        // 10/25 改名 ticket → orderId
+        await markReplyViewed(props.kind, props.orderId);
         reply.isViewed = true;
         emit("reply-viewed");
       } catch (e) {
@@ -107,7 +111,8 @@ const isPublic = computed({
     actionError.value = "";
     savingVisibility.value = true;
     try {
-      const data = await setVisibility(props.ticket, v);
+      // 10/25 改名 ticket → orderId
+      const data = await setVisibility(props.orderId, v);
       vm.value.isPublic = data.isPublic; // 以後端確認後的值為準
       emit("visibility-changed", data.isPublic);
     } catch (e) {
@@ -128,7 +133,8 @@ async function rate(value) {
   actionError.value = "";
   savingSatisfaction.value = true;
   try {
-    const data = await setSatisfaction(props.kind, props.ticket, value);
+    // 10/25 改名 ticket → orderId
+    const data = await setSatisfaction(props.kind, props.orderId, value);
     vm.value.reply.satisfaction = data.satisfaction;
     vm.value.reply.canRateSatisfaction = false;
   } catch (e) {

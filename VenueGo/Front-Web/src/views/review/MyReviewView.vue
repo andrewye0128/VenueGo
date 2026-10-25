@@ -38,9 +38,11 @@ import { ErrorCodes } from "@/constants/errorCodes";
 import MyReviewDetail from "@/components/review/MyReviewDetail.vue";
 
 // 顧客模式傳 kind + ticket；預覽模式只傳 previewId（種類由 API 回傳的 kind 決定）
+// 10/25：ticket 改名 orderId（訂單 Id）
 const props = defineProps({
   kind: { type: String, default: null },
-  ticket: { type: String, default: null },
+  // 10/25 改名 ticket → orderId
+  orderId: { type: String, default: null },
   previewId: { type: String, default: null },
 });
 
@@ -67,9 +69,10 @@ const needsLogin = computed(() => loadErrorCode.value === ErrorCodes.NotLoggedIn
       class="mb-4"
     />
 
+    <!-- 10/25 改名 ticket → orderId / order-id -->
     <MyReviewDetail
       :kind="kind"
-      :ticket="ticket"
+      :order-id="orderId"
       :preview-id="previewId"
       @load-error="(code) => (loadErrorCode = code)"
     >

@@ -4,6 +4,7 @@
 // kind   = "visit"（現場評論）| "booking"（預約評論）
 // ticket = 訂單 Id（OrderId）。10/15 Reviews 重構起兩種都是訂單 Id（以前現場評論是憑證 Id），
 //          變數名稱沿用，呼叫的頁面不用改。
+// 10/25：變數名稱也改成 orderId（後端的網址參數、待評論／已評論清單的欄位一起改名），網址本身不變。
 // 10/9 起兩種都要會員本人登入（http.js 會自動帶上 JWT）。
 //
 // 共用的 http.js 會自動取出 ApiResult 的 data，所以這裡的函式回傳的就是真正的資料。
@@ -15,8 +16,10 @@ import http from "./http";
 
 // ticket 現在都是數字，但包一層 encodeURIComponent 是習慣：
 // 萬一哪天格式改了、出現 / 或 ? 之類的字元，網址才不會斷掉。
-function base(kind, ticket) {
-  return `/reviews/${kind}/${encodeURIComponent(ticket)}`;
+// 10/25 改名 ticket → orderId
+function base(kind, orderId) {
+  // 10/25 改名 ticket → orderId
+  return `/reviews/${kind}/${encodeURIComponent(orderId)}`;
 }
 
 // 首頁顧客評價輪播：[GET] /api/reviews/featured（規格 2-11，10/15）
@@ -41,28 +44,34 @@ export async function getPublicReviews(filter) {
   return data;
 }
 
-// 撰寫頁的表單設定，同時判定資格（過期、已評過、查無憑證）：[GET] /api/reviews/{kind}/{ticket}/form
-export async function getWriteForm(kind, ticket) {
-  const { data } = await http.get(`${base(kind, ticket)}/form`);
+// 撰寫頁的表單設定，同時判定資格（過期、已評過、查無憑證）：[GET] /api/reviews/{kind}/{orderId}/form
+// 10/25 改名 ticket → orderId
+export async function getWriteForm(kind, orderId) {
+  // 10/25 改名 ticket → orderId
+  const { data } = await http.get(`${base(kind, orderId)}/form`);
   return data;
 }
 
-// 送出評論：[POST] /api/reviews/{kind}/{ticket}
+// 送出評論：[POST] /api/reviews/{kind}/{orderId}
 // input 見規格 2-3。回傳後端的成功訊息（「評論已送出」）。
-export async function createReview(kind, ticket, input) {
-  const response = await http.post(base(kind, ticket), input);
+// 10/25 改名 ticket → orderId
+export async function createReview(kind, orderId, input) {
+  // 10/25 改名 ticket → orderId
+  const response = await http.post(base(kind, orderId), input);
   return response.message;
 }
 
-// 我的評論（檢視頁）：[GET] /api/reviews/{kind}/{ticket}
+// 我的評論（檢視頁）：[GET] /api/reviews/{kind}/{orderId}
 // ⚠️ 這支是純讀取，不會記錄「顧客已看過回覆」。
-export async function getMyReview(kind, ticket) {
-  const { data } = await http.get(base(kind, ticket));
+// 10/25 改名 ticket → orderId
+export async function getMyReview(kind, orderId) {
+  // 10/25 改名 ticket → orderId
+  const { data } = await http.get(base(kind, orderId));
   return data;
 }
 
 // 我的評論 › 待評論（規格 2-9）：[GET] /api/reviews/mine/pending
-// 本人的、還沒評、還沒過期的現場和預約憑證，快到期的排前面。每筆的 kind＋ticket 就是撰寫頁的網址。
+// 本人的、還沒評、還沒過期的現場和預約憑證，快到期的排前面。每筆的 kind＋orderId 就是撰寫頁的網址（10/25 欄位從 ticket 改名）。
 export async function listPendingReviews() {
   const { data } = await http.get("/reviews/mine/pending");
   return data;
@@ -83,23 +92,29 @@ export async function getReviewPreview(reviewId) {
   return data;
 }
 
-// 記錄「顧客已看過館方回覆」：[POST] /api/reviews/{kind}/{ticket}/reply-viewed
+// 記錄「顧客已看過館方回覆」：[POST] /api/reviews/{kind}/{orderId}/reply-viewed
 // 重複呼叫不會覆蓋第一次的時間。
-export async function markReplyViewed(kind, ticket) {
-  const { data } = await http.post(`${base(kind, ticket)}/reply-viewed`);
+// 10/25 改名 ticket → orderId
+export async function markReplyViewed(kind, orderId) {
+  // 10/25 改名 ticket → orderId
+  const { data } = await http.post(`${base(kind, orderId)}/reply-viewed`);
   return data;
 }
 
-// 切換公開：[POST] /api/reviews/visit/{id}/visibility
+// 切換公開：[POST] /api/reviews/visit/{orderId}/visibility
 // 只有現場評論有這支。
-export async function setVisibility(id, isPublic) {
-  const { data } = await http.post(`${base("visit", id)}/visibility`, { isPublic });
+// 10/25 改名 id → orderId
+export async function setVisibility(orderId, isPublic) {
+  // 10/25 改名 id → orderId
+  const { data } = await http.post(`${base("visit", orderId)}/visibility`, { isPublic });
   return data;
 }
 
-// 對館方回覆表態：[POST] /api/reviews/{kind}/{ticket}/satisfaction
+// 對館方回覆表態：[POST] /api/reviews/{kind}/{orderId}/satisfaction
 // satisfaction：0 不滿意 / 1 普通 / 2 滿意
-export async function setSatisfaction(kind, ticket, satisfaction) {
-  const { data } = await http.post(`${base(kind, ticket)}/satisfaction`, { satisfaction });
+// 10/25 改名 ticket → orderId
+export async function setSatisfaction(kind, orderId, satisfaction) {
+  // 10/25 改名 ticket → orderId
+  const { data } = await http.post(`${base(kind, orderId)}/satisfaction`, { satisfaction });
   return data;
 }

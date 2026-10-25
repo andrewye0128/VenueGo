@@ -76,7 +76,8 @@ async function loadPending() {
     const userId = memberStore.member?.userId;
     pending.value = items.map((item) => ({
       ...item,
-      hasDraft: hasReviewDraft(userId, item.kind, item.ticket),
+      // 10/25 改名 ticket → orderId
+      hasDraft: hasReviewDraft(userId, item.kind, item.orderId),
     }));
   } catch (e) {
     pendingError.value = e.message;
@@ -205,7 +206,8 @@ function onVisibilityChanged(item, isPublic) {
 const opened = reactive(new Set());
 
 // 每一筆的 key：種類＋憑證（同一個 ticket 數字在現場、預約兩邊可能各有一筆）
-const keyOf = (item) => `${item.kind}-${item.ticket}`;
+// 10/25 改名 ticket → orderId
+const keyOf = (item) => `${item.kind}-${item.orderId}`;
 </script>
 
 <template>
@@ -329,8 +331,9 @@ const keyOf = (item) => `${item.kind}-${item.ticket}`;
           </div>
 
           <!-- 主要行動用 action 色。有草稿時改成「繼續撰寫」，顧客才知道進去會看到上次寫的內容 -->
+          <!-- 10/25 改名 ticket → orderId -->
           <UButton
-            :to="writeRoute(item.kind, String(item.ticket))"
+            :to="writeRoute(item.kind, String(item.orderId))"
             color="action"
             size="sm"
             icon="i-lucide-pen-line"
@@ -460,11 +463,12 @@ const keyOf = (item) => `${item.kind}-${item.ticket}`;
               <div
                 class="border-l-[3px] border-brand-primary bg-brand-primary/10 pr-4 pb-4 pl-4 sm:pl-[4.25rem]"
               >
+                <!-- 10/25 改名 ticket → orderId / order-id -->
                 <MyReviewDetail
                   v-if="opened.has(keyOf(item))"
                   compact
                   :kind="item.kind"
-                  :ticket="String(item.ticket)"
+                  :order-id="String(item.orderId)"
                   @reply-viewed="onReplyViewed(item)"
                   @visibility-changed="(isPublic) => onVisibilityChanged(item, isPublic)"
                 />

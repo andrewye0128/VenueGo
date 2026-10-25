@@ -1,14 +1,14 @@
 ﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using VenueGo.Constants;
 using VenueGo.Dtos;
 using VenueGo.Dtos.ReviewDtos.MyReviews;
 using VenueGo.Dtos.ReviewDtos.PublicReviews;
 using VenueGo.Dtos.ReviewDtos.WriteReview;
 using VenueGo.Helpers;
-using VenueGo.Constants;
-using VenueGo.Services.Reviews;
 using VenueGo.Services.Auth;
+using VenueGo.Services.Reviews;
 
 namespace VenueGo.Controllers.Api
 {
@@ -140,6 +140,7 @@ namespace VenueGo.Controllers.Api
         //  現場評論與預約評論分成兩個 Action，而不是共用一個 {kind}：
         //    1. 兩邊的判斷規則不同（現場看入場、預約看付款），分開寫比較不會搞混。（10/15 起兩邊的網址參數都是訂單 Id）
         //    2. 路由寫 {id:int}／{orderId:int}，不是整數的網址直接 404，不必進 Action 再檢查。
+        //       10/25：現場評論的 {id} 改名 {orderId}，兩種評論的網址參數同名（網址本身沒變，前台不用改網址）。
         //  兩邊共用的邏輯都在 Services/Reviews/ 裡（10/10 起），
         //  Action 本身只剩「接參數 → 呼叫 Service → 用第一區翻成回應」。
         //
@@ -220,14 +221,15 @@ namespace VenueGo.Controllers.Api
         /// ### 注意
         /// - 不是本人的訂單、或沒有資格時回 404，不會透露「這筆訂單存在」。
         /// </remarks>
-        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
+        /// <param name="orderId" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id。10/25 參數名稱從 id 改成 orderId，跟預約評論一致，網址不變）</param>
         /// <response code="200">可以評論，Data 是表單設定</response>
         /// <response code="404">查無評論資格：沒有有效入場（或付款）紀錄、或不是本人的訂單。ErrorCode：`NotFound`</response>
         /// <response code="409">這筆訂單已經評論過了。ErrorCode：`AlreadyReviewed`</response>
         /// <response code="410">超過可以評論的時間。ErrorCode：`Expired`</response>
         /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
         /// <response code="403">登入的不是會員。ErrorCode：`Forbidden`</response>
-        [HttpGet("visit/{id:int}/form")]
+        // 10/25 改名 orderId，原本：[HttpGet("visit/{id:int}/form")]
+        [HttpGet("visit/{orderId:int}/form")]
         [ProducesResponseType<ApiResult<WriteFormDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status403Forbidden)]
@@ -235,8 +237,10 @@ namespace VenueGo.Controllers.Api
         [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status410Gone)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> GetVisitForm(int id)
-            => ToResponse(await _memberReviews.GetVisitFormAsync(id, _currentUser.UserId));
+        // 10/25 改名 orderId，原本：public async Task<IActionResult> GetVisitForm(int id)
+        public async Task<IActionResult> GetVisitForm(int orderId)
+            // 10/25 改名 orderId，原本：=> ToResponse(await _memberReviews.GetVisitFormAsync(id, _currentUser.UserId));
+            => ToResponse(await _memberReviews.GetVisitFormAsync(orderId, _currentUser.UserId));
 
         /// <summary>取得預約評論表單</summary>
         /// <remarks>
@@ -275,7 +279,7 @@ namespace VenueGo.Controllers.Api
         /// - 資格會在送出時重新判定一次：表單可能在畫面上停了好幾天。
         /// - 存好之後會建立預審紀錄；預審失敗不影響這次送出。
         /// </remarks>
-        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
+        /// <param name="orderId" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id。10/25 參數名稱從 id 改成 orderId，跟預約評論一致，網址不變）</param>
         /// <param name="vm">評論內容：星等（必填）、文字、提及標籤、匿名、公開</param>
         /// <response code="200">送出成功，Message 是「評論已送出」</response>
         /// <response code="400">欄位驗證失敗，Data.errors 是各欄位的錯誤訊息。ErrorCode：`ValidationFailed`</response>
@@ -284,7 +288,8 @@ namespace VenueGo.Controllers.Api
         /// <response code="410">超過可以評論的時間。ErrorCode：`Expired`</response>
         /// <response code="401">沒有登入。ErrorCode：`NotLoggedIn`</response>
         /// <response code="403">登入的不是會員。ErrorCode：`Forbidden`</response>
-        [HttpPost("visit/{id:int}")]
+        // 10/25 改名 id → orderId
+        [HttpPost("visit/{orderId:int}")]
         [ProducesResponseType<ApiResult>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status401Unauthorized)]
@@ -293,13 +298,15 @@ namespace VenueGo.Controllers.Api
         [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status410Gone)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> CreateVisit(int id, [FromBody] ReviewCreateForVisitDto? vm)
+        // 10/25 改名 id → orderId
+        public async Task<IActionResult> CreateVisit(int orderId, [FromBody] ReviewCreateForVisitDto? vm)
         {
             // 欄位驗證（星等必填、字數上限⋯）已經由 [ApiController] 在進來之前做完了；這裡只剩「整個本體沒送」
             if (vm == null) return BadRequest(ApiResponses.EmptyBody());
 
             // 資格會在 Service 裡重驗一次：表單可能停在畫面上好幾天，也可能有人繞過畫面直接送請求
-            return ToCreatedResponse(await _memberReviews.CreateVisitReviewAsync(id, _currentUser.UserId, vm));
+            // 10/25 改名 id → orderId
+            return ToCreatedResponse(await _memberReviews.CreateVisitReviewAsync(orderId, _currentUser.UserId, vm));
         }
 
         /// <summary>送出預約評論</summary>
@@ -345,15 +352,18 @@ namespace VenueGo.Controllers.Api
         ///
         /// **純讀取**：不會記錄「顧客已看過回覆」，那是另一支 `POST .../reply-viewed`。
         /// </remarks>
-        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
+        /// <param name="orderId" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id。10/25 參數名稱從 id 改成 orderId，跟預約評論一致，網址不變）</param>
         /// <response code="200">成功</response>
         /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
-        [HttpGet("visit/{id:int}")]
+        // 10/25 改名 id → orderId
+        [HttpGet("visit/{orderId:int}")]
         [ProducesResponseType<ApiResult<MyReviewDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> GetVisitReview(int id)
-            => ToResponse(await _memberReviews.GetVisitReviewAsync(id, _currentUser.UserId));
+        // 10/25 改名 id → orderId
+        public async Task<IActionResult> GetVisitReview(int orderId)
+            // 10/25 改名 id → orderId
+            => ToResponse(await _memberReviews.GetVisitReviewAsync(orderId, _currentUser.UserId));
 
         /// <summary>查看我的預約評論</summary>
         /// <remarks>
@@ -378,7 +388,7 @@ namespace VenueGo.Controllers.Api
         /// 會員中心「我的評論 › 待評論」分頁。**需要會員登入。**
         ///
         /// 回傳本人的、還沒評過、還沒過期的現場和預約評論，快到期的排前面。
-        /// 每一筆的 `kind`＋`ticket` 就是撰寫頁的網址：`/reviews/{kind}/{ticket}/write`。
+        /// 每一筆的 `kind`＋`orderId` 就是撰寫頁的網址：`/reviews/{kind}/{orderId}/write`。（10/25 欄位 `ticket` 改名 `orderId`）
         ///
         /// ### 注意
         /// - 同一筆訂單可能同時出現一張現場、一張預約（兩種評論資格分開計算）。
@@ -402,7 +412,7 @@ namespace VenueGo.Controllers.Api
         /// 會員中心「我的評論 › 已評論」分頁。**需要會員登入。**
         ///
         /// 回傳本人寫過的現場和預約評論的摘要，新的排前面。
-        /// 展開後的完整內容請用「查看我的評論」（`GET /api/reviews/{kind}/{ticket}`）。
+        /// 展開後的完整內容請用「查看我的評論」（`GET /api/reviews/{kind}/{orderId}`）。
         ///
         /// ### 注意
         /// - **純讀取**：不會記錄「顧客已看過回覆」。`hasUnviewedReply` 是 true 的那幾筆，畫面上可以標「新回覆」。
@@ -479,15 +489,18 @@ namespace VenueGo.Controllers.Api
         /// - 只在「有回覆而且還沒記錄過」時寫入；重複呼叫不會蓋掉第一次的時間。
         /// - 還沒有回覆時不寫入，Data.viewed 是 `false`。
         /// </remarks>
-        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
+        /// <param name="orderId" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id。10/25 參數名稱從 id 改成 orderId，跟預約評論一致，網址不變）</param>
         /// <response code="200">成功，Data.viewed 表示目前是否已記錄為已讀</response>
         /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
-        [HttpPost("visit/{id:int}/reply-viewed")]
+        // 10/25 改名 id → orderId
+        [HttpPost("visit/{orderId:int}/reply-viewed")]
         [ProducesResponseType<ApiResult<ReplyViewedDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> MarkVisitReplyViewed(int id)
-            => ToResponse(await _memberReviews.MarkVisitReplyViewedAsync(id, _currentUser.UserId));
+        // 10/25 改名 id → orderId
+        public async Task<IActionResult> MarkVisitReplyViewed(int orderId)
+            // 10/25 改名 id → orderId
+            => ToResponse(await _memberReviews.MarkVisitReplyViewedAsync(orderId, _currentUser.UserId));
 
         /// <summary>記錄已讀館方回覆</summary>
         /// <remarks>
@@ -511,26 +524,29 @@ namespace VenueGo.Controllers.Api
         ///
         /// 被館方標為垃圾的評論強制不公開，不能切換。
         /// </remarks>
-        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
+        /// <param name="orderId" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id。10/25 參數名稱從 id 改成 orderId，跟預約評論一致，網址不變）</param>
         /// <param name="body">`{ "isPublic": true }`：要變成的狀態，不是「反過來」</param>
         /// <response code="200">成功，Data.isPublic 是切換後的狀態</response>
         /// <response code="400">沒有指定 isPublic。ErrorCode：`ValidationFailed`</response>
         /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         /// <response code="409">評論已被下架，不能切換。ErrorCode：`SpamMarked`</response>
-        [HttpPost("visit/{id:int}/visibility")]
+        // 10/25 改名 id → orderId
+        [HttpPost("visit/{orderId:int}/visibility")]
         [ProducesResponseType<ApiResult<VisibilityResultDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> SetVisibility(int id, [FromBody] VisibilityRequestDto? body)
+        // 10/25 改名 id → orderId
+        public async Task<IActionResult> SetVisibility(int orderId, [FromBody] VisibilityRequestDto? body)
         {
             if (body?.IsPublic is not bool isPublic)
                 return Fail(400, "ValidationFailed", "請指定要公開或不公開",
                             new { errors = new Dictionary<string, string[]> { ["isPublic"] = new[] { "請指定要公開或不公開" } } });
 
             // 被標記垃圾的評論強制不公開。Razor 版是安靜地轉回頁面；API 版明確回錯誤碼（SpamMarked）
-            return ToResponse(await _memberReviews.SetVisitVisibilityAsync(id, _currentUser.UserId, isPublic));
+            // 10/25 改名 id → orderId
+            return ToResponse(await _memberReviews.SetVisitVisibilityAsync(orderId, _currentUser.UserId, isPublic));
         }
 
         // ── 2-7 對回覆表態 ───────────────────────────────────
@@ -541,22 +557,25 @@ namespace VenueGo.Controllers.Api
         ///
         /// `satisfaction`：`0` 不滿意、`1` 普通、`2` 滿意。
         /// </remarks>
-        /// <param name="id" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id）</param>
+        /// <param name="orderId" example="1">訂單 Id（10/15 起；以前是現場評論憑證 Id。10/25 參數名稱從 id 改成 orderId，跟預約評論一致，網址不變）</param>
         /// <param name="body">`{ "satisfaction": 2 }`</param>
         /// <response code="200">成功，Data.satisfaction 是存下來的值</response>
         /// <response code="400">satisfaction 不是 0、1、2。ErrorCode：`InvalidSatisfaction`</response>
         /// <response code="404">查無評論：還沒評論過，或不是本人。ErrorCode：`NotFound`</response>
         /// <response code="409">館方還沒回覆（`NoReply`），或已經表態過（`AlreadyRated`）</response>
-        [HttpPost("visit/{id:int}/satisfaction")]
+        // 10/25 改名 id → orderId
+        [HttpPost("visit/{orderId:int}/satisfaction")]
         [ProducesResponseType<ApiResult<SatisfactionResultDto>>(StatusCodes.Status200OK)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status400BadRequest)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
         [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
         [Authorize(AuthenticationSchemes = JwtBearerDefaults.AuthenticationScheme, Roles = RoleNames.Member)]
-        public async Task<IActionResult> SetVisitSatisfaction(int id, [FromBody] SatisfactionRequestDto? body)
+        // 10/25 改名 id → orderId
+        public async Task<IActionResult> SetVisitSatisfaction(int orderId, [FromBody] SatisfactionRequestDto? body)
         {
             if (!IsValidSatisfaction(body)) return InvalidSatisfaction();
-            return ToResponse(await _memberReviews.SetVisitSatisfactionAsync(id, _currentUser.UserId, body!.Satisfaction!.Value));
+            // 10/25 改名 id → orderId
+            return ToResponse(await _memberReviews.SetVisitSatisfactionAsync(orderId, _currentUser.UserId, body!.Satisfaction!.Value));
         }
 
         /// <summary>對館方回覆表態</summary>

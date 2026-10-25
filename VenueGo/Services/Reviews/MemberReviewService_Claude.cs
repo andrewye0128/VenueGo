@@ -188,12 +188,14 @@ namespace VenueGo.Services.Reviews
             return targets.Select(t => t.Kind == ReviewKindCode.Visit
                                ? new PendingReviewItemDto(
                                      Kind: ReviewKind.Visit,
-                                     Ticket: t.OrderId,
+                                     // 10/25 改名 OrderId，原本：Ticket: t.OrderId,
+                                     OrderId: t.OrderId,
                                      Context: VisitContextOf(slots, t.OrderId),
                                      Deadline: ReviewMapper.ToDeadline(t.ExpiredAt, now))
                                : new PendingReviewItemDto(
                                      Kind: ReviewKind.Booking,
-                                     Ticket: t.OrderId,
+                                     // 10/25 改名 OrderId，原本：Ticket: t.OrderId,
+                                     OrderId: t.OrderId,
                                      Context: ReviewMapper.BookingContext(t.OrderId, orderNos.GetValueOrDefault(t.OrderId), ChannelOf(channels, t.OrderId)),
                                      Deadline: ReviewMapper.ToDeadline(t.ExpiredAt, now)))
                           .ToList();
@@ -223,7 +225,8 @@ namespace VenueGo.Services.Reviews
             // ⚠️ 還沒有分頁：一位會員的評論數量有限（每筆訂單最多各一則），之後真的變多再補 Skip／Take。
             return rows.Select(d => new ReviewedItemDto(
                            Kind: ReviewKindCodeExtensions.ToRouteKind(d.ReviewKind),
-                           Ticket: d.OrderId,
+                           // 10/25 改名 OrderId，原本：Ticket: d.OrderId,
+                           OrderId: d.OrderId,
                            Context: d.ReviewKind == (byte)ReviewKindCode.Visit
                                         ? ReviewMapper.VisitContext(d.VenueName, d.RentStartTime)
                                         : BookingReviewContext(d.OrderId, d.OrderNo),

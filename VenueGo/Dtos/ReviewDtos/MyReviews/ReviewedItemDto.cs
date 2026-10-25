@@ -10,7 +10,7 @@ namespace VenueGo.Dtos.ReviewDtos.MyReviews
     /// </summary>
     public sealed record ReviewedItemDto(
         string Kind,                 // ReviewKind 的值：visit／booking
-        int Ticket,                  // 訂單 Id（10/15 起現場、預約都是；以前現場評論是憑證 Id）。名稱沿用，前台不用改
+        int OrderId,                 // 訂單 Id（現場、預約都是）。10/25 從 Ticket 改名，JSON 欄位從 ticket 變成 orderId，前台一起改
         ReviewContextDto Context,
         byte StarRating,
         string? Excerpt,             // 內容開頭（已遮蔽個資、不雅字詞），只給星等時是 null

@@ -21,6 +21,15 @@ builder.Configuration.AddJsonFile(
     reloadOnChange: true
 );
 
+
+// QR 簽章密鑰：沒設定或太短就直接不讓程式啟動，避免掃 QR 時才發現驗不過
+var qrSigningKey = builder.Configuration["QrSigning:Key"];
+if (string.IsNullOrWhiteSpace(qrSigningKey) || qrSigningKey.Length < 32)
+{
+    throw new InvalidOperationException(
+        "缺少 QrSigning:Key 設定（至少 32 字元）。請在 appsettings.Local.json 加入，產生方式見 appsettings.json 的 Jwt 註解。");
+}
+
 // Add services to the container.
 builder.Services.AddControllersWithViews();
 
@@ -57,6 +66,28 @@ builder.Services.AddRateLimiter(options =>
                 "TooManyRequests"),
             cancellationToken);
     };
+
+    options.AddPolicy("TransferCreate", httpContext =>
+       RateLimitPartition.GetFixedWindowLimiter(
+           partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+           factory: _ => new FixedWindowRateLimiterOptions
+           {
+               PermitLimit = 10,
+               Window = TimeSpan.FromMinutes(10),
+               QueueLimit = 0,
+               AutoReplenishment = true
+           }));
+
+    options.AddPolicy("TransferRedeem", httpContext =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
+                Window = TimeSpan.FromMinutes(10),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
 });
 
 builder.Services.Configure<Microsoft.AspNetCore.Mvc.ApiBehaviorOptions>(o =>

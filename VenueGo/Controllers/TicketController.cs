@@ -1,20 +1,21 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using QRCoder;
 using System.Security.Claims;
+using VenueGo.Constants;
 using VenueGo.Data;
+using VenueGo.Enums;
 using VenueGo.Helpers;
 using VenueGo.Models.CheckinModels;
 using VenueGo.Models.Entities;
 using VenueGo.Services.CheckIn;
-using VenueGo.ViewModels.CheckinViewModels;
 using VenueGo.Services.Ticket;
-using VenueGo.Enums;
+using VenueGo.ViewModels.CheckinViewModels;
+using VenueGo.ViewModels.Shared;
 
 namespace VenueGo.Controllers
 {
-    [Authorize]
+    [Authorize(Roles = RoleNames.BackOffice)]
     public class TicketController : Controller
     {
         //private readonly dbVenueContext _db;
@@ -24,6 +25,7 @@ namespace VenueGo.Controllers
         private readonly CTicketViewModelFactory _viewFactory;
         private readonly CTicketStatusLogFactory _ticketStatusLogFactory;
         private readonly COvertimeChargeFactory _overtimeChargeFactory;
+        private const int TicketPageSize = 10;
         private int? GetCurrentUserId()
         {
             var value = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -41,19 +43,17 @@ namespace VenueGo.Controllers
             _overtimeChargeFactory = overtimeChargeFactory;
         }
 
-        public IActionResult Index(string? txtKeyword, DateOnly? selectedDate, int? venueId, int? status)
+        private IActionResult RedirectToList()
+        {
+            string savedQuery = HttpContext.Session.GetString("searchQuery") ?? "";
+            return Redirect(Url.Action("Index", "Ticket") + savedQuery);
+        }
+
+        public IActionResult Index(string? txtKeyword, DateOnly? selectedDate, int? venueId, int? status, int page = 1)
         {
 
-            // 沒有選擇日期時，預設使用今天的日期, 第一次進入頁面時，selectedDate 為 null傳入今天
-            // ViewBag傳到頁面是今天, 前一天為今天 - 1, 後一天為今天 + 1
-            // 有選擇日期時，使用選擇的日期, selectedDate 為選擇的日期
-            // ViewBag傳到頁面是選擇的日期, 前一天為選擇的日期 - 1, 後一天為選擇的日期 + 1
-
             // 網址有搜尋條件
-            if(Request.QueryString.HasValue)
-            {
-                HttpContext.Session.SetString("searchQuery", Request.QueryString.Value!);
-            }
+            HttpContext.Session.SetString("searchQuery", Request.QueryString.Value ?? "");
 
             //防呆
             DateOnly targetDate = selectedDate ?? _viewFactory.GetToday();
@@ -67,7 +67,7 @@ namespace VenueGo.Controllers
                 SelectedStatus = status,
                 // 使用<SelectListItem>接收下拉選單內容並用asp-items綁定了CTicketViewModelFactory裡搜尋場地的結果
                 AvailableVenues = _viewFactory.GetVenueOptions(),
-                Tickets = _ticketFactory.SearchTickets(targetDate, txtKeyword, venueId, status)
+                Tickets = _ticketFactory.SearchTickets(targetDate, txtKeyword, venueId, status, page, TicketPageSize)
             };
 
             return View(vm);
@@ -82,12 +82,12 @@ namespace VenueGo.Controllers
 
             if (isSuccess)
             {
-                return RedirectToAction("Index");
+                return RedirectToList();
             }
             else
             {
                 TempData["ErrorMessage"] = "票券不存在或是錯誤的進出行為";
-                return RedirectToAction("Index");
+                return RedirectToList();
             }
         }
 
@@ -99,12 +99,12 @@ namespace VenueGo.Controllers
 
             if (isSuccess)
             {
-                return RedirectToAction("Index");
+                return RedirectToList();
             }
             else
             {
                 TempData["ErrorMessage"] = "票券不存在或是錯誤的進出行為";
-                return RedirectToAction("Index");
+                return RedirectToList();
             }
         }
 
@@ -134,23 +134,6 @@ namespace VenueGo.Controllers
             return View(vm);
         }
 
-        private static string GetFailMessage(CheckInFailReason reason, string actionText) => reason switch
-        {
-            CheckInFailReason.TicketNotFound => "找不到這張票券",
-            CheckInFailReason.AlreadyCancelled => $"票券已取消，無法{actionText}",
-            CheckInFailReason.AlreadyExpired => $"票券已失效，無法{actionText}",
-            CheckInFailReason.AlreadyCompleted => $"票券已使用完畢，無法{actionText}",
-            CheckInFailReason.NotYetStartTime => $"尚未到預約時間，無法{actionText}",
-            CheckInFailReason.InvalidSequence => actionText switch
-            {
-                "入場" => "入場順序異常（可能已經入場）",
-                "離場" => "離場順序異常（這張票還沒入場）",
-                "取消" => "只有「有效」狀態的票券才能取消（已使用過的不行）",
-                "轉失效" => "只有「有效」狀態的票券才能轉失效",
-                _ => $"{actionText}失敗：異常操作行為"
-            },
-            _ => $"{actionText}失敗"
-        };
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -169,7 +152,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "入場"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "入場"); // 失敗一定有值
             }
             return RedirectToAction("ScanLog", new { id });
         }
@@ -194,7 +177,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "離場"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "離場"); // 失敗一定有值
             }
             return RedirectToAction("ScanLog", new { id });
         }
@@ -220,7 +203,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "取消"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "取消"); // 失敗一定有值
             }
             return RedirectToAction("ManualLog", new { id });
         }
@@ -247,7 +230,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "轉失效"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "轉失效"); // 失敗一定有值
             }
             return RedirectToAction("ManualLog", new { id });
         }
@@ -274,7 +257,7 @@ namespace VenueGo.Controllers
             }
             else
             {
-                TempData[CDictionary.TK_MSG_操作失敗] = GetFailMessage(result.Reason!.Value, "補發QRcode"); // 失敗一定有值
+                TempData[CDictionary.TK_MSG_操作失敗] = CheckinDisplayText.FailMessage(result.Reason!.Value, "補發QRcode"); // 失敗一定有值
             }
             return RedirectToAction("ManualLog", new { id });
         }
@@ -361,6 +344,8 @@ namespace VenueGo.Controllers
             return RedirectToAction("ScanLog", new { id });
         }
 
+
+        // QR 圖也改畫動態 payload,不會讓任何人撈到 Qrtoken 本身
         public async Task<IActionResult> QrImage(int id)
         {
             var qrtoken = await _viewFactory.GetQrtokenAsync(id);

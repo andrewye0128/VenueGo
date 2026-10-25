@@ -288,6 +288,14 @@
             setTimeout(function () { div.remove(); }, 4000);
       }
 
+      /* 10/25 新增：在原地切換圖釘的樣子（未讀清單用，不重新載入）。
+         跟 _QueueList.cshtml 產生的三個地方對齊：pinned、aria-pressed、title。 */
+      function setPinState(pin, pinned) {
+            pin.classList.toggle('pinned', pinned);
+            pin.setAttribute('aria-pressed', pinned ? 'true' : 'false');
+            pin.title = pinned ? '取消置頂' : '標記為優先處理';
+      }
+
       /* ── 目前的條件 ────────────────────────────────────
          全部存在 #queueState 的 data-* 上，由後端每次一起吐出來。 */
 
@@ -615,11 +623,32 @@
 
             // 3. 置頂：送出「要變成什麼」，成功後重新載入（排序會變）
             const pin = e.target.closest('.js-pin');
+            /* 10/25：未讀清單也能置頂，加上 inUnread 這段。原本：
             if (pin) {
                   const willPin = pin.getAttribute('aria-pressed') !== 'true';
                   pin.disabled = true;
                   post(pin.dataset.url, { isPinned: willPin })
                         .then(function () { return loadList(currentFilter()); })
+                        .catch(function (err) {
+                              flash(errorMessage(err), 'danger');
+                              pin.disabled = false;
+                        });
+                  return;
+            }
+            */
+            if (pin) {
+                  const willPin = pin.getAttribute('aria-pressed') !== 'true';
+                  /* 10/25 新增：未讀清單的排序跟置頂無關，重新載入只會讓讀過的這則從清單消失（它已經算待回覆了），
+                     員工正在看、可能正要回覆，所以只在原地換圖釘的樣子，不重新載入。 */
+                  const inUnread = currentFilter().tab === 'unread';
+                  pin.disabled = true;
+                  post(pin.dataset.url, { isPinned: willPin })
+                        .then(function () {
+                              if (!inUnread) return loadList(currentFilter());
+                              setPinState(pin, willPin);
+                              pin.disabled = false;
+                              flash(willPin ? '已置頂，在待回覆清單會排在最上面' : '已取消置頂');
+                        })
                         .catch(function (err) {
                               flash(errorMessage(err), 'danger');
                               pin.disabled = false;
@@ -991,6 +1020,10 @@
                   .then(function (res) {
                         const badge = item.querySelector('.js-read-badge');
                         if (badge) badge.classList.remove('d-none');
+
+                        // 10/25 新增：讀過了就算待回覆，後端才允許置頂，這時才把未讀清單裡的圖釘顯示出來
+                        const waitingPin = item.querySelector('.js-pin.pin-await');
+                        if (waitingPin) waitingPin.classList.remove('pin-await');
 
                         // data 為 true 代表這次才讀的；false 代表別人剛讀過，數字早就不對了
                         if (res.data.data === true) {

@@ -119,16 +119,22 @@ body {
                     transform: rotate(-35deg);
                 }
 
-        .queue-row {
-            display: flex;
-            align-items: center;
-            gap: .75rem;
-            padding: .7rem .9rem;
-            background: #fff;
-            border: 1px solid #e9ecef;
-            border-radius: 8px;
-            margin-bottom: .5rem;
+        /* 10/25 新增：未讀清單的圖釘，展開、記錄閱覽之前先佔位但看不見（也點不到、Tab 不會停在上面） */
+        .pin-btn.pin-await {
+            visibility: hidden;
+            opacity: 0;
         }
+
+.queue-row {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .7rem .9rem;
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    margin-bottom: .5rem;
+}
 
             .queue-row.is-pinned {
                 border-left: 4px solid #dc3545;

@@ -133,10 +133,27 @@
                按鈕裡不能再放按鈕，而且點圖釘會連帶觸發展開。 *@
                   <div class="accordion-header d-flex align-items-center">
 
+                        @* 10/25 未讀清單也放圖釘，原本只有待回覆有。原本：
                         @if (Model.Tab == QueueTab.Pending)
                         {
                               <button type="button"
                                       class="pin-btn ms-2 flex-shrink-0 js-pin @(item.IsPinned ? "pinned" : "")"
+                                      data-url="@Url.Action("TogglePin", new { id = item.ReviewId })"
+                                      aria-pressed="@(item.IsPinned ? "true" : "false")"
+                                      title="@(item.IsPinned ? "取消置頂" : "標記為優先處理")">
+                                    <i class="bi bi-pin-angle-fill"></i>
+                              </button>
+                        }
+                        *@
+                        @* 10/25 新增：未讀清單的圖釘。
+                           後端只讓「待回覆」的評論置頂（CanHandle），未讀的要先展開、記錄閱覽才算待回覆，
+                           所以先把位置留著但看不見（pin-await），閱覽紀錄存好之後 areview-queue.js 才把它顯示出來。
+                           位置先留著，標題列才不會在展開那一下往右跳，也跟待回覆清單對齊。 *@
+                        @if (Model.Tab == QueueTab.Pending || Model.Tab == QueueTab.Unread)
+                        {
+                              var pinAwait = Model.Tab == QueueTab.Unread && !item.IsRead;
+                              <button type="button"
+                                      class="pin-btn ms-2 flex-shrink-0 js-pin @(item.IsPinned ? "pinned" : "") @(pinAwait ? "pin-await" : "")"
                                       data-url="@Url.Action("TogglePin", new { id = item.ReviewId })"
                                       aria-pressed="@(item.IsPinned ? "true" : "false")"
                                       title="@(item.IsPinned ? "取消置頂" : "標記為優先處理")">

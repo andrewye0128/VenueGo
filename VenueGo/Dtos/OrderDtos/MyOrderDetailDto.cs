@@ -34,7 +34,7 @@
         /// <summary>下單當下的單價（成交快照，日後調價不會變）。</summary>
         public int UnitPrice { get; init; }
 
-        /// <summary>是否為尖峰，只供顯示（PeakSlotRules）。</summary>
+        /// <summary>是否為尖峰：下單當下存下來的值（舊資料才推算，見 PeakSlotRules）。</summary>
         public bool IsPeak { get; init; }
     }
 

@@ -1,6 +1,7 @@
 <!--
   會員中心／我的預約：篩選、列表（電腦表格／手機卡片）、分頁、明細、取消
   資料來自後端 GET /api/reservations（api/reservationApi.js），會員身分由登入的 JWT 決定
+  付款期限到了會自動重新讀取（useDueRefresh），後端排程改成已逾期後不用重新整理
   編號只顯示訂單編號（VG…），跟「訂單與付款」同一個編號；點編號跳到訂單頁並只查這一筆
   預約編號（R012）只在後台使用，這裡的 reservationId 只拿來呼叫 API
   UFormField、UInput、USelect、UAlert、UButton 與 useOverlay、useToast 由 Nuxt UI 自動匯入
@@ -16,6 +17,7 @@ import ListTable from "@/components/list/ListTable.vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import ReservationDetailModal from "@/components/reservations/ReservationDetailModal.vue";
 import { cancelMyReservation, getMyReservations } from "@/api/reservationApi";
+import { useDueRefresh } from "@/composables/useDueRefresh";
 import { useKeywordQuery } from "@/composables/useKeywordQuery";
 import { useSiteClock } from "@/composables/useSiteClock";
 import { ErrorCodes } from "@/constants/errorCodes";
@@ -87,10 +89,18 @@ const errorMessage = ref("");
 // 例如快速連點第 2 頁、第 3 頁，第 2 頁的回應比較晚回來時，不會蓋掉第 3 頁
 let latestRequestId = 0;
 
-async function load() {
+/**
+ * 讀取這一頁的預約
+ * @param {object} [options]
+ * @param {boolean} [options.silent] 自動重新讀取（useDueRefresh）用：不顯示讀取中、
+ *   失敗時保留原本的資料也不顯示錯誤（使用者沒按任何東西，突然跳出錯誤會很奇怪，下次再試就好）
+ */
+async function load({ silent = false } = {}) {
   const requestId = ++latestRequestId;
-  loading.value = true;
-  errorMessage.value = "";
+  if (!silent) {
+    loading.value = true;
+    errorMessage.value = "";
+  }
   try {
     const data = await getMyReservations({
       ...filters.value,
@@ -99,6 +109,13 @@ async function load() {
       pageSize: PAGE_SIZE,
     });
     if (requestId !== latestRequestId) return;
+    // 這一頁已經超過最後一頁（例如第 2 頁唯一的一筆逾期後，不再符合「待確認」的篩選）
+    // → 跳到最後一頁，不然畫面會顯示「查無資料」，但其實前一頁還有。改 page 會自動再查一次
+    const lastPage = Math.max(Math.ceil(data.totalCount / PAGE_SIZE), 1);
+    if (data.items.length === 0 && page.value > lastPage) {
+      page.value = lastPage;
+      return;
+    }
     result.value = data;
     // 測試空資料時用：
     // result.value = { items: [], totalCount: 0 };
@@ -111,10 +128,12 @@ async function load() {
       router.push({ name: "login" });
       return;
     }
+    if (silent) return;
     // http.js 已經把錯誤整理成中文的 err.message
     errorMessage.value = err.message || "讀取預約資料失敗，請稍後再試";
     result.value = { items: [], totalCount: 0 };
   } finally {
+    // 不分一般或安靜模式都要關：安靜模式可能剛好蓋掉使用者按的那一次，不關的話會一直顯示讀取中
     if (requestId === latestRequestId) loading.value = false;
   }
 }
@@ -125,8 +144,15 @@ watch(filters, () => {
   if (page.value !== 1) page.value = 1;
   else load();
 });
-watch(page, load);
-onMounted(load);
+// 用箭頭函式包起來：watch 會把新舊頁碼當參數傳進去，直接寫 watch(page, load) 會傳到 options
+watch(page, () => load());
+onMounted(() => load());
+
+// 付款期限到了自動重新讀取，不用重新整理就會看到「已逾期」（說明見 useDueRefresh.js）
+useDueRefresh(
+  computed(() => result.value.items),
+  () => load({ silent: true }),
+);
 
 // ── 表格欄位 ──
 // accessorKey：對應資料的欄位名稱；沒有對應欄位的（使用時間、操作）用 id

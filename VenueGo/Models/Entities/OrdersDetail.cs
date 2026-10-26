@@ -18,4 +18,6 @@ public partial class OrdersDetail
     public int Subtotal { get; set; }
 
     public TimeOnly? SlotTime { get; set; }
+
+    public bool? IsPeak { get; set; }
 }

@@ -44,6 +44,23 @@
   訪客：存在 sessionStorage，關掉分頁就回到展開，每個分頁各自記。
   在這一頁按登出時（NavBar），會員資料被清空，這裡馬上改用訪客的狀態。
   localStorage／sessionStorage 被瀏覽器封鎖時會丟例外：一律當成「沒有紀錄」，不讓頁面壞掉。
+
+  ── 10/26：回頂部 ───────────────────────────────────────────
+  評論專區的篩選（運動類型分頁、星等分布、篩選列）都在最上面，顧客會一直回去調，所以加「回頂部」，捲到整頁最上面。
+  - 什麼時候出現：評論卡的開頭捲出畫面之後（＝上面的篩選列已經看不到了）。篩選列還看得到時，這顆按鈕沒有用。
+    看評論卡開頭的一個空 div（topSentinel）有沒有捲到畫面上方的 header（TopBar＋NavBar）底下。
+    10/26 晚驗收修正：原本用 IntersectionObserver 看它有沒有捲出「畫面」，沒算到固定在上面的 header——
+    篩選列早就被 NavBar 蓋住了，按鈕還沒出現。header 的高度每次現量（跟 ReviewIndexView 換頁時捲動的算法一樣），
+    手機、電腦 header 不一樣高也不用另外寫。
+  - 放哪裡（四種情況）：
+    1. 左右換頁區：右下角。頁碼搬到左下角，兩個一樣高，左右對稱。
+    2. 換頁 Bar：Bar 的右邊那一格（原本空著，是為了讓中間的換頁鈕置中，跟左邊的收合鈕對稱）。
+       品牌藍的字＋「↑ 頂線」圖示，底色跟 Bar 一樣：低調，但看得出跟換頁鈕不同。平板以上寬度夠，「回頂部」三個字放在圖示左邊。
+       Bar 收合後：改成右下角的按鈕（跟樣子 1 一樣）。
+    3. 手機橫向的換頁膠囊：膠囊（或收合後的把手）正上方、貼著右邊。橫向時中間要留給評論卡，兩側邊緣最不擋視線。
+       只放圖示，省寬度。膠囊收合、展開時位置不變，不會跳。
+    4. 只有 1 頁（沒有任何換頁的東西）：右下角，跟樣子 1 一樣。
+  - 「減少動態效果」的人直接跳到頂部，不做平滑捲動。
 -->
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
@@ -193,6 +210,28 @@ function onKeyup(e) {
   if (KEY_DIR[e.key] === press.activeDir.value) press.stop();
 }
 
+// ── 10/26：回頂部（檔頭）──
+// topSentinel：評論卡開頭的空 div。它捲出畫面上緣，就代表上面的篩選列已經看不到了
+const topSentinel = ref(null);
+const showTop = ref(false);
+// 10/26 晚：改成捲動時自己算，要扣掉 header（檔頭）。原本：let topObserver = null;
+let topFrame = 0;
+function updateShowTop() {
+  topFrame = 0;
+  const el = topSentinel.value;
+  if (!el) return;
+  const headerHeight = document.querySelector("header")?.offsetHeight ?? 0;
+  showTop.value = el.getBoundingClientRect().top < headerHeight;
+}
+// 捲動事件很密，一個畫格只算一次
+function onScrollForTop() {
+  if (topFrame === 0) topFrame = requestAnimationFrame(updateShowTop);
+}
+function scrollToTop() {
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.scrollTo({ top: 0, behavior: reduce ? "auto" : "smooth" });
+}
+
 // ── 用哪一種樣子 ──
 const root = ref(null);
 const canHover = ref(false);
@@ -234,6 +273,14 @@ onMounted(() => {
   window.addEventListener("resize", measure);
   window.addEventListener("keydown", onKeydown);
   window.addEventListener("keyup", onKeyup);
+  // 10/26：回頂部（檔頭）。10/26 晚改成捲動時算、扣掉 header。原本：
+  // topObserver = new IntersectionObserver(([entry]) => {
+  //   showTop.value = !entry.isIntersecting && entry.boundingClientRect.top < 0;
+  // });
+  // if (topSentinel.value) topObserver.observe(topSentinel.value);
+  window.addEventListener("scroll", onScrollForTop, { passive: true });
+  window.addEventListener("resize", onScrollForTop);
+  updateShowTop();
 });
 onBeforeUnmount(() => {
   hoverQuery?.removeEventListener("change", onHoverChange);
@@ -241,6 +288,10 @@ onBeforeUnmount(() => {
   window.removeEventListener("resize", measure);
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("keyup", onKeyup);
+  // 原本：topObserver?.disconnect();
+  window.removeEventListener("scroll", onScrollForTop);
+  window.removeEventListener("resize", onScrollForTop);
+  cancelAnimationFrame(topFrame);
 });
 
 // ── 換頁 Bar 的收合狀態（檔頭說明）──
@@ -305,6 +356,8 @@ watch(
 
 <template>
   <div ref="root" class="relative">
+    <!-- 10/26：回頂部要不要出現，看這個空 div 有沒有捲出畫面（檔頭） -->
+    <div ref="topSentinel" aria-hidden="true"></div>
     <slot />
 
     <template v-if="hasPages">
@@ -368,20 +421,65 @@ watch(
           </span>
         </button>
 
-        <!-- 右下角頁碼：只顯示 -->
+        <!-- 頁碼：只顯示。
+             10/26 從右下角搬到左下角，右下角給回頂部；高度改成跟回頂部一樣（44px），左右對稱。原本：
+             class="fixed right-4 bottom-4 z-30 rounded-md border border-neutral-border bg-neutral-surface px-3 py-1.5 text-sm font-semibold text-neutral-text-primary shadow-sm tabular-nums" -->
         <div
-          class="fixed right-4 bottom-4 z-30 rounded-md border border-neutral-border bg-neutral-surface px-3 py-1.5 text-sm font-semibold text-neutral-text-primary shadow-sm tabular-nums"
+          class="fixed bottom-4 left-4 z-30 inline-flex h-11 items-center rounded-md border border-neutral-border bg-neutral-surface px-3 text-sm font-semibold text-neutral-text-primary shadow-sm tabular-nums"
           role="status"
           :aria-label="`第 ${shownPage} 頁，共 ${totalPages} 頁`"
         >
           {{ shownPage }} / {{ totalPages }}
         </div>
+
+        <!-- 10/26：右下角回頂部（檔頭） -->
+        <Transition
+          enter-active-class="transition-opacity duration-200"
+          enter-from-class="opacity-0"
+          leave-active-class="transition-opacity duration-200"
+          leave-to-class="opacity-0"
+        >
+          <button
+            v-if="showTop"
+            type="button"
+            class="pager-button top-button top-float fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 h-11 gap-1 rounded-md border border-neutral-border bg-neutral-surface px-3 text-sm font-semibold shadow-sm"
+            @click="scrollToTop"
+          >
+            回頂部
+            <UIcon name="i-lucide-arrow-up-to-line" class="size-4.5" aria-hidden="true" />
+          </button>
+        </Transition>
       </template>
 
       <!-- ── 樣子 3：手機橫向的換頁膠囊（右下角，往右收合）── -->
       <template v-else-if="usePill">
         <!-- 佔位：最後一張卡捲到最下面時，不會被膠囊蓋住 -->
         <div class="h-14" aria-hidden="true"></div>
+
+        <!-- 10/26：回頂部放在膠囊（或收合後的把手）正上方、貼著右邊（檔頭）。
+             膠囊和把手都是 44px 高，往上再空 4px：按鈕的 bottom＝膠囊的 bottom＋2.75rem。只放圖示。
+             看起來 38px（跟膠囊的按鈕一樣），可以按的範圍用外層撐到 44px（跟收合後的把手同一個作法）。
+             不用 pill-hit：它會把 position 改成 relative，按鈕就不會固定在畫面上了 -->
+        <Transition
+          enter-active-class="transition-opacity duration-200"
+          enter-from-class="opacity-0"
+          leave-active-class="transition-opacity duration-200"
+          leave-to-class="opacity-0"
+        >
+          <button
+            v-if="showTop"
+            type="button"
+            class="top-hit fixed right-[max(0.25rem,env(safe-area-inset-right))] bottom-[calc(max(0.5rem,env(safe-area-inset-bottom))+2.75rem)] z-30 flex size-11 items-center justify-center"
+            aria-label="回頂部"
+            @click="scrollToTop"
+          >
+            <span
+              class="pager-button top-button top-float top-round size-9.5 border border-neutral-border bg-neutral-surface shadow-md"
+            >
+              <UIcon name="i-lucide-arrow-up-to-line" class="size-4.5" aria-hidden="true" />
+            </span>
+          </button>
+        </Transition>
 
         <div
           v-if="!collapsed"
@@ -497,7 +595,31 @@ watch(
                 <IconChevronRightBold class="size-6" aria-hidden="true" />
               </button>
             </div>
-            <span aria-hidden="true"></span>
+            <!-- 10/26：右邊那格放回頂部（檔頭）。原本空著：<span aria-hidden="true"></span>
+                 這格的寬度是固定的（手機 3rem、平板以上 7rem），按鈕出現、消失時中間的換頁鈕不會動 -->
+            <div class="flex justify-end">
+              <Transition
+                enter-active-class="transition-opacity duration-200"
+                enter-from-class="opacity-0"
+                leave-active-class="transition-opacity duration-200"
+                leave-to-class="opacity-0"
+              >
+                <button
+                  v-if="showTop"
+                  type="button"
+                  class="pager-button top-button h-12 w-12 gap-1 text-sm font-semibold sm:h-11 sm:w-28"
+                  aria-label="回頂部"
+                  @click="scrollToTop"
+                >
+                  <span class="hidden sm:inline" aria-hidden="true">回頂部</span>
+                  <UIcon
+                    name="i-lucide-arrow-up-to-line"
+                    class="size-6 sm:size-5"
+                    aria-hidden="true"
+                  />
+                </button>
+              </Transition>
+            </div>
           </div>
         </div>
 
@@ -517,7 +639,47 @@ watch(
             <UIcon name="i-lucide-chevron-up" class="size-6" aria-hidden="true" />
           </span>
         </button>
+
+        <!-- 10/26：Bar 收合後，回頂部改成右下角的按鈕（跟左右換頁區的一樣，檔頭） -->
+        <template v-if="collapsed">
+          <Transition
+            enter-active-class="transition-opacity duration-200"
+            enter-from-class="opacity-0"
+            leave-active-class="transition-opacity duration-200"
+            leave-to-class="opacity-0"
+          >
+            <button
+              v-if="showTop"
+              type="button"
+              class="pager-button top-button top-float fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 h-11 gap-1 rounded-md border border-neutral-border bg-neutral-surface px-3 text-sm font-semibold shadow-sm"
+              @click="scrollToTop"
+            >
+              回頂部
+              <UIcon name="i-lucide-arrow-up-to-line" class="size-4.5" aria-hidden="true" />
+            </button>
+          </Transition>
+        </template>
       </template>
+    </template>
+
+    <!-- 10/26：只有 1 頁，沒有任何換頁的東西：回頂部在右下角（檔頭） -->
+    <template v-else>
+      <Transition
+        enter-active-class="transition-opacity duration-200"
+        enter-from-class="opacity-0"
+        leave-active-class="transition-opacity duration-200"
+        leave-to-class="opacity-0"
+      >
+        <button
+          v-if="showTop"
+          type="button"
+          class="pager-button top-button top-float fixed right-[max(1rem,env(safe-area-inset-right))] bottom-[max(1rem,env(safe-area-inset-bottom))] z-30 h-11 gap-1 rounded-md border border-neutral-border bg-neutral-surface px-3 text-sm font-semibold shadow-sm"
+          @click="scrollToTop"
+        >
+          回頂部
+          <UIcon name="i-lucide-arrow-up-to-line" class="size-4.5" aria-hidden="true" />
+        </button>
+      </Transition>
     </template>
   </div>
 </template>
@@ -637,6 +799,32 @@ watch(
   outline: 2px solid var(--color-brand-primary);
   outline-offset: 2px;
 }
+/* 10/26：回頂部用品牌藍（字和圖示），底色維持原本的（檔頭）。要寫兩個 class，才蓋得過上面 .pager-button 的顏色 */
+.pager-button.top-button {
+  color: var(--color-brand-primary);
+}
+.pager-button.top-round {
+  border-radius: 9999px;
+}
+.top-hit:focus-visible {
+  outline: none;
+}
+.top-hit:focus-visible .pager-button {
+  outline: 2px solid var(--color-brand-primary);
+  outline-offset: 2px;
+}
+/* 浮在評論卡上的回頂部：滑鼠移上去的底色要「不透明」，不然會看到後面的評論卡（.pager-button 的底色是半透明的） */
+@media (hover: hover) {
+  .top-hit:hover .pager-button.top-float,
+  .pager-button.top-float:hover {
+    background-color: color-mix(
+      in srgb,
+      var(--color-brand-primary) 8%,
+      var(--color-neutral-surface)
+    );
+  }
+}
+
 /* 10/24：膠囊的按鈕看起來只有 38px 高，可以按的範圍往外撐到 44px（Apple 建議的最小觸控尺寸）。
    透明的 ::after 比按鈕大一圈，點在上面就等於點到按鈕。相鄰按鈕撐出去的部分會重疊，重疊處由後面的按鈕接手。 */
 .pill-hit {

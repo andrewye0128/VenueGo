@@ -366,11 +366,13 @@ const mentionOptions = [
         "
       />
 
+      <!-- 10/26：告訴顧客公開之後什麼時候看得到（評論專區只列「館方回覆過」或「已滿緩衝天數」的評論）。
+           天數由後端給（setup.form.publicBufferDays），前端不寫死。原本：description="送出後仍可隨時在評論頁切換。" -->
       <USwitch
         v-if="setup.form.showPublic"
         v-model="state.isPublic"
         label="公開此評論"
-        description="送出後仍可隨時在評論頁切換。"
+        :description="`公開的評論會在館方回覆後、或最晚 ${setup.form.publicBufferDays} 天後，顯示在評論專區。送出後仍可隨時在評論頁切換。`"
       />
 
       <UAlert

@@ -73,7 +73,8 @@ namespace VenueGo.Services.Reviews
                     CanChooseAnonymous: true,
                     ShowPublic: true,
                     Initial: new WriteFormInitialDto(IsAnonymous: false, IsPublic: true),
-                    ContentMaxLength: ContentMaxLength)));
+                    ContentMaxLength: ContentMaxLength,
+                    PublicBufferDays: ReviewPolicy.PublicBufferDays)));
         }
 
         /// <inheritdoc/>
@@ -96,7 +97,8 @@ namespace VenueGo.Services.Reviews
                     CanChooseAnonymous: false,
                     ShowPublic: false,
                     Initial: new WriteFormInitialDto(IsAnonymous: false, IsPublic: false),
-                    ContentMaxLength: ContentMaxLength)));
+                    ContentMaxLength: ContentMaxLength,
+                    PublicBufferDays: ReviewPolicy.PublicBufferDays)));
         }
 
         // ════════════════════════════════════════════════════════

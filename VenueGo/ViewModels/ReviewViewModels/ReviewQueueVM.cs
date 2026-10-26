@@ -94,12 +94,27 @@ namespace VenueGo.ViewModels.ReviewViewModels
         public const int MaxKeywords = 5;
     }
 
-    /// <summary>未回覆的時間警示。</summary>
+    /// <summary>
+    /// 未回覆的時間警示。
+    /// 10/26 負評優先：Soon、Late 依星等不同（規則在 Models/ReviewModels/ReviewUrgency_Claude.cs）。原本：
+    ///     None,       // 不用提醒
+    ///     Soon,       // 橘：滿 3 天
+    ///     Overdue     // 紅：已滿 7 天
+    /// </summary>
     public enum OverdueLevel
     {
         None,       // 不用提醒
-        Soon,       // 橘：滿 3 天
-        Overdue     // 紅：已滿 7 天
+        Soon,       // 橘：期限當天、已過目標期限，或放了滿 3 天
+        Late,       // 紅：還沒閱覽，超過閱覽的最遲期限（10/26 新增）
+        Overdue     // 紅：已滿 7 天（已經自動公開）
+    }
+
+    /// <summary>10/26：一則評論現在該做什麼。</summary>
+    public enum DeadlineStage
+    {
+        None,       // 已回覆或已標垃圾，不用做
+        Read,       // 還沒閱覽
+        Reply       // 閱覽過，還沒回覆
     }
 
     /// <summary>分組的依據。9/29 加：原本只有依訂單，現在多了依場地。</summary>
@@ -165,7 +180,8 @@ namespace VenueGo.ViewModels.ReviewViewModels
     /// 某一頁第一則的「排序依據時間」與是否置頂（10/23，評論管理長按快轉時顯示）。
     /// Time：已完成是回覆時間、垃圾桶是標記時間，其餘是評論時間（跟清單的排序一致）。
     /// </summary>
-    public sealed record QueuePageMark(DateTime Time, bool IsPinned);
+    /// <remarks>10/26：未讀、待回覆改成依期限排序，Time 改放期限，Prefix 放「期限 」讓畫面上看得懂。原本只有 Time、IsPinned。</remarks>
+    public sealed record QueuePageMark(DateTime Time, bool IsPinned, string Prefix = "");
 
     /// <summary>館方評論清單的整頁資料。Index 與 QueueList 共用同一份。</summary>
     public sealed record ReviewQueueVM
@@ -242,6 +258,18 @@ namespace VenueGo.ViewModels.ReviewViewModels
         public List<QueuePageMark> PageMarks { get; init; } = new();
         /// <summary>符合條件的總則數（Items 只有這一頁）。</summary>
         public int TotalItemCount { get; init; }
+
+        /// <summary>
+        /// 10/26：全部、已完成清單在預設條件下，沒有列出的「只有星等」評論有幾則（跟顧客端評論專區一樣）。
+        /// 0 就不顯示說明。
+        /// </summary>
+        public int RatingOnlyHidden { get; init; }
+
+        /// <summary>
+        /// 10/26：未讀、待回覆清單最後那一段「只有星等」的評論有幾則（不含置頂的）。
+        /// 分隔線上顯示「只有星等（N 則）」。依訂單、場地分組時不畫分隔線，這個是 0。
+        /// </summary>
+        public int RatingOnlySectionCount { get; init; }
 
         /// <summary>已經打亂順序的罐頭回覆，整頁共用一組。</summary>
         public List<CannedReply> CannedReplies { get; init; } = new();

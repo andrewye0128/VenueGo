@@ -68,6 +68,18 @@ namespace VenueGo.ViewModels.ReviewViewModels
         /// </summary>
         public OverdueLevel OverdueLevel { get; init; }
 
+        // ── 10/26 負評優先：現在該做什麼、期限（Controller 用同一個「現在」算好）──
+        public DeadlineStage Stage { get; init; }
+
+        /// <summary>目前這個階段的目標期限。已處理的是 null。未讀、待回覆清單依這個排序。</summary>
+        public DateTime? DueAt { get; init; }
+
+        /// <summary>期限的文字，例如「今天 18:00」。已處理的是 null。</summary>
+        public string? DueText { get; init; }
+
+        /// <summary>已經過了目標期限（還沒處理的才會是 true）。</summary>
+        public bool IsPastDue { get; init; }
+
         // ── 計算屬性 ──
         public bool IsRead => ReadAt != null;
         public bool HasReply => RepliedAt != null;

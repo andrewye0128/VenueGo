@@ -1,5 +1,6 @@
 ﻿@model VenueGo.ViewModels.ReviewViewModels.ReviewQueueVM
 @using VenueGo.Models.ReviewModels
+@using VenueGo.ViewModels.ReviewViewModels   @* 10/26 新增：QueueTab（封存數字的腳本） *@
 
 @*
     放置路徑：Views/AReview/Index.cshtml
@@ -22,6 +23,37 @@
 
 @* 操作結果提示，由 JS 放進來 *@
 <div id="queueFlash" aria-live="polite"></div>
+
+@* 10/26：封存的數字只要點開過封存清單一次，這個分頁就不再顯示，關掉分頁重開才會再出現。
+   跟換頁 Bar 的收合狀態一樣存在 sessionStorage（areview-pager.js），狀態掛在 <html> 的 data-spam-count-seen 上，
+   數字藏起來的樣式在 site.css。清單被整塊換掉時，新的數字也會照著藏起來，不必重新套用。
+   這段寫在清單前面、不放進 Scripts：畫面畫出數字之前就先套上，才不會一載入先閃一下數字再消失。
+   瀏覽器封鎖 sessionStorage 時：當成沒有紀錄，只在這次載入有效。 *@
+<script>
+      (function () {
+            'use strict';
+            const STORE_KEY = 'venuego.reviewQueue.spamCountSeen';
+            const SEEN_ATTR = 'data-spam-count-seen';
+
+            function markSeen() {
+                  document.documentElement.setAttribute(SEEN_ATTR, '');
+                  try { sessionStorage.setItem(STORE_KEY, '1'); } catch { /* 存不了就只在這次載入有效 */ }
+            }
+
+            let seen = false;
+            try { seen = sessionStorage.getItem(STORE_KEY) === '1'; } catch { seen = false; }
+            if (seen) document.documentElement.setAttribute(SEEN_ATTR, '');
+
+            // 一開始就是封存清單（網址帶 tab=spam、按 F5）
+            if (@Json.Serialize(Model.Tab == QueueTab.Spam)) markSeen();
+
+            // 在頁面上切到封存清單：清單換掉之後 areview-queue.js 會發出 queue:rendered，看 #queueState 的 data-tab
+            document.addEventListener('queue:rendered', function () {
+                  const state = document.getElementById('queueState');
+                  if (state && state.dataset.tab === '@QueueTab.Spam') markSeen();
+            });
+      })();
+</script>
 
 @* 清單容器。data-list-url 讓 JS 知道要去哪裡拿新清單，
    網址由 Url.Action 產生，路由改了這裡會自動跟著改。 *@

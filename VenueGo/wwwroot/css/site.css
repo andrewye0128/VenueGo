@@ -273,3 +273,28 @@ body {
 #replyPreviewModal .rp-bubble {
     border-top-left-radius: 0 !important;
 }
+
+/* 10/26 負評優先：未讀、待回覆清單最後一段「只有星等」的評論前面的分隔線（_QueueList.cshtml）。
+   Bootstrap 的 accordion 會把「不是第一個」的評論上框線拿掉，分隔線後面那一則要補回來，不然會跟分隔線黏在一起。 */
+#reviewQueue .queue-section-divider {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    margin: 1rem 0 .5rem;
+}
+
+    #reviewQueue .queue-section-divider::before,
+    #reviewQueue .queue-section-divider::after {
+        content: "";
+        flex: 1;
+        border-top: 1px dashed var(--bs-border-color);
+    }
+
+    #reviewQueue .queue-section-divider + .accordion-item {
+        border-top: var(--bs-accordion-border-width) solid var(--bs-accordion-border-color);
+    }
+
+/* 10/26：點開過封存清單之後，這個分頁就不再顯示封存的數字（狀態由 Views/AReview/Index.cshtml 掛在 <html> 上） */
+html[data-spam-count-seen] .js-spam-count {
+    display: none;
+}

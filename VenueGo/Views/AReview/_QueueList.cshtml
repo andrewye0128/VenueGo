@@ -23,11 +23,23 @@
 
 @functions {
       // 這個 Partial 只在這裡用到的小工具
+      // 10/26：多了 Late（還沒閱覽、超過閱覽最遲期限），跟 Overdue 一樣是紅色。原本只有 Overdue、Soon 兩種
       static string OverdueClass(OverdueLevel level) => level switch
       {
             OverdueLevel.Overdue => "queue-overdue",
+            OverdueLevel.Late    => "queue-overdue",
             OverdueLevel.Soon    => "queue-soon",
+            OverdueLevel.None    => "",
             _                    => ""
+      };
+
+      // 10/26 負評優先：期限 badge 上的動詞
+      static string StageVerb(DeadlineStage stage) => stage switch
+      {
+            DeadlineStage.Read  => "閱覽",
+            DeadlineStage.Reply => "回覆",
+            DeadlineStage.None  => "",
+            _                   => ""
       };
 
       // 已表態的滿意度：左側色條。未表態或還沒回覆就不上色。
@@ -185,7 +197,9 @@
                                                 <span class="badge rounded-pill text-bg-light border"><i class="bi bi-geo-alt"></i> 現場</span>
                                           }
 
-                                          @* 警示：顏色之外還有圖示與文字，色覺障礙者也分得出來 *@
+                                          @* 警示：顏色之外還有圖示與文字，色覺障礙者也分得出來
+                                             10/26 負評優先：依星等有不同的期限（ReviewUrgency_Claude.cs），badge 上寫出期限。
+                                             未讀、待回覆清單依期限排序，沒到提醒的也顯示一個淡色的期限，排序才看得懂。原本：
                                           @if (item.OverdueLevel == OverdueLevel.Overdue)
                                           {
                                                 <span class="badge text-bg-danger">
@@ -198,8 +212,53 @@
                                                       <i class="bi bi-hourglass-split"></i> 請儘快回覆
                                                 </span>
                                           }
+                                          *@
+                                          @if (item.OverdueLevel == OverdueLevel.Overdue)
+                                          {
+                                                <span class="badge text-bg-danger">
+                                                      <i class="bi bi-exclamation-triangle"></i> 超過 @ReviewPolicy.PublicBufferDays 天未回覆
+                                                </span>
+                                          }
+                                          else if (item.OverdueLevel == OverdueLevel.Late)
+                                          {
+                                                <span class="badge text-bg-danger">
+                                                      <i class="bi bi-exclamation-triangle"></i> 超過 @ReviewUrgency.ReadLimitDays 天未閱覽
+                                                </span>
+                                          }
+                                          else if (item.OverdueLevel == OverdueLevel.Soon && !item.IsPastDue)
+                                          {
+                                                <span class="badge text-bg-warning">
+                                                      <i class="bi bi-hourglass-split"></i> @($"{item.DueText} 前{StageVerb(item.Stage)}")
+                                                </span>
+                                          }
+                                          else if (item.OverdueLevel == OverdueLevel.Soon)
+                                          {
+                                                <span class="badge text-bg-warning">
+                                                      <i class="bi bi-hourglass-split"></i> @("請儘快" + StageVerb(item.Stage))
+                                                </span>
+                                          }
+                                          else if (item.OverdueLevel == OverdueLevel.None
+                                                   && item.DueText != null
+                                                   && (Model.Tab == QueueTab.Unread || Model.Tab == QueueTab.Pending))
+                                          {
+                                                <span class="badge text-bg-light border text-muted">
+                                                      <i class="bi bi-clock"></i> @($"{item.DueText} 前{StageVerb(item.Stage)}")
+                                                </span>
+                                          }
 
+                                          @* 10/27：已回覆的不顯示「已閱覽」（回覆過一定讀過，兩個一起出現是重複的）；
+                                             標成垃圾的改顯示「已封存」，黑底白字跟垃圾理由同一個樣式。原本：
                                           <span class="badge text-bg-secondary js-read-badge @(item.IsRead ? "" : "d-none")">已閱覽</span>
+                                          *@
+                                          @if (item.IsSpam)
+                                          {
+                                                <span class="badge rounded-pill text-bg-dark">已封存</span>
+                                          }
+                                          @if (!item.IsSpam && !item.HasReply)
+                                          {
+                                                @* 展開未讀的評論時，areview-queue.js 會把 d-none 拿掉 *@
+                                                <span class="badge text-bg-secondary js-read-badge @(item.IsRead ? "" : "d-none")">已閱覽</span>
+                                          }
 
                                           @if (item.HasReply)
                                           {
@@ -694,7 +753,8 @@
                   <a class="nav-link js-queue-link @(Model.Tab == QueueTab.Spam ? "active" : "")"
                      href="@Url.Action("Index", RouteFor(tab: QueueTab.Spam))">
                         封存
-                        <span class="badge rounded-pill text-bg-secondary ms-1">@Model.SpamCount</span>
+                        @* 10/26：點開過封存清單之後，這個分頁就不再顯示數字（Index.cshtml 的 js-spam-count） *@
+                        <span class="badge rounded-pill text-bg-secondary ms-1 js-spam-count">@Model.SpamCount</span>
                   </a>
             </li>
       </ul>
@@ -746,6 +806,13 @@
             }
             @* 10/23：分頁之後 Items 只有這一頁，總數改看 TotalItemCount *@
             <span>（全部都要符合）· 找到 @Model.TotalItemCount 則</span>
+      </p>
+}
+@* 10/26：全部、已完成在預設條件下不列「只有星等」的評論，跟顧客端評論專區一樣說明還有幾則、怎麼看到 *@
+@if (Model.RatingOnlyHidden > 0)
+{
+      <p class="small text-muted mb-2">
+            另有 @Model.RatingOnlyHidden 則只給星等、沒有文字的評論沒有列出；選任一個篩選條件就會一起顯示。
       </p>
 }
 @if (Model.Tab == QueueTab.Unread)
@@ -845,10 +912,28 @@ else if (Model.Grouped || Model.GroupByVenue)
 }
 else
 {
-      @* ── 一般清單 ── *@
+      @* ── 一般清單 ──
+         10/26：未讀、待回覆最後一段是「只有星等」的評論，前面畫一條分隔線（RatingOnlySectionCount）。
+         這一頁從那一段開始時，分隔線放在最上面，一看就知道這頁都是只有星等的。原本：
       <div class="accordion" id="reviewQueue">
             @foreach (var item in Model.Items)
             {
+                  await RenderItem(item);
+            }
+      </div>
+      *@
+      <div class="accordion" id="reviewQueue">
+            @{ bool inRatingOnly = false; }
+            @foreach (var item in Model.Items)
+            {
+                  bool startsSection = Model.RatingOnlySectionCount > 0 && !inRatingOnly && item.IsRatingOnly && !item.IsPinned;
+                  if (startsSection)
+                  {
+                        inRatingOnly = true;
+                        <div class="queue-section-divider small text-muted" role="separator">
+                              <span>只有星等（@Model.RatingOnlySectionCount 則）</span>
+                        </div>
+                  }
                   await RenderItem(item);
             }
       </div>
@@ -865,7 +950,8 @@ else
 @if (Model.TotalPages > 1)
 {
       var pageMarks = System.Text.Json.JsonSerializer.Serialize(
-            Model.PageMarks.Select(m => new { time = m.Time.ToString("yyyy-MM-ddTHH:mm"), pinned = m.IsPinned }));
+            // 10/26：加 prefix（未讀、待回覆是「期限 」）。原本：Model.PageMarks.Select(m => new { time = m.Time.ToString("yyyy-MM-ddTHH:mm"), pinned = m.IsPinned }));
+            Model.PageMarks.Select(m => new { time = m.Time.ToString("yyyy-MM-ddTHH:mm"), pinned = m.IsPinned, prefix = m.Prefix }));
       <div id="queuePager" class="queue-pager"
            data-page="@Model.Page"
            data-total-pages="@Model.TotalPages"

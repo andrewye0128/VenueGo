@@ -331,14 +331,16 @@ html:not([${COLLAPSED_ATTR}]):has(#queuePager) .vg-tm-toast { bottom: 109px; }
         render();
     }
 
-    // 日期：10月19日 14:30（不是今年才加上年份）；置頂的加註
+      // 日期：10月19日 14:30（不是今年才加上年份）；置頂的加註
+      // 10/26：未讀、待回覆改成依期限排序，後端給 prefix「期限 」，加在日期前面。原本：return mark.pinned ? '置頂・' + date : date;
     function markText(mark) {
         if (!mark || typeof mark.time !== 'string') return '';
         const m = mark.time.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
         if (!m) return '';
         const year = Number(m[1]);
         const date = (year === new Date().getFullYear() ? '' : year + '年') + Number(m[2]) + '月' + Number(m[3]) + '日 ' + m[4] + ':' + m[5];
-        return mark.pinned ? '置頂・' + date : date;
+          const text = (typeof mark.prefix === 'string' ? mark.prefix : '') + date;
+          return mark.pinned ? '置頂・' + text : text;
     }
 
     function render() {

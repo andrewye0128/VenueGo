@@ -482,7 +482,13 @@ namespace VenueGo.Controllers
                 SpamReasonText           = r.SpamMarkedAt != null ? ReviewPolicy.SpamReasonText(r.SpamReason) : null,
                 SpamMarkedByEmployeeName = x?.SpamMarkedByEmployeeName,
 
-                OverdueLevel = GetOverdueLevel(r, now)
+                // 10/26 負評優先：提醒的顏色依星等不同（ReviewUrgency_Claude.cs）。原本：
+                // OverdueLevel = GetOverdueLevel(r, now)
+                OverdueLevel = ReviewUrgency.LevelOf(r, now),
+                Stage        = ReviewUrgency.StageOf(r),
+                DueAt        = ReviewUrgency.DueOf(r),
+                DueText      = ReviewUrgency.DueOf(r) is DateTime due ? ReviewUrgency.DueText(due, now) : null,
+                IsPastDue    = ReviewUrgency.DueOf(r) is DateTime dueAt && now >= dueAt
             };
         }
 
@@ -499,7 +505,7 @@ namespace VenueGo.Controllers
         /// </summary>
         private static List<ReviewQueueGroupVM> BuildGroups(List<ReviewQueueItemVM> items, string tab)
         {
-            bool byReplied = tab == QueueTab.Completed;
+            // 10/26：排序改由 SortItems、SortGroups 依 tab 決定，不再需要。原本：bool byReplied = tab == QueueTab.Completed;
 
             var groups = items
                 // 追不到訂單的各自成一組：用「負的 ReviewId」當臨時分組鍵，
@@ -509,21 +515,26 @@ namespace VenueGo.Controllers
                 {
                     OrderId = g.Key > 0 ? g.Key : null,
                     OrderNo = g.Select(i => i.OrderNo).FirstOrDefault(n => n != null),
-                    Items   = byReplied
-                              ? g.OrderByDescending(i => i.RepliedAt).ToList()
-                              : g.OrderBy(i => i.CreatedAt).ToList()
+                    // 10/26：組內也照清單的順序（未讀、待回覆是期限）。原本：
+                    // Items   = byReplied
+                    //           ? g.OrderByDescending(i => i.RepliedAt).ToList()
+                    //           : g.OrderBy(i => i.CreatedAt).ToList()
+                    Items   = SortItems(g, tab)
                 })
                 .ToList();
 
-            return byReplied
-                ? groups.OrderByDescending(g => g.HasPinned)
-                        .ThenBy(g => g.OrderId == null)
-                        .ThenByDescending(g => g.Items[0].RepliedAt)
-                        .ToList()
-                : groups.OrderByDescending(g => g.HasPinned)
-                        .ThenBy(g => g.OrderId == null)
-                        .ThenBy(g => g.Items[0].CreatedAt)
-                        .ToList();
+            // 原本：
+            // return byReplied
+            //     ? groups.OrderByDescending(g => g.HasPinned)
+            //             .ThenBy(g => g.OrderId == null)
+            //             .ThenByDescending(g => g.Items[0].RepliedAt)
+            //             .ToList()
+            //     : groups.OrderByDescending(g => g.HasPinned)
+            //             .ThenBy(g => g.OrderId == null)
+            //             .ThenBy(g => g.Items[0].CreatedAt)
+            //             .ToList();
+            return SortGroups(groups.OrderByDescending(g => g.HasPinned)
+                                    .ThenBy(g => g.OrderId == null), tab);
         }
 
         /// <summary>
@@ -534,7 +545,7 @@ namespace VenueGo.Controllers
         /// </summary>
         private static List<ReviewQueueGroupVM> BuildVenueGroups(List<ReviewQueueItemVM> items, string tab)
         {
-            bool byReplied = tab == QueueTab.Completed;
+            // 10/26：排序改由 SortItems、SortGroups 依 tab 決定，不再需要。原本：bool byReplied = tab == QueueTab.Completed;
 
             var groups = items
                 // 追不到場地的各自成一組：用「負的 ReviewId」當臨時分組鍵，VenueId 一定是正的，不會撞在一起
@@ -544,22 +555,59 @@ namespace VenueGo.Controllers
                     Kind      = QueueGroupKind.Venue,
                     VenueId   = g.Key > 0 ? g.Key : null,
                     VenueName = g.Select(i => i.VenueName).FirstOrDefault(n => n != null),
-                    Items     = byReplied
-                                ? g.OrderByDescending(i => i.RepliedAt).ToList()
-                                : g.OrderBy(i => i.CreatedAt).ToList()
+                    // 10/26：組內也照清單的順序（未讀、待回覆是期限）。原本：
+                    // Items     = byReplied
+                    //             ? g.OrderByDescending(i => i.RepliedAt).ToList()
+                    //             : g.OrderBy(i => i.CreatedAt).ToList()
+                    Items     = SortItems(g, tab)
                 })
                 .ToList();
 
-            return byReplied
-                ? groups.OrderByDescending(g => g.HasPinned)
-                        .ThenBy(g => g.VenueId == null)
-                        .ThenByDescending(g => g.Items[0].RepliedAt)
-                        .ToList()
-                : groups.OrderByDescending(g => g.HasPinned)
-                        .ThenBy(g => g.VenueId == null)
-                        .ThenBy(g => g.Items[0].CreatedAt)
-                        .ToList();
+            // 原本：
+            // return byReplied
+            //     ? groups.OrderByDescending(g => g.HasPinned)
+            //             .ThenBy(g => g.VenueId == null)
+            //             .ThenByDescending(g => g.Items[0].RepliedAt)
+            //             .ToList()
+            //     : groups.OrderByDescending(g => g.HasPinned)
+            //             .ThenBy(g => g.VenueId == null)
+            //             .ThenBy(g => g.Items[0].CreatedAt)
+            //             .ToList();
+            return SortGroups(groups.OrderByDescending(g => g.HasPinned)
+                                    .ThenBy(g => g.VenueId == null), tab);
         }
+
+        /// <summary>
+        /// 10/26 負評優先：清單（或一組裡面）的順序。
+        ///   未讀、待回覆：置頂 → 有文字的在前、只有星等的放最後 → 期限早的在前 → 評論早的在前。
+        ///     評分越低期限越短，所以負評自然排在前面；同樣星等，越早進來的越前面（期限表在 ReviewUrgency_Claude.cs）。
+        ///   已完成：回覆時間新的在前（原本的順序）。
+        ///   全部、垃圾桶：評論時間舊的在前（原本分組時的順序）。
+        /// </summary>
+        private static List<ReviewQueueItemVM> SortItems(IEnumerable<ReviewQueueItemVM> items, string tab) => tab switch
+        {
+            QueueTab.Unread or QueueTab.Pending => items.OrderByDescending(i => i.IsPinned)
+                                                        .ThenBy(i => i.IsRatingOnly)
+                                                        .ThenBy(i => i.DueAt ?? DateTime.MaxValue)
+                                                        .ThenBy(i => i.CreatedAt)
+                                                        .ThenBy(i => i.ReviewId)
+                                                        .ToList(),
+            QueueTab.Completed => items.OrderByDescending(i => i.RepliedAt).ToList(),
+            QueueTab.All or QueueTab.Spam => items.OrderBy(i => i.CreatedAt).ToList(),
+            _ => throw new ArgumentOutOfRangeException(nameof(tab), tab, "未定義的清單")
+        };
+
+        /// <summary>10/26：組的順序。置頂、追不到的排最後已經排好，這裡接著用「組裡排第一的那一則」排（跟 SortItems 一致）。</summary>
+        private static List<ReviewQueueGroupVM> SortGroups(IOrderedEnumerable<ReviewQueueGroupVM> groups, string tab) => tab switch
+        {
+            QueueTab.Unread or QueueTab.Pending => groups.ThenBy(g => g.Items[0].IsRatingOnly)
+                                                         .ThenBy(g => g.Items[0].DueAt ?? DateTime.MaxValue)
+                                                         .ThenBy(g => g.Items[0].CreatedAt)
+                                                         .ToList(),
+            QueueTab.Completed => groups.ThenByDescending(g => g.Items[0].RepliedAt).ToList(),
+            QueueTab.All or QueueTab.Spam => groups.ThenBy(g => g.Items[0].CreatedAt).ToList(),
+            _ => throw new ArgumentOutOfRangeException(nameof(tab), tab, "未定義的清單")
+        };
 
         /// <summary>
         /// 運動類型與場地的查詢字串一樣不可信任（9/29）：
@@ -605,8 +653,11 @@ namespace VenueGo.Controllers
         private static DateTime SortTimeOf(ReviewQueueItemVM item, string tab) => tab switch
         {
             QueueTab.All       => item.CreatedAt,
-            QueueTab.Unread    => item.CreatedAt,
-            QueueTab.Pending   => item.CreatedAt,
+            // 10/26 未讀、待回覆改成依期限排序，所以顯示期限。原本：
+            // QueueTab.Unread    => item.CreatedAt,
+            // QueueTab.Pending   => item.CreatedAt,
+            QueueTab.Unread    => item.DueAt ?? item.CreatedAt,
+            QueueTab.Pending   => item.DueAt ?? item.CreatedAt,
             QueueTab.Completed => item.RepliedAt ?? item.CreatedAt,
             QueueTab.Spam      => item.SpamMarkedAt ?? item.CreatedAt,
             _ => throw new ArgumentOutOfRangeException(nameof(tab), tab, "未定義的清單")
@@ -656,9 +707,37 @@ namespace VenueGo.Controllers
             //   所以有分組時，用「分組之後」的順序切頁；同一組被切到兩頁時，組的標題會標「接上一頁／下一頁還有」。
             //   目前資料量小，整份在記憶體裡排；資料量變大之後，不分組的情況可以改成在資料庫 Skip / Take。
             var reviews = ApplyTab(listBase, t).ToList();
+
+            // 10/26：全部、已完成清單在預設條件下，不列「只有星等」的評論（跟顧客端評論專區一樣）。
+            //   任一個篩選條件不是預設值（來源、時間範圍、運動類型或場地、搜尋、依訂單分組）就一起列出：例如用訂單編號搜尋時，員工要找的就是那一則。
+            //   10/27：依訂單分組也算（跟重置按鈕的 HasFilter 一致）
+            //   一則有文字的都沒有時全部列出，不讓畫面空著（也跟顧客端一樣）。
+            //   未讀、待回覆要處理，一律列出（放在最後）；垃圾桶也一律列出：只有星等的評論不該被標成垃圾，列出來錯誤才看得到。
+            bool hideRatingOnly = (t == QueueTab.All || t == QueueTab.Completed)
+                                  && s == QueueSource.All
+                                  && rg == QueueRange.Default
+                                  && keywords.Count == 0
+                                  && sport == null
+                                  && venue == null
+                                  && !grouped;
+            int ratingOnlyHidden = 0;
+            if (hideRatingOnly)
+            {
+                var withText = reviews.Where(r => !string.IsNullOrWhiteSpace(r.ReviewContent)).ToList();
+                if (withText.Count > 0)
+                {
+                    ratingOnlyHidden = reviews.Count - withText.Count;
+                    reviews = withText;
+                }
+            }
+
             var refs = LoadRefs(reviews);   // 原本：var lookups = LoadLookups(reviews);
 
             var items = reviews.Select(r => BuildItem(r, refs, now)).ToList();
+
+            // 10/26 負評優先：未讀、待回覆依期限重新排（SortItems）。期限要先算好才能排，所以在記憶體排。
+            //   其他清單維持 ApplyTab 在資料庫排好的順序。
+            if (t == QueueTab.Unread || t == QueueTab.Pending) items = SortItems(items, t);
 
             // 10/25：預約評論補上付款方式（View 對預約評論不顯示場地、使用時段，改顯示這個）
             var channelNames = PaymentChannelNames(items.Where(i => i.IsBookingReview && i.OrderId != null)
@@ -670,6 +749,11 @@ namespace VenueGo.Controllers
                          .ToList();
 
             bool hasGroups = groupByVenue || groupByOrder;
+
+            // 10/26：未讀、待回覆沒分組時，最後一段「只有星等」的評論前面畫分隔線，標「只有星等（N 則）」。置頂的不算
+            int ratingOnlySection = 0;
+            if ((t == QueueTab.Unread || t == QueueTab.Pending) && !hasGroups)
+                ratingOnlySection = items.Count(i => i.IsRatingOnly && !i.IsPinned);
             List<ReviewQueueGroupVM> allGroups = [];
             if (groupByVenue) allGroups = BuildVenueGroups(items, t);
             else if (groupByOrder) allGroups = BuildGroups(items, t);
@@ -712,7 +796,9 @@ namespace VenueGo.Controllers
 
             // 每一頁第一則的排序時間（長按快轉時顯示「正在經過哪裡」）
             var pageMarks = ordered.Where((_, i) => i % PageSize == 0)
-                                   .Select(i => new QueuePageMark(SortTimeOf(i, t), i.IsPinned))
+                                   // 10/26：未讀、待回覆顯示的是期限，前面加「期限 」。原本：.Select(i => new QueuePageMark(SortTimeOf(i, t), i.IsPinned))
+                                   .Select(i => new QueuePageMark(SortTimeOf(i, t), i.IsPinned,
+                                                                  t == QueueTab.Unread || t == QueueTab.Pending ? "期限 " : ""))
                                    .ToList();
 
             return new ReviewQueueVM
@@ -745,6 +831,8 @@ namespace VenueGo.Controllers
                 TotalPages = totalPages,
                 PageMarks  = pageMarks,
                 TotalItemCount = ordered.Count,
+                RatingOnlyHidden       = ratingOnlyHidden,
+                RatingOnlySectionCount = ratingOnlySection,
 
                 UnreadCount  = countBase.Count(UnreadRule),
                 PendingCount = countBase.Count(PendingRule),

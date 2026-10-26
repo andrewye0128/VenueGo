@@ -1,5 +1,6 @@
 <script setup>
 import { computed, onUnmounted, ref, watch } from "vue";
+// import { errorMessages } from "vue/compiler-sfc";
 // 10/25 評論組（昱）新增：已使用的票券，「轉贈票券」的位置改放現場評論的按鈕（立刻評論／查看評論）
 import { useReviewStatuses } from "@/composables/useReviewStatuses";
 
@@ -8,7 +9,7 @@ const props = defineProps({
   busy: { type: Boolean, default: false },
 });
 
-const emit = defineEmits(["view-qr", "transfer", "cancel-transfer", "transfer-expired"]);
+const emit = defineEmits(["view-qr", "transfer", "resend", "cancel-transfer", "transfer-expired"]);
 
 // 10/25 評論組（昱）新增：已使用、而且這張票可以評論（或已經評過）時才有值；其他情況是 null，維持原本的「轉贈票券」。
 // 一筆訂單有好幾張票時，只有判斷資格用的那一張有按鈕（每筆訂單只能評一次），說明在 composables/useReviewStatuses.js
@@ -19,15 +20,20 @@ const reviewButton = computed(() =>
 
 const statusMap = {
   available: { label: "可使用", class: "bg-blue-800 text-white" },
+  inside: { label: "場內", class: "bg-green-700 text-white" },
   used: { label: "已使用", class: "bg-gray-100 text-gray-500" },
   expired: { label: "已過期", class: "border border-gray-200 bg-gray-100 text-gray-500" },
   transferred: { label: "已轉贈", class: "bg-gray-100 text-gray-500" },
 };
 
+const unknownBadge = { label: "狀態未知", class: "bg-gray-100 text-gray-500" };
+
 const placeholderText = computed(() => {
   switch (props.ticket.status) {
     case "available":
-      return "想送給朋友?點下方轉贈,產生驗證碼";
+      return "想送給朋友?點下方轉贈,輸入對方 Email";
+    case "inside":
+      return "您目前在場內，離場時請出示 QR Code";
     case "used":
       return "此票券已使用";
     case "expired":
@@ -39,15 +45,22 @@ const placeholderText = computed(() => {
   }
 });
 
-const isTransferring = computed(() => !!props.ticket.transferCode); // !!
-const canUse = computed(() => props.ticket.status === "available" && !isTransferring.value);
+const isTransferring = computed(() => !!props.ticket.transferToMasked);
+
+// 能出示 QR：可使用（入場用）或場內（離場用）；轉贈中也可以（後端規則：轉贈完成前持有人 QR 仍有效）
+const canShowQr = computed(
+  () => props.ticket.status === "available" || props.ticket.status === "inside",
+);
+// 能轉贈：只有可使用的票，場內的人不能轉贈
+const canTransfer = computed(() => props.ticket.status === "available" && !isTransferring.value);
 
 // 轉贈中優先顯示 -> 再顯示其他狀態
 const badge = computed(() =>
   isTransferring.value
     ? { label: "轉贈中", class: "bg-gray-900 text-white" }
-    : statusMap[props.ticket.status],
+    : (statusMap[props.ticket.status] ?? unknownBadge),
 );
+
 // 倒數計時
 const now = ref(Date.now());
 let timer = null;
@@ -88,16 +101,39 @@ watch(
 );
 
 // ---- 複製驗證碼 ----
-const copied = ref(false);
-async function copyCode() {
-  try {
-    await navigator.clipboard.writeText(props.ticket.transferCode);
-    copied.value = true;
-    setTimeout(() => (copied.value = false), 1500);
-  } catch (err) {
-    console.error("複製失敗", err);
-  }
-}
+// const copied = ref(false);
+// async function copyCode() {
+//   try {
+//     await navigator.clipboard.writeText(props.ticket.transferCode);
+//     copied.value = true;
+//     setTimeout(() => (copied.value = false), 1500);
+//   } catch (err) {
+//     console.error("複製失敗", err);
+//   }
+// }
+
+// // 轉贈表單(輸入對方會員email)
+// const showForm = ref(false);
+// const email = ref("");
+// const emailError = ref("");
+
+// function submitTransfer() {
+//   const value = email.value.trim();
+//   if (!value) {
+//     emailError.value = "請輸入對方的 Email";
+//     return;
+//   }
+//   if (!/^\S+@\S+\.\S+$/.test(value)) {
+//     emailError.value = "Email 格式不正確";
+//     return;
+//   }
+//   emailError.value = "";
+//   // 成功由父層呼叫done(),才關閉
+//   emit("transfer", value, () => {
+//     showForm.value = false;
+//     email.value = "";
+//   });
+// }
 
 // 取消轉贈
 const confirmCancel = ref(false);
@@ -119,9 +155,9 @@ function onCancel() {
 
     <p class="text-sm text-gray-500">{{ ticket.sportType }}</p>
     <p class="text-sm text-gray-500">{{ ticket.date }} · {{ ticket.timeRange }}</p>
-    <!-- 轉贈中:驗證碼區塊 -->
+    <!-- 轉贈中:顯示寄給誰;平常顯示提示 -->
     <div
-      class="mt-2 flex h-14 items-center rounded border border-dashed px-3"
+      class="mt-2 flex min-h-14 items-center rounded border border-dashed px-3 py-2"
       :class="
         isTransferring
           ? 'border-gray-400 bg-gray-50 justify-between'
@@ -129,9 +165,7 @@ function onCancel() {
       "
     >
       <template v-if="isTransferring">
-        <span class="font-mono text-lg font-bold tracking-[0.25em] text-gray-900 select-all">
-          {{ ticket.transferCode }}
-        </span>
+        <span class="text-sm text-gray-900">已寄給 {{ ticket.transferToMasked }}</span>
         <span class="text-xs" :class="noTime ? 'text-red-600 font-medium' : 'text-gray-500'">
           剩 {{ remainText }}
         </span>
@@ -140,24 +174,25 @@ function onCancel() {
     </div>
     <div class="grid grid-cols-2 gap-2 mt-2">
       <template v-if="isTransferring">
-        <button
-          type="button"
-          class="py-2 text-sm font-medium rounded border bg-gray-900 text-white border-gray-900 hover:bg-gray-700 transition-colors"
-          @click="copyCode"
-        >
-          {{ copied ? "已複製 ✓" : "複製驗證碼" }}
-        </button>
-
-        <button
-          v-if="!confirmCancel"
-          :disabled="busy"
-          type="button"
-          class="py-2 text-sm font-medium rounded border bg-white text-gray-900 border-gray-400 hover:bg-gray-100 transition-colors"
-          @click="confirmCancel = true"
-        >
-          取消轉贈
-        </button>
-        <div v-else class="grid grid-cols-2 gap-1">
+        <template v-if="!confirmCancel">
+          <button
+            type="button"
+            :disabled="busy"
+            class="py-2 text-sm font-medium rounded border bg-white text-gray-900 border-gray-400 hover:bg-gray-100 transition-colors"
+            @click="emit('resend')"
+          >
+            {{ busy ? "處理中…" : "重新寄送" }}
+          </button>
+          <button
+            :disabled="busy"
+            type="button"
+            class="py-2 text-sm font-medium rounded border bg-white text-gray-900 border-gray-400 hover:bg-gray-100 transition-colors"
+            @click="confirmCancel = true"
+          >
+            取消轉贈
+          </button>
+        </template>
+        <div v-else class="col-span-2 grid grid-cols-2 gap-1">
           <button
             type="button"
             class="py-2 text-xs rounded border border-gray-300 text-gray-600 hover:bg-gray-100"
@@ -174,20 +209,27 @@ function onCancel() {
             {{ busy ? "取消中…" : "確定取消" }}
           </button>
         </div>
+        <button
+          type="button"
+          class="col-span-2 py-2 text-sm font-medium rounded border bg-white text-gray-900 border-gray-400 hover:bg-gray-100 transition-colors"
+          @click="emit('view-qr')"
+        >
+          使用票券
+        </button>
       </template>
       <template v-else>
         <button
           type="button"
-          :disabled="!canUse"
+          :disabled="!canShowQr"
           class="py-2 text-sm font-medium rounded border transition-colors"
           :class="
-            canUse
+            canShowQr
               ? 'bg-gray-900 text-white border-gray-900 hover:bg-gray-700'
               : 'bg-white text-gray-300 border-gray-200 cursor-not-allowed'
           "
           @click="emit('view-qr')"
         >
-          查看 QR Code
+          使用票券
         </button>
         <!-- 10/25 評論組（昱）新增：已使用的票券，轉贈的位置改放評論按鈕（已使用的票本來就不能轉贈，兩顆不會同時需要）。
              顏色跟我的預約、我的評論一樣：立刻評論＝橘色實心、查看評論＝藍色外框（見 useReviewStatuses.js）。
@@ -205,10 +247,10 @@ function onCancel() {
         <template v-else>
           <button
             type="button"
-            :disabled="!canUse || busy"
+            :disabled="!canTransfer || busy"
             class="py-2 text-sm font-medium rounded border transition-colors"
             :class="
-              canUse && !busy
+              canTransfer && !busy
                 ? 'bg-white text-gray-900 border-gray-400 hover:bg-gray-100'
                 : 'bg-white text-gray-300 border-gray-200 cursor-not-allowed'
             "

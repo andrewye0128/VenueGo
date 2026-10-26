@@ -91,10 +91,13 @@
 
 <div class="d-flex align-items-center justify-content-between mb-4">
     <h4 class="fw-bold mb-0"><i class="bi bi-grid-1x2 me-2 text-primary"></i>場館即時人數</h4>
-    <a asp-action="Index" class="btn btn-outline-primary btn-sm">
-        <i class="bi bi-arrow-clockwise me-1"></i>重新整理
-    </a>
+    <div class="d-flex gap-2">
+        <a asp-action="Index" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-arrow-clockwise me-1"></i>重新整理
+        </a>
+    </div>
 </div>
+
 
 @if (Model.VenueOccupancies.Any(v => v.IsOverCapacity))
 {
@@ -149,6 +152,12 @@
                     {
                         <div class="small text-muted mt-2">尚未設定容留人數上限</div>
                     }
+                    <div class="border-top mt-3 pt-3">
+                        <a asp-controller="Scan" asp-action="Index" asp-route-venueId="@venue.VenueId"
+                            class="btn btn-primary btn-sm w-100 mt-3">
+                            <i class="bi bi-qr-code-scan me-1"></i>掃描驗票
+                        </a>
+                    </div>
                 </div>
             </div>
         </div>

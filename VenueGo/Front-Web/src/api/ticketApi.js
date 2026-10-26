@@ -1,4 +1,3 @@
-import { da } from "zod/locales";
 import http from "./http";
 
 // 我的票券：GET /api/tickets/mine
@@ -9,8 +8,26 @@ export async function getMyTickets(testUserId) {
   // 直接回傳apiresult的內部回傳結果
 }
 
-export async function createTransfer(ticketId) {
-  const { data } = await http.post(`/tickets/${ticketId}/transfer`);
+// 收到的轉讓：GET /api/tickets/incoming（不含驗證碼，碼只在信裡）
+export async function getIncomingTransfers() {
+  const { data } = await http.get("/tickets/incoming");
+  return data;
+}
+
+// 使用票券視窗：GET /api/tickets/{id}/qr
+//  成功回傳 { payload, expiresAt, status }（status 是 available 或 inside）
+export async function getTicketQr(ticketId) {
+  const { data } = await http.get(`/tickets/${ticketId}/qr`);
+  return data;
+}
+
+export async function createTransfer(ticketId, email) {
+  const { data } = await http.post(`/tickets/${ticketId}/transfer`, { email });
+  return data;
+}
+
+export async function resendTransfer(ticketId) {
+  const { data } = await http.post(`/tickets/${ticketId}/transfer/resend`);
   return data;
 }
 

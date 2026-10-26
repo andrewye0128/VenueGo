@@ -23,6 +23,8 @@ import StarView from "@/components/review/StarView.vue";
 import ReviewCard from "@/components/review/ReviewCard.vue";
 import ReviewPager from "@/components/review/ReviewPager.vue";
 import { MENTION_TAGS } from "@/constants/review";
+// 10/26 新增：運動類型分頁前面的圖示（後台「運動類型管理」設定的那個），跟場地預約頁共用同一份清單
+import { useSportTypes } from "@/composables/useSportTypes";
 
 const route = useRoute();
 const router = useRouter();
@@ -180,6 +182,19 @@ function revealActiveTab() {
   nav.scrollTo({ left: el.offsetLeft - (nav.clientWidth - el.offsetWidth) / 2 });
 }
 
+// 10/26 新增：分頁的圖示。
+//  - 評論專區的 API 沒有圖示，借用場地預約頁的 useSportTypes()（全站共用一份，整個網站只向後端要一次）。
+//  - 「全部」不是運動類型，沒有圖示。
+//  - 清單還沒讀到時先留圖示的位置，讀到之後才畫出來，分頁的寬度不會跳。
+//  - 這個運動沒有啟用中的場地時，那支 API 不會列出它，這個分頁就不放圖示。
+// 回傳值：圖示名稱；""＝清單還在讀，先留位置；null＝不畫、也不留位置。
+const { sportTypes, error: sportTypesError, findSportType } = useSportTypes();
+function tabIcon(tab) {
+  if (tab.sportTypeId == null) return null;
+  if (sportTypes.value.length === 0) return sportTypesError.value ? null : "";
+  return findSportType(tab.sportTypeId)?.icon ?? null;
+}
+
 // ── 畫面用的衍生值 ──
 const hasFilter = computed(() => {
   if (!vm.value) return false;
@@ -261,18 +276,25 @@ const mentionTabs = computed(() =>
         aria-label="運動類型"
         class="mb-4 flex overflow-x-auto overscroll-x-contain border-b border-neutral-border"
       >
+        <!-- 10/26：字放大 2px（text-sm → text-base），前面加運動類型的圖示（inline-flex、items-center、gap-1.5），左右留白 px-4 → px-5。原本：
+          class="shrink-0 border-b-2 px-4 py-2 text-sm whitespace-nowrap focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary pointer-coarse:py-3"
+        -->
         <RouterLink
           v-for="tab in vm.sportTabs"
           :key="tab.sportTypeId ?? 'all'"
           :to="linkFor({ sportTypeId: tab.sportTypeId })"
           :aria-current="vm.filter.sportTypeId === tab.sportTypeId ? 'page' : undefined"
-          class="shrink-0 border-b-2 px-4 py-2 text-sm whitespace-nowrap focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary pointer-coarse:py-3"
+          class="inline-flex shrink-0 items-center gap-1.5 border-b-2 px-5 py-2 text-base whitespace-nowrap focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary pointer-coarse:py-3"
           :class="
             vm.filter.sportTypeId === tab.sportTypeId
               ? 'border-brand-primary font-semibold text-neutral-text-primary'
               : 'border-transparent text-brand-primary hover:bg-brand-primary/8'
           "
         >
+          <!-- 10/26 新增：圖示。清單還在讀時只留位置（外層 span），讀到才畫 -->
+          <span v-if="tabIcon(tab) !== null" class="size-5 shrink-0" aria-hidden="true">
+            <UIcon v-if="tabIcon(tab)" :name="tabIcon(tab)" class="size-5" />
+          </span>
           {{ tab.name }}
         </RouterLink>
       </nav>

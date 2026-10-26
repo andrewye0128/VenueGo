@@ -257,3 +257,6 @@ dotnet_diagnostic.CS1591.severity = none
 
 # 建議將常值、僅包含唯讀屬性的 class 改為 record
 dotnet_diagnostic.IDE0250.severity = suggestion
+
+# 將 XML 註解中遺漏參數 設定為 suggestion
+dotnet_diagnostic.CS1573.severity = suggestion

@@ -228,8 +228,8 @@ namespace VenueGo.Services.Orders
         /// <summary>
         /// 費用明細，一格一列，依時間排序。
         /// <para>
-        /// 尖峰標籤：問場地模組預約當天的尖峰起始時間，再交給 PeakSlotRules 判斷（同後台預約詳細頁）。
-        /// 金額一律用 OrdersDetails.UnitPrice 的成交快照。
+        /// 尖峰標籤：先用下單時存下來的 OrdersDetails.IsPeak；舊資料沒有才用預約當天的尖峰起始時間推算
+        /// （規則在 PeakSlotRules，同後台預約詳細頁）。金額一律用 OrdersDetails.UnitPrice 的成交快照。
         /// </para>
         /// <para>
         /// SlotTime 是 null 的列不回傳：現在的寫入方式每一格都有 SlotTime，
@@ -239,20 +239,23 @@ namespace VenueGo.Services.Orders
         private async Task<List<MyOrderLineDto>> LoadLinesAsync(
             int orderId, int sportTypeId, DateOnly bookingDate, CancellationToken ct)
         {
-            var peakStartTime = await _venueSchedule.GetPeakStartTimeAsync(sportTypeId, bookingDate, ct);
-
             var rows = await _db.OrdersDetails.AsNoTracking()
                 .Where(d => d.OrderId == orderId && d.SlotTime != null)
                 .OrderBy(d => d.SlotTime)
-                .Select(d => new { d.SlotTime, d.UnitPrice })
+                .Select(d => new { d.SlotTime, d.UnitPrice, d.IsPeak })
                 .ToListAsync(ct);
+
+            // 有舊資料（IsPeak 是 null）才向場地模組查預約當天的尖峰起始時間
+            var peakStartTime = PeakSlotRules.NeedsFallback(rows.Select(d => d.IsPeak))
+                ? await _venueSchedule.GetPeakStartTimeAsync(sportTypeId, bookingDate, ct)
+                : null;
 
             return rows
                 .Select(d => new MyOrderLineDto
                 {
                     SlotTime = d.SlotTime!.Value.ToString("HH\\:mm"),
                     UnitPrice = d.UnitPrice,
-                    IsPeak = PeakSlotRules.IsPeak(d.SlotTime, peakStartTime)
+                    IsPeak = PeakSlotRules.IsPeak(d.IsPeak, d.SlotTime, peakStartTime)
                 })
                 .ToList();
         }

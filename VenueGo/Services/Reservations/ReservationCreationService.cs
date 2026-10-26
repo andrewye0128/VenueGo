@@ -322,7 +322,7 @@ namespace VenueGo.Services.Reservations
 
         /// <summary>
         /// 組出訂單明細，一格時段一列（方案 C）。
-        /// UnitPrice 是成交當下的價格快照，日後調價不影響舊訂單。
+        /// UnitPrice、IsPeak 都是成交當下的快照，日後調價、改尖峰時間都不影響舊訂單。
         /// </summary>
         private void AddOrderDetails(Order order, Reservation reservation, PricingResult pricing)
         {
@@ -333,7 +333,9 @@ namespace VenueGo.Services.Reservations
                 SlotTime = line.SlotTime,
                 UnitPrice = line.UnitPrice,
                 DurationHours = line.DurationHours,
-                Subtotal = line.Subtotal
+                Subtotal = line.Subtotal,
+                // 計價時就決定了這格是尖峰還是離峰，跟單價是同一次判斷，存下來才不會跟單價對不上
+                IsPeak = line.IsPeak
             });
 
             _db.OrdersDetails.AddRange(details);

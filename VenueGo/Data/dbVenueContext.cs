@@ -35,6 +35,7 @@ public partial class dbVenueContext : DbContext
     public virtual DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
 
     public virtual DbSet<Payment> Payments { get; set; }
+    public virtual DbSet<PaymentTransaction> PaymentTransactions { get; set; }
 
     public virtual DbSet<Permission> Permissions { get; set; }
 
@@ -281,6 +282,30 @@ public partial class dbVenueContext : DbContext
             entity.Property(e => e.PaidAt).HasPrecision(0);
             entity.Property(e => e.PaymentDueAt).HasPrecision(0);
             entity.Property(e => e.TransactionNo).HasMaxLength(100);
+        });
+
+        modelBuilder.Entity<PaymentTransaction>(entity =>
+        {
+            entity.HasIndex(e => e.MerchantTradeNo, "IX_PaymentTransactions_MerchantTradeNo");
+
+            entity.HasIndex(e => e.PaymentId, "IX_PaymentTransactions_PaymentId");
+
+            entity.HasIndex(e => e.MerchantTradeNo, "UQ_PaymentTransactions_MerchantTradeNo_Send")
+                .IsUnique()
+                .HasFilter("([EventType]=(0))");
+
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(0)
+                .HasDefaultValueSql("(sysdatetime())", "DF_PaymentTransactions_CreatedAt");
+            entity.Property(e => e.EcpayPaymentDate).HasPrecision(0);
+            entity.Property(e => e.MerchantTradeNo)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.ProcessResult).HasDefaultValue((byte)0, "DF_PaymentTransactions_ProcessResult");
+            entity.Property(e => e.RtnMsg).HasMaxLength(200);
+            entity.Property(e => e.TradeNo)
+                .HasMaxLength(20)
+                .IsUnicode(false);
         });
 
         modelBuilder.Entity<Permission>(entity =>

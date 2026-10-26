@@ -1,5 +1,6 @@
 ﻿using VenueGo.Options;
 using VenueGo.Services.Orders;
+using VenueGo.Services.Payments;
 using VenueGo.Services.Reservations;
 using VenueGo.Services.TimeSlots;
 
@@ -16,6 +17,9 @@ namespace VenueGo.Extensions
         {
             // 球館預約的業務規則（appsettings.json 的 ReservationRules）
             services.Configure<ReservationRulesOptions>(configuration.GetSection(ReservationRulesOptions.SectionName));
+
+            // 綠界金流的設定（appsettings.Local.json 的 Ecpay；沒設定也能啟動，只是不能線上付款）
+            services.Configure<EcpayOptions>(configuration.GetSection(EcpayOptions.SectionName));
 
             // 訂位草稿（存在 Session）
             services.AddScoped<IReservationDraftStore, SessionReservationDraftStore>();
@@ -42,8 +46,13 @@ namespace VenueGo.Extensions
             // 前台會員「訂單與付款」：訂單列表、明細
             services.AddScoped<IMemberOrderQueryService, MemberOrderQueryService>();
 
+            // 收款確認：後台標記已付款、綠界付款成功共用（改狀態、建票券、逾期後收款的處理）
+            services.AddScoped<IPaymentConfirmationService, PaymentConfirmationService>();
+
             // 逾期排程：每 1 分鐘把超過付款期限、還沒付款的預約改成已逾期，並釋放時段
             services.AddScoped<IReservationExpiryService, ReservationExpiryService>();
+
+            // 預約逾期背景排程
             services.AddHostedService<ReservationExpiryHostedService>();
 
             return services;

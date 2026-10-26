@@ -2,6 +2,7 @@
   會員中心／訂單與付款：篩選、列表（電腦表格／手機卡片）、分頁、明細、付款
   跟「我的預約」的差別：這頁的重點是「錢付了沒、要付多少、什麼時候前要付」，排序是下單時間新到舊
   資料來自 [GET] /api/orders（api/orderApi.js）；明細視窗另外讀 /api/orders/{orderId}
+  付款期限到了會自動重新讀取（useDueRefresh），後端排程改成已逾期後不用重新整理
   「付款」按鈕：3-A 先顯示按鈕和倒數，按下去提示「製作中」；3-D 再接上綠界付款流程（onPay）
   訂單編號跟「我的預約」同一個編號；點編號跳到我的預約並只查這一筆
   UFormField、UInput、USelect、UAlert、UButton 與 useOverlay、useToast 由 Nuxt UI 自動匯入
@@ -16,6 +17,7 @@ import ListTable from "@/components/list/ListTable.vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import OrderDetailModal from "@/components/orders/OrderDetailModal.vue";
 import { getMyOrders } from "@/api/orderApi";
+import { useDueRefresh } from "@/composables/useDueRefresh";
 import { useKeywordQuery } from "@/composables/useKeywordQuery";
 import { useSiteClock } from "@/composables/useSiteClock";
 import { ErrorCodes } from "@/constants/errorCodes";
@@ -71,10 +73,18 @@ const errorMessage = ref("");
 // 只採用最後一次查詢的結果（快速換頁時，舊的回應不會蓋掉新的）
 let latestRequestId = 0;
 
-async function load() {
+/**
+ * 讀取這一頁的訂單
+ * @param {object} [options]
+ * @param {boolean} [options.silent] 自動重新讀取（useDueRefresh）用：不顯示讀取中、
+ *   失敗時保留原本的資料也不顯示錯誤（使用者沒按任何東西，突然跳出錯誤會很奇怪，下次再試就好）
+ */
+async function load({ silent = false } = {}) {
   const requestId = ++latestRequestId;
-  loading.value = true;
-  errorMessage.value = "";
+  if (!silent) {
+    loading.value = true;
+    errorMessage.value = "";
+  }
   try {
     const data = await getMyOrders({
       ...filters.value,
@@ -83,6 +93,13 @@ async function load() {
       pageSize: PAGE_SIZE,
     });
     if (requestId !== latestRequestId) return;
+    // 這一頁已經超過最後一頁（例如第 2 頁唯一的一筆逾期後，不再符合「未付款」的篩選）
+    // → 跳到最後一頁，不然畫面會顯示「查無資料」，但其實前一頁還有。改 page 會自動再查一次
+    const lastPage = Math.max(Math.ceil(data.totalCount / PAGE_SIZE), 1);
+    if (data.items.length === 0 && page.value > lastPage) {
+      page.value = lastPage;
+      return;
+    }
     result.value = data;
     console.log("訂單資料", result.value);
   } catch (err) {
@@ -93,9 +110,11 @@ async function load() {
       router.push({ name: "login", query: { redirect: "/member/orders" } });
       return;
     }
+    if (silent) return;
     errorMessage.value = err.message || "讀取訂單資料失敗，請稍後再試";
     result.value = { items: [], totalCount: 0 };
   } finally {
+    // 不分一般或安靜模式都要關：安靜模式可能剛好蓋掉使用者按的那一次，不關的話會一直顯示讀取中
     if (requestId === latestRequestId) loading.value = false;
   }
 }
@@ -105,8 +124,15 @@ watch(filters, () => {
   if (page.value !== 1) page.value = 1;
   else load();
 });
-watch(page, load);
-onMounted(load);
+// 用箭頭函式包起來：watch 會把新舊頁碼當參數傳進去，直接寫 watch(page, load) 會傳到 options
+watch(page, () => load());
+onMounted(() => load());
+
+// 付款期限到了自動重新讀取，不用重新整理就會看到「已逾期」（說明見 useDueRefresh.js）
+useDueRefresh(
+  computed(() => result.value.items),
+  () => load({ silent: true }),
+);
 
 // ── 表格欄位（每一欄的顯示內容寫在下方 template 的 #xxx-cell）──
 const columns = [

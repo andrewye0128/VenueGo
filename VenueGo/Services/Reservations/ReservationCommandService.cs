@@ -151,6 +151,16 @@ namespace VenueGo.Services.Reservations
                 "已作廢此預約，時段已釋放，且不計入營運統計。",
                 cancellationToken);
 
+        public Task<ReservationCommandResult> CancelByVenueAsync(
+            int reservationId, string reason, int operatorUserId,
+            CancellationToken cancellationToken = default)
+            => TerminateAsync(
+                reservationId, reason, operatorUserId,
+                ReservationStatus.CancelledByVenue,
+                AuditActions.CancelReservationByVenue,
+                "已因館方因素取消此預約，時段已釋放。",
+                cancellationToken);
+
         /// <summary>
         /// 終止預約的共用流程。取消與作廢的處理完全相同，
         /// 差別只在寫入的狀態值、稽核動作代碼與成功訊息，因此抽成同一個方法。

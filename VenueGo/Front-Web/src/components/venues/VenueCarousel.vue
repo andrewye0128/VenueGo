@@ -54,8 +54,8 @@ onMounted(async () => {
 const carouselUi = {
   // 卡片等高
   container: "items-stretch",
-  // 一次顯示幾張：手機 85%（露出下一張邊緣，提示可以滑動）、平板 2 張、電腦 4 張
-  item: "basis-[85%] md:basis-1/2 lg:basis-1/4",
+  // 一次顯示幾張：手機 5/6（約 83%，露出下一張邊緣，提示可以滑動）、平板 2 張、電腦 4 張
+  item: "basis-5/6 md:basis-1/2 lg:basis-1/4",
   // 箭頭樣式跟首頁評價輪播（HomeReviewCarousel）一致：
   // 平板以下用滑的、不顯示箭頭（左右留白不夠放）；左右都不能按（張數不超過一頁）時整組隱藏
   arrows: "max-lg:hidden has-[[data-slot=prev]:disabled]:has-[[data-slot=next]:disabled]:hidden",

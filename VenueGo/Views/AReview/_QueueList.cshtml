@@ -42,6 +42,10 @@
             _                   => ""
       };
 
+      // 10/27：一組評論的預約編號（同一組是同一筆訂單，取第一個有值的）。訂單編號連到預約詳細頁用
+      static int? GroupReservationId(ReviewQueueGroupVM group) =>
+            group.Items.Select(i => i.ReservationId).FirstOrDefault(id => id != null);
+
       // 已表態的滿意度：左側色條。未表態或還沒回覆就不上色。
       static string SatisfactionClass(byte? satisfaction) => satisfaction switch
       {
@@ -125,7 +129,7 @@
             range   = QueueRange.Default,
             field   = QueueSearchField.Default,
             keyword = "",
-            grouped = "false",
+            grouped = "true",   // 10/27：依訂單分組預設開啟。原本：grouped = "false",
             sportTypeId = "",
             venueId = "",
             satisfaction = ""   // 10/27
@@ -368,7 +372,21 @@
                                     }
                                     @if (item.OrderNo != null)
                                     {
+                                          @* 10/27：訂單編號連到預約組的預約詳細頁，開新分頁：清單、篩選條件、打到一半的回覆都還在。追不到預約時只顯示文字。原本：
                                           <div><i class="bi bi-receipt"></i> 訂單 <span class="js-hl">@item.OrderNo</span></div>
+                                          *@
+                                          @if (item.ReservationId is int rid)
+                                          {
+                                                <div>
+                                                      <i class="bi bi-receipt"></i> 訂單
+                                                      <a asp-controller="Reservation" asp-action="Details" asp-route-id="@rid"
+                                                         target="_blank" rel="noopener" title="在新分頁查看預約詳細資料"><span class="js-hl">@item.OrderNo</span> <i class="bi bi-box-arrow-up-right small"></i></a>
+                                                </div>
+                                          }
+                                          else
+                                          {
+                                                <div><i class="bi bi-receipt"></i> 訂單 <span class="js-hl">@item.OrderNo</span></div>
+                                          }
                                     }
                                     @* 10/25：預約評論顯示付款方式（現場櫃台／信用卡／LINE Pay），跟顧客端撰寫頁的確認區塊一樣 *@
                                     @if (item.IsBookingReview)
@@ -915,7 +933,20 @@ else if (Model.Grouped || Model.GroupByVenue)
                                     else
                                     {
                                           <i class="bi bi-receipt"></i>
+                                          @* 10/27：組標題的訂單編號也連到預約詳細頁（開新分頁）。原本：
                                           <span>訂單 <span class="fw-semibold js-hl">@group.OrderNo</span></span>
+                                          *@
+                                          @if (GroupReservationId(group) is int groupRid)
+                                          {
+                                                <span>訂單
+                                                      <a asp-controller="Reservation" asp-action="Details" asp-route-id="@groupRid"
+                                                         target="_blank" rel="noopener" title="在新分頁查看預約詳細資料"><span class="fw-semibold js-hl">@group.OrderNo</span> <i class="bi bi-box-arrow-up-right small"></i></a>
+                                                </span>
+                                          }
+                                          else
+                                          {
+                                                <span>訂單 <span class="fw-semibold js-hl">@group.OrderNo</span></span>
+                                          }
                                     }
                                     @* 10/23 分頁：同一組可能被切到兩頁，則數看整組的；被切開時標出來 *@
                                     <span class="text-muted ms-2">共 @group.AllCount 則評論</span>

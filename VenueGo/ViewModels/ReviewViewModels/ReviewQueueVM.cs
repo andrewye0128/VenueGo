@@ -216,12 +216,12 @@ namespace VenueGo.ViewModels.ReviewViewModels
         public List<string> Keywords { get; init; } = new();
 
         /// <summary>
-        /// 依訂單分組。預設關閉。
+        /// 依訂單分組。10/27 起預設開啟（原本預設關閉）：同一筆訂單的評論者多半互相認識，反映的問題也常重疊，放在一起處理比較方便。
         /// （9/29 舊說明，v2 已不成立）⚠️ 有選運動類型時一律是 false（改成依場地分組），開關也會停用。
         /// v2：這裡存的是「使用者有沒有打開開關」，選了運動類型或場地時也照樣記著，
         ///     條件拿掉後就恢復分組。畫面上實際有沒有依訂單分組，看 GroupByOrder。
         /// </summary>
-        public bool Grouped { get; init; }
+        public bool Grouped { get; init; } = true;   // 10/27：預設開啟。原本：public bool Grouped { get; init; }
 
         // ── 運動類型與場地（9/29）──
 
@@ -318,7 +318,7 @@ namespace VenueGo.ViewModels.ReviewViewModels
             || Range != QueueRange.Default
             || SearchField != QueueSearchField.Default
             || !string.IsNullOrEmpty(Keyword)
-            || Grouped
+            || !Grouped   // 10/27：預設改成依訂單分組，關掉才算改了條件。原本：|| Grouped
             || SportTypeId != null
             || VenueId != null
             || Satisfaction != QueueSatisfaction.All;   // 10/27

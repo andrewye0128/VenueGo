@@ -34,6 +34,12 @@ namespace VenueGo.ViewModels.ReviewViewModels
         public int? OrderId { get; init; }
 
         /// <summary>
+        /// 10/27：這筆訂單的預約編號（Orders.ReservationId）。訂單編號做成連結，連到預約組的預約詳細頁（/Reservation/Details/{id}）。
+        /// 追不到訂單、或訂單沒有預約（Orders.ReservationId 是 null）時是 null，訂單編號就只顯示文字。
+        /// </summary>
+        public int? ReservationId { get; init; }
+
+        /// <summary>
         /// 10/25：預約評論的付款方式（現場櫃台／信用卡／LINE Pay），只有預約評論會填。
         /// 預約評論評的是「預約流程」，跟場地、使用時段無關，所以館方清單改顯示付款方式。
         /// 查不到已付款的紀錄時是 null，畫面顯示「查無付款紀錄」。

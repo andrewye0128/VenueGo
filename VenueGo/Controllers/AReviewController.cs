@@ -417,6 +417,21 @@ namespace VenueGo.Controllers
         /// 取最早一筆已付款紀錄的 PaymentChannel。一筆訂單的付款紀錄很少，整批讀回來再分組。
         /// 查不到的訂單不放進結果（不要用列舉的預設值 0，那會變成「現場櫃台」，顯示錯的付款方式）。
         /// </summary>
+        /// <summary>
+        /// 10/27：每筆訂單的預約編號，回傳「OrderId → ReservationId」。訂單編號連到預約詳細頁用。
+        /// 訂單沒有預約（ReservationId 是 null）的不放進結果。
+        /// </summary>
+        private Dictionary<int, int> ReservationIdsOf(IEnumerable<int> orderIds)
+        {
+            var ids = orderIds.Distinct().ToList();
+            if (ids.Count == 0) return new();
+
+            return _db.Orders
+                      .Where(o => ids.Contains(o.OrderId) && o.ReservationId != null)
+                      .Select(o => new { o.OrderId, ReservationId = o.ReservationId!.Value })
+                      .ToDictionary(o => o.OrderId, o => o.ReservationId);
+        }
+
         private Dictionary<int, string> PaymentChannelNames(IEnumerable<int> orderIds)
         {
             var ids = orderIds.Distinct().ToList();
@@ -795,6 +810,13 @@ namespace VenueGo.Controllers
                                           : i)
                          .ToList();
 
+            // 10/27：訂單編號連到預約詳細頁，補上預約編號
+            var reservationIds = ReservationIdsOf(items.Where(i => i.OrderId != null).Select(i => i.OrderId!.Value));
+            items = items.Select(i => i.OrderId is int oid && reservationIds.TryGetValue(oid, out var rid)
+                                          ? i with { ReservationId = rid }
+                                          : i)
+                         .ToList();
+
             bool hasGroups = groupByVenue || groupByOrder;
 
             // 10/26：未讀、待回覆沒分組時，最後一段「只有星等」的評論前面畫分隔線，標「只有星等（N 則）」。置頂的不算
@@ -907,8 +929,9 @@ namespace VenueGo.Controllers
         /// <summary>整頁。第一次進來、按 F5、從書籤打開都走這裡。</summary>
         [HttpGet]
         // 10/27：多了 satisfaction（已完成清單的滿意度篩選）
+        // 10/27：依訂單分組預設開啟。原本：bool grouped = false
         public IActionResult Index(string? tab, string? source, string? range,
-                                   string? field, string? keyword, bool grouped = false,
+                                   string? field, string? keyword, bool grouped = true,
                                    int? sportTypeId = null, int? venueId = null, int? page = null,
                                    string? satisfaction = null)
         {
@@ -918,8 +941,9 @@ namespace VenueGo.Controllers
         /// <summary>只有清單那一塊。切換篩選、搜尋、處理完一則之後，由 axios 呼叫。</summary>
         [HttpGet]
         // 10/27：多了 satisfaction（已完成清單的滿意度篩選）
+        // 10/27：依訂單分組預設開啟。原本：bool grouped = false
         public IActionResult QueueList(string? tab, string? source, string? range,
-                                       string? field, string? keyword, bool grouped = false,
+                                       string? field, string? keyword, bool grouped = true,
                                        int? sportTypeId = null, int? venueId = null, int? page = null,
                                        string? satisfaction = null)
         {

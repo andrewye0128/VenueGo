@@ -340,7 +340,8 @@
             } catch (e) {
                   // 萬一讀不到也要有得用，不能讓「重置」整個壞掉
                   // 10/27：多了 satisfaction
-                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'false', sportTypeId: '', venueId: '', satisfaction: '', page: '' };
+                  // 10/27：依訂單分組預設開啟，grouped 改成 'true'
+                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'true', sportTypeId: '', venueId: '', satisfaction: '', page: '' };
             }
       }
 

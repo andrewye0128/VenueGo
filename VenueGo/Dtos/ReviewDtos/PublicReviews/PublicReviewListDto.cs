@@ -22,5 +22,8 @@
         RatingSummaryDto Summary,
         IReadOnlyList<PublicReviewCardDto> Items,
         int Page,
-        int TotalPages);
+        int TotalPages,
+        // 10/17：沒選星等時，只給星等的評論不列在 Items 裡，這裡是沒列出的則數（前台顯示「另有 N 則」）。
+        // 選了星等、或符合條件的評論一則有文字的都沒有時，全部都會列出，這裡是 0。
+        int RatingOnlyHidden);
 }

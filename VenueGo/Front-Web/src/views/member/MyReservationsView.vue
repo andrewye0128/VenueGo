@@ -1,7 +1,10 @@
 <!--
   會員中心／我的預約：篩選、列表（電腦表格／手機卡片）、分頁、明細、取消
   資料來自後端 GET /api/reservations（api/reservationApi.js），會員身分由登入的 JWT 決定
-  UFormField、UInput、USelect、UAlert 與 useOverlay、useToast 由 Nuxt UI 自動匯入
+  付款期限到了會自動重新讀取（useDueRefresh），後端排程改成已逾期後不用重新整理
+  編號只顯示訂單編號（VG…），跟「訂單與付款」同一個編號；點編號跳到訂單頁並只查這一筆
+  預約編號（R012）只在後台使用，這裡的 reservationId 只拿來呼叫 API
+  UFormField、UInput、USelect、UAlert、UButton 與 useOverlay、useToast 由 Nuxt UI 自動匯入
 -->
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
@@ -14,6 +17,8 @@ import ListTable from "@/components/list/ListTable.vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import ReservationDetailModal from "@/components/reservations/ReservationDetailModal.vue";
 import { cancelMyReservation, getMyReservations } from "@/api/reservationApi";
+import { useDueRefresh } from "@/composables/useDueRefresh";
+import { useKeywordQuery } from "@/composables/useKeywordQuery";
 import { useSiteClock } from "@/composables/useSiteClock";
 import { ErrorCodes } from "@/constants/errorCodes";
 import { useMemberStore } from "@/stores/member";
@@ -24,8 +29,8 @@ import {
   RESERVATION_STATUS,
   RESERVATION_STATUS_OPTIONS,
 } from "@/constants/statuses";
-import { formatAmount, formatDate, formatTimeRange } from "@/utils/format";
-import { canCancel, formatPersonCount, formatReservationNo } from "@/utils/reservation";
+import { formatAmount, formatDate, formatDateTime, formatTimeRange } from "@/utils/format";
+import { canCancel, formatPersonCount } from "@/utils/reservation";
 
 const PAGE_SIZE = 10;
 
@@ -47,6 +52,15 @@ const DEFAULT_FILTERS = {
 };
 const filters = ref({ ...DEFAULT_FILTERS });
 const page = ref(1);
+// 關鍵字跟網址的 ?keyword= 同步：從訂單頁點編號跳過來時，一進來就只查那一筆
+useKeywordQuery(filters);
+
+// 訂單編號連到「訂單與付款」，並用這個編號查詢
+const ordersLink = (orderNo) => ({ name: "orders", query: { keyword: orderNo } });
+
+// 按鈕的 aria-label 用來分辨是哪一筆：有訂單編號就用編號，沒有（舊資料）就用日期＋場地
+const rowName = (r) =>
+  r.orderNo ? `訂單 ${r.orderNo}` : `${formatDate(r.bookingDate)} ${r.venueName}`;
 
 // 有沒有套用篩選條件：決定沒有資料時顯示哪一種空狀態
 //   沒有篩選 → 「目前沒有預約紀錄」（真的沒預約過）
@@ -75,10 +89,18 @@ const errorMessage = ref("");
 // 例如快速連點第 2 頁、第 3 頁，第 2 頁的回應比較晚回來時，不會蓋掉第 3 頁
 let latestRequestId = 0;
 
-async function load() {
+/**
+ * 讀取這一頁的預約
+ * @param {object} [options]
+ * @param {boolean} [options.silent] 自動重新讀取（useDueRefresh）用：不顯示讀取中、
+ *   失敗時保留原本的資料也不顯示錯誤（使用者沒按任何東西，突然跳出錯誤會很奇怪，下次再試就好）
+ */
+async function load({ silent = false } = {}) {
   const requestId = ++latestRequestId;
-  loading.value = true;
-  errorMessage.value = "";
+  if (!silent) {
+    loading.value = true;
+    errorMessage.value = "";
+  }
   try {
     const data = await getMyReservations({
       ...filters.value,
@@ -87,6 +109,13 @@ async function load() {
       pageSize: PAGE_SIZE,
     });
     if (requestId !== latestRequestId) return;
+    // 這一頁已經超過最後一頁（例如第 2 頁唯一的一筆逾期後，不再符合「待確認」的篩選）
+    // → 跳到最後一頁，不然畫面會顯示「查無資料」，但其實前一頁還有。改 page 會自動再查一次
+    const lastPage = Math.max(Math.ceil(data.totalCount / PAGE_SIZE), 1);
+    if (data.items.length === 0 && page.value > lastPage) {
+      page.value = lastPage;
+      return;
+    }
     result.value = data;
     // 測試空資料時用：
     // result.value = { items: [], totalCount: 0 };
@@ -99,10 +128,12 @@ async function load() {
       router.push({ name: "login" });
       return;
     }
+    if (silent) return;
     // http.js 已經把錯誤整理成中文的 err.message
     errorMessage.value = err.message || "讀取預約資料失敗，請稍後再試";
     result.value = { items: [], totalCount: 0 };
   } finally {
+    // 不分一般或安靜模式都要關：安靜模式可能剛好蓋掉使用者按的那一次，不關的話會一直顯示讀取中
     if (requestId === latestRequestId) loading.value = false;
   }
 }
@@ -113,22 +144,61 @@ watch(filters, () => {
   if (page.value !== 1) page.value = 1;
   else load();
 });
-watch(page, load);
-onMounted(load);
+// 用箭頭函式包起來：watch 會把新舊頁碼當參數傳進去，直接寫 watch(page, load) 會傳到 options
+watch(page, () => load());
+onMounted(() => load());
+
+// 付款期限到了自動重新讀取，不用重新整理就會看到「已逾期」（說明見 useDueRefresh.js）
+useDueRefresh(
+  computed(() => result.value.items),
+  () => load({ silent: true }),
+);
 
 // ── 表格欄位 ──
-// accessorKey：對應資料的欄位名稱；沒有對應欄位的（使用時段、操作）用 id
+// accessorKey：對應資料的欄位名稱；沒有對應欄位的（使用時間、操作）用 id
 // 每一欄的顯示內容寫在下方 template 的 #xxx-cell
+// 排序是建立時間新到舊（後端排好），建立時間是次要資訊，放在操作前面
 const columns = [
-  { accessorKey: "reservationId", header: "預約編號" },
-  { accessorKey: "venueName", header: "場地名稱" },
-  { accessorKey: "bookingDate", header: "預約日期" },
-  { id: "time", header: "使用時段" },
-  { accessorKey: "personCount", header: "預約人數" },
-  { accessorKey: "reservationStatus", header: "預約狀態" },
-  { accessorKey: "paymentStatus", header: "付款狀態" },
-  { id: "actions", header: "操作" },
+  {
+    accessorKey: "orderNo",
+    header: "訂單編號",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "venueName",
+    header: "場地名稱",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  { id: "time", header: "使用時間", meta: { class: { th: "text-center", td: "text-center" } } },
+  {
+    accessorKey: "personCount",
+    header: "預約人數",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "reservationStatus",
+    header: "預約狀態",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "paymentStatus",
+    header: "付款狀態",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  {
+    accessorKey: "reservedAt",
+    header: "建立時間",
+    meta: { class: { th: "text-center", td: "text-center" } },
+  },
+  { id: "actions", header: "操作", meta: { class: { th: "text-center" } } },
 ];
+
+// 建立時間拆成日期、時間兩段：表格分兩行顯示（跟「使用時間」一樣），手機卡片接成一行
+// "2026-10-18T14:30:00" → { date: "2026/10/18", time: "14:30" }
+function reservedAtParts(reservation) {
+  const [date, time] = formatDateTime(reservation.reservedAt).split(" ");
+  return { date, time };
+}
 
 // ── 明細、取消 ──
 const overlay = useOverlay();
@@ -147,12 +217,11 @@ async function openDetail(reservation) {
 
 // 表格、手機卡片、明細視窗三個入口都走這裡
 async function openCancel(reservation) {
-  const reservationNo = formatReservationNo(reservation.reservationId);
   const done = await cancelModal.open({
     title: "取消預約",
     description: "確定要取消以下預約嗎？",
     details: [
-      { label: "預約編號", value: reservationNo },
+      { label: "訂單編號", value: reservation.orderNo ?? "—" },
       { label: "場地名稱", value: reservation.venueName },
       {
         label: "使用時間",
@@ -168,8 +237,9 @@ async function openCancel(reservation) {
   });
 
   if (done) {
+    // 標題用場地和日期，不用編號：沒有訂單的舊資料沒有編號，而且客人看場地比看編號直覺
     toast.add({
-      title: `已取消預約 ${reservationNo}`,
+      title: `已取消 ${formatDate(reservation.bookingDate)} ${reservation.venueName} 的預約`,
       color: "success",
       icon: "i-mdi-check-circle",
     });
@@ -190,11 +260,12 @@ async function openCancel(reservation) {
             <UInput
               v-model="draft.keyword"
               icon="i-lucide-search"
-              placeholder="場地名稱 / 預約編號"
+              placeholder="場地名稱 / 訂單編號"
               class="w-full"
             />
           </UFormField>
-          <UFormField label="預約日期">
+          <!-- 比對的是使用場地的那一天（bookingDate），不是建立日期，所以叫「使用日期」（同訂單頁） -->
+          <UFormField label="使用日期">
             <DatePickerInput v-model="draft.date" />
           </UFormField>
           <UFormField label="預約狀態">
@@ -260,19 +331,42 @@ async function openCancel(reservation) {
       </template>
 
       <!-- ── 電腦版表格：每一欄的顯示內容（資料在 row.original 裡） ── -->
-      <template #reservationId-cell="{ row }">
-        {{ formatReservationNo(row.original.reservationId) }}
+      <!-- 訂單編號：連到「訂單與付款」只查這一筆。用連結不用按鈕：可以開新分頁，讀屏軟體也會唸「連結」
+           加底線：不能只靠顏色分辨「這是連結」（色弱的人看不出來）
+           沒有訂單的舊資料沒有編號，顯示「—」 -->
+      <template #orderNo-cell="{ row }">
+        <RouterLink
+          v-if="row.original.orderNo"
+          :to="ordersLink(row.original.orderNo)"
+          class="rounded font-medium whitespace-nowrap text-brand-primary tabular-nums underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
+          :aria-label="`訂單 ${row.original.orderNo}，前往訂單與付款`"
+        >
+          {{ row.original.orderNo }}
+        </RouterLink>
+        <span v-else>—</span>
       </template>
-      <template #bookingDate-cell="{ row }">
-        {{ formatDate(row.original.bookingDate) }}
-      </template>
+      <!-- 使用時間、建立時間：分成兩行（上面日期、下面時間），寫法同訂單頁的「使用時間」 -->
       <template #time-cell="{ row }">
-        {{ formatTimeRange(row.original.startTime, row.original.endTime) }}
+        <span class="block whitespace-nowrap tabular-nums">
+          {{ formatDate(row.original.bookingDate) }}
+        </span>
+        <span class="block whitespace-nowrap text-neutral-text-secondary tabular-nums">
+          {{ formatTimeRange(row.original.startTime, row.original.endTime) }}
+        </span>
+      </template>
+      <template #reservedAt-cell="{ row }">
+        <span class="block whitespace-nowrap tabular-nums">
+          {{ reservedAtParts(row.original).date }}
+        </span>
+        <span class="block whitespace-nowrap text-neutral-text-secondary tabular-nums">
+          {{ reservedAtParts(row.original).time }}
+        </span>
       </template>
       <!-- 人數、付款狀態：預約沒有訂單或付款紀錄時是 null，顯示「—」 -->
       <template #personCount-cell="{ row }">
         {{ row.original.personCount ?? "—" }}
       </template>
+
       <template #reservationStatus-cell="{ row }">
         <StatusBadge :status="RESERVATION_STATUS[row.original.reservationStatus]" />
       </template>
@@ -284,25 +378,34 @@ async function openCancel(reservation) {
         <span v-else>—</span>
       </template>
       <template #actions-cell="{ row }">
-        <div class="flex gap-4">
-          <!-- 每一列都有「查看」，讀屏軟體只唸「查看」會分不出是哪一筆，所以補上 aria-label -->
-          <button
-            type="button"
-            class="cursor-pointer rounded font-medium text-brand-primary underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
-            :aria-label="`查看 ${formatReservationNo(row.original.reservationId)} 預約明細`"
+        <div class="flex gap-2">
+          <!-- 每一列都有「查看」，讀屏軟體只唸「查看」會分不出是哪一筆，所以補上 aria-label
+               外框按鈕（outline）：跟「訂單與付款」頁一致；顏色維持原本的藍（查看）、橘（取消）
+               :loading-auto="false"：全站按鈕預設會在 async 的 @click 執行期間轉圈（vite.config.js 的 loadingAuto），
+               openDetail／openCancel 會等視窗關閉才結束，不關掉的話視窗開著時按鈕一直轉圈 -->
+          <UButton
+            color="primary"
+            variant="outline"
+            size="sm"
+            class="whitespace-nowrap"
+            :aria-label="`查看 ${rowName(row.original)} 預約明細`"
+            :loading-auto="false"
             @click="openDetail(row.original)"
           >
             查看
-          </button>
-          <button
+          </UButton>
+          <UButton
             v-if="isCancellable(row.original)"
-            type="button"
-            class="cursor-pointer rounded font-medium text-brand-action underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
-            :aria-label="`取消 ${formatReservationNo(row.original.reservationId)} 預約`"
+            color="action"
+            variant="outline"
+            size="sm"
+            class="whitespace-nowrap"
+            :aria-label="`取消 ${rowName(row.original)} 預約`"
+            :loading-auto="false"
             @click="openCancel(row.original)"
           >
             取消
-          </button>
+          </UButton>
         </div>
       </template>
 
@@ -310,9 +413,15 @@ async function openCancel(reservation) {
       <template #card="{ row }">
         <div class="flex flex-col gap-2 text-sm">
           <div class="flex items-center justify-between gap-2">
-            <span class="font-semibold text-neutral-text-primary">
-              {{ formatReservationNo(row.reservationId) }}
-            </span>
+            <RouterLink
+              v-if="row.orderNo"
+              :to="ordersLink(row.orderNo)"
+              class="rounded font-semibold text-brand-primary tabular-nums underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
+              :aria-label="`訂單 ${row.orderNo}，前往訂單與付款`"
+            >
+              {{ row.orderNo }}
+            </RouterLink>
+            <span v-else class="font-semibold text-neutral-text-primary">—</span>
             <StatusBadge :status="RESERVATION_STATUS[row.reservationStatus]" />
           </div>
           <p class="text-base font-semibold text-neutral-text-primary">{{ row.venueName }}</p>
@@ -321,6 +430,9 @@ async function openCancel(reservation) {
             {{ formatTimeRange(row.startTime, row.endTime) }} ·
             {{ formatPersonCount(row.personCount) }}
           </p>
+          <p class="text-xs text-neutral-text-secondary tabular-nums">
+            建立於 {{ formatDateTime(row.reservedAt) }}
+          </p>
           <div class="flex items-center justify-between gap-2">
             <!-- 沒有付款紀錄時不顯示付款標籤，用空的 span 佔位，讓「查看／取消」維持靠右 -->
             <StatusBadge
@@ -328,24 +440,26 @@ async function openCancel(reservation) {
               :status="PAYMENT_STATUS[row.paymentStatus]"
             />
             <span v-else />
-            <div class="flex gap-4">
-              <button
-                type="button"
-                class="cursor-pointer rounded px-1 py-2 font-medium text-brand-primary underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-primary"
-                :aria-label="`查看 ${formatReservationNo(row.reservationId)} 預約明細`"
+            <div class="flex gap-2">
+              <UButton
+                color="primary"
+                variant="outline"
+                :aria-label="`查看 ${rowName(row)} 預約明細`"
+                :loading-auto="false"
                 @click="openDetail(row)"
               >
                 查看
-              </button>
-              <button
+              </UButton>
+              <UButton
                 v-if="isCancellable(row)"
-                type="button"
-                class="cursor-pointer rounded px-1 py-2 font-medium text-brand-action underline underline-offset-4 focus-visible:outline-2 focus-visible:outline-brand-primary"
-                :aria-label="`取消 ${formatReservationNo(row.reservationId)} 預約`"
+                color="action"
+                variant="outline"
+                :aria-label="`取消 ${rowName(row)} 預約`"
+                :loading-auto="false"
                 @click="openCancel(row)"
               >
                 取消
-              </button>
+              </UButton>
             </div>
           </div>
         </div>

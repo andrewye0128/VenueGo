@@ -161,23 +161,25 @@ namespace VenueGo.Controllers.Api
         ///
         /// ### 注意
         /// - 星等分布用「套用星等篩選之前」的結果計算，所以切換星等時分布圖不會變。
+        /// - **只給星等的評論**（10/17）：沒有指定 `star` 時不列在 `items` 裡，則數放在 `ratingOnlyHidden`；
+        ///   指定了 `star`，或符合條件的評論一則有文字的都沒有時，全部列出。星等分布、平均分數一律包含它們。
         /// - 還沒有分頁，`page`、`totalPages` 目前固定是 1。
-        /// - 不認得的 `range`、`sort` 一律改用預設值，不回錯誤。
+        /// - 不認得的 `range`、`mention`、`sort` 一律改用預設值，不回錯誤。
         /// - `take`（10/13，首頁評價 Slide 用）只限制 `items` 的筆數；星等分布、平均分數仍然用全部符合條件的評論計算。
         /// </remarks>
         /// <param name="sportTypeId">運動類型的 Id；不給代表全部</param>
         /// <param name="range" example="year">時間範圍：`7days`、`30days`、`year`、`all`；預設 `year`</param>
         /// <param name="star" example="5">只看幾顆星（1～5）；不給代表全部</param>
-        /// <param name="hasContentOnly">只看有文字內容的評論</param>
+        /// <param name="mention" example="venue">提及：`all`、`venue`（場地設施）、`staff`（人員服務）；預設 `all`</param>
         /// <param name="sort" example="newest">排序：`newest`、`highest`、`lowest`；預設 `newest`</param>
         /// <param name="take" example="10">最多回傳幾則卡片（1～50）；不給代表全部，超出範圍會自動調整到範圍內</param>
         /// <response code="200">成功</response>
         [HttpGet("")]
         [ProducesResponseType<ApiResult<PublicReviewListDto>>(StatusCodes.Status200OK)]
         public async Task<IActionResult> GetPublicReviews(
-            int? sportTypeId, string? range, int? star, bool hasContentOnly = false, string? sort = null, int? take = null)
+            int? sportTypeId, string? range, int? star, string? mention = null, string? sort = null, int? take = null)
         {
-            var data = await _publicReviews.GetPublicReviewsAsync(sportTypeId, range, star, hasContentOnly, sort, take);
+            var data = await _publicReviews.GetPublicReviewsAsync(sportTypeId, range, star, mention, sort, take);
             return Ok(ApiResult<PublicReviewListDto>.Ok(data));
         }
 
@@ -185,11 +187,14 @@ namespace VenueGo.Controllers.Api
 
         /// <summary>首頁顧客評價輪播</summary>
         /// <remarks>
-        /// 首頁「顧客評價」區塊用：平均分數、總則數，加上最多 12 張有文字、星等夠高的評價卡片。不需要登入。
+        /// 首頁「顧客評價」區塊用：平均分數、總則數，加上最多 12 張 3 星以上的評價卡片。不需要登入。
         ///
         /// ### 挑選規則
-        /// 依序找：近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星 → 全部 3 星以上。
-        /// 前面階段找到的全部保留；某一階段放不下時，只從這一階段隨機抽到 12 則為止。最後全部打亂順序。
+        /// 依序找下面五組，每一組都是「近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星」：
+        /// - a. 有館方回覆、30 字以上；b. 有館方回覆；c. 30 字以上
+        /// - d. 不限時間、3 星以上的文字評論；e. 只給星等的（最後補上全部 3 星以上）
+        ///
+        /// 前面階段找到的全部保留；某一階段放不下時，只從這一階段隨機抽到 12 則為止。最後全部打亂順序。一則都沒有時 `items` 是空陣列。
         ///
         /// ### 注意
         /// - **每次呼叫結果都不一樣**（隨機），所以回應標了不快取。

@@ -29,11 +29,15 @@ namespace VenueGo.Services.Reviews
         /// <summary>首頁輪播最多幾張（10/15）：手機 1、平板 2、電腦 3 張一頁都整除。</summary>
         private const int FeaturedCount = 12;
 
+        // 首頁輪播：幾個字以上算「30 字以上」的長評（10/16）
+        private const int FeaturedLongTextMin = 30;
+
         /// <inheritdoc/>
         public async Task<PublicReviewListDto> GetPublicReviewsAsync(
-            int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort, int? take = null)
+            int? sportTypeId, string? range, int? star, string? mention, string? sort, int? take = null)
         {
             string rg = ReviewRange.Normalize(range);
+            string mn = ReviewMention.Normalize(mention);
             string so = ReviewSort.Normalize(sort);
             int? st = star is >= 1 and <= 5 ? star : null;
 
@@ -45,7 +49,7 @@ namespace VenueGo.Services.Reviews
                                         .ToListAsync());
 
             // 星等篩選之前的結果：分布圖與平均分數用這一份算
-            var beforeStar = ApplyCardFilters(PublishedReviews(_timeService.Now), sportTypeId, rg, hasContentOnly,
+            var beforeStar = ApplyCardFilters(PublishedReviews(_timeService.Now), sportTypeId, rg, mn,
                                               _timeService.Today);
 
             var countByStar = await beforeStar
@@ -53,9 +57,26 @@ namespace VenueGo.Services.Reviews
                 .Select(g => new { Star = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.Star, x => x.Count);
 
+            // 10/17：拿掉「只看有留言的」開關，改成：
+            //   - 選了星等 → 那個星等全部列出（含只給星等的）：使用者在意的是分數，不是文字。
+            //   - 沒選星等 → 只列有文字的；但一則有文字的都沒有時，全部列出，不讓畫面空著。
+            // 星等分布、平均分數不受影響：上面的 countByStar 一直是全部算。
             var listQuery = beforeStar;
+            int ratingOnlyHidden = 0;
             if (st is int s)
+            {
                 listQuery = listQuery.Where(r => r.StarRating == s);
+            }
+            else
+            {
+                var withText = listQuery.Where(r => r.ReviewContent != null && r.ReviewContent != "");
+                int textCount = await withText.CountAsync();
+                if (textCount > 0)
+                {
+                    ratingOnlyHidden = countByStar.Values.Sum() - textCount;
+                    listQuery = withText;
+                }
+            }
 
             // ⚠️ 還沒有分頁。資料量變大之後要補 Skip / Take（規格已經預留 page／totalPages）。
             // 10/13：take 有給就只取前幾則（首頁 Slide）。排序之後才取，取到的才會是「最新的幾則」
@@ -64,16 +85,18 @@ namespace VenueGo.Services.Reviews
             var reviews = await limited.ToListAsync();
 
             return new PublicReviewListDto(
-                Filter: new ReviewFilterDto(sportTypeId, rg, st, hasContentOnly, so),
-                Defaults: new ReviewDefaultsDto(ReviewRange.Default, ReviewSort.Default),
+                Filter: new ReviewFilterDto(sportTypeId, rg, st, mn, so),
+                Defaults: new ReviewDefaultsDto(ReviewRange.Default, ReviewMention.Default, ReviewSort.Default),
                 Options: new ReviewOptionsDto(
                     ReviewRange.Options.Select(o => new OptionItem(o.Value, o.Text)).ToList(),
+                    ReviewMention.Options.Select(o => new OptionItem(o.Value, o.Text)).ToList(),
                     ReviewSort.Options.Select(o => new OptionItem(o.Value, o.Text)).ToList()),
                 SportTabs: sportTabs,
                 Summary: ReviewMapper.ToRatingSummary(countByStar),
                 Items: reviews.Select(ReviewMapper.ToPublicCard).ToList(),
                 Page: 1,
-                TotalPages: 1);
+                TotalPages: 1,
+                RatingOnlyHidden: ratingOnlyHidden);
         }
 
         /// <inheritdoc/>
@@ -88,11 +111,17 @@ namespace VenueGo.Services.Reviews
                 .Select(g => new { Star = g.Key, Count = g.Count() })
                 .ToDictionaryAsync(x => x.Star, x => x.Count);
 
-            // 候選：有文字、3 星以上。只讀挑選需要的三個欄位，挑好之後才讀完整的卡片。
+            // 候選：3 星以上（10/16 起含只給星等的）。只讀挑選需要的欄位，挑好之後才讀完整的卡片。
             // （以專題的資料量全部讀回來沒問題；之後評論多到上萬則，再把階段條件搬進 SQL。）
+            // 字數用 SQL 的 LEN 算：只有空白的內容會算成 0 字，跟「只給星等」一樣處理。
             var candidates = await published
-                .Where(r => r.ReviewContent != null && r.ReviewContent != "" && r.StarRating >= 3)
-                .Select(r => new FeaturedCandidate(r.ReviewId, r.StarRating, r.CreatedAt))
+                .Where(r => r.StarRating >= 3)
+                .Select(r => new FeaturedCandidate(
+                    r.ReviewId,
+                    r.StarRating,
+                    r.CreatedAt,
+                    r.RepliedAt != null,                                         // HasReply
+                    r.ReviewContent == null ? 0 : r.ReviewContent.Length))      // TextLength
                 .ToListAsync();
 
             var pickedIds = PickFeatured(candidates, now, FeaturedCount, Random.Shared);
@@ -106,16 +135,21 @@ namespace VenueGo.Services.Reviews
                 Items: pickedIds.Where(byId.ContainsKey).Select(id => ReviewMapper.ToPublicCard(byId[id])).ToList());
         }
 
-        /// <summary>首頁輪播挑選用的最小資料。</summary>
-        public sealed record FeaturedCandidate(int ReviewId, byte StarRating, DateTime CreatedAt);
+        /// <summary>首頁輪播挑選用的最小資料。TextLength 是 0 代表只給星等。</summary>
+        public sealed record FeaturedCandidate(int ReviewId, byte StarRating, DateTime CreatedAt, bool HasReply, int TextLength)
+        {
+            public bool IsRatingOnly => TextLength == 0;
+            public bool IsLong => TextLength >= FeaturedLongTextMin;
+        }
 
         /// <summary>
-        /// 首頁輪播的挑選規則（規格 2-11）。純計算、不碰資料庫，random 由外面傳進來，方便寫單元測試（傳固定種子）。
+        /// 首頁輪播的挑選規則（規格 2-11，10/16 改版）。純計算、不碰資料庫，random 由外面傳進來，方便寫單元測試（傳固定種子）。
         /// <list type="number">
-        ///   <item>依序看五個階段：近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星 → 全部 3 星以上。
-        ///         後面的階段會包含前面已經選過的評論，選過的跳過。</item>
+        ///   <item>依序看 stages 裡的每一個階段（a～e，見程式裡的註解）。後面的階段會包含前面已經選過的評論，選過的跳過，
+        ///         所以每一群只要照字面寫條件，不用再寫「排除前面的」。</item>
         ///   <item>前面階段的全部保留；某一階段加進來會超過 count 時，只從這一階段裡隨機抽，補滿就停。</item>
         ///   <item>最後把全部打亂順序：每次打開首頁，看到的評論和順序都不一樣。</item>
+        ///   <item>一則都沒選到時回空清單，前台會把整個「顧客評價」區塊拿掉（f）。</item>
         /// </list>
         /// </summary>
         public static List<int> PickFeatured(IReadOnlyList<FeaturedCandidate> candidates, DateTime now, int count, Random random)
@@ -123,14 +157,33 @@ namespace VenueGo.Services.Reviews
             DateTime threeMonthsAgo = now.AddMonths(-3);
             DateTime oneYearAgo = now.AddYears(-1);
 
-            var stages = new Func<FeaturedCandidate, bool>[]
-            {
-                c => c.CreatedAt >= threeMonthsAgo && c.StarRating == 5,
-                c => c.CreatedAt >= threeMonthsAgo && c.StarRating == 4,
-                c => c.CreatedAt >= oneYearAgo && c.StarRating == 5,
-                c => c.CreatedAt >= oneYearAgo && c.StarRating == 4,
-                c => c.StarRating >= 3,
-            };
+            // 「近期四段」：近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星，套在某一群評論上
+            Func<FeaturedCandidate, bool>[] Recent(Func<FeaturedCandidate, bool> group) =>
+            [
+                c => group(c) && c.CreatedAt >= threeMonthsAgo && c.StarRating == 5,
+                c => group(c) && c.CreatedAt >= threeMonthsAgo && c.StarRating == 4,
+                c => group(c) && c.CreatedAt >= oneYearAgo && c.StarRating == 5,
+                c => group(c) && c.CreatedAt >= oneYearAgo && c.StarRating == 4,
+            ];
+
+            Func<FeaturedCandidate, bool>[] stages =
+            [
+                // a. 有館方回覆、30 字以上
+                .. Recent(c => !c.IsRatingOnly && c.HasReply && c.IsLong),
+                // b. 有館方回覆
+                .. Recent(c => !c.IsRatingOnly && c.HasReply),
+                // c. 30 字以上
+                .. Recent(c => !c.IsRatingOnly && c.IsLong),
+                // d. 不限時間、3 星以上：有回覆且 30 字以上 → 有回覆 → 30 字以上
+                c => !c.IsRatingOnly && c.StarRating >= 3 && c.HasReply && c.IsLong,
+                c => !c.IsRatingOnly && c.StarRating >= 3 && c.HasReply,
+                c => !c.IsRatingOnly && c.StarRating >= 3 && c.IsLong,
+                // d-4（10/16 待確認）：沒有回覆、不到 30 字的文字評論。不要的話刪掉這一行
+                c => !c.IsRatingOnly && c.StarRating >= 3,
+                // e. 只給星等
+                .. Recent(c => c.IsRatingOnly),
+                c => c.IsRatingOnly && c.StarRating >= 3,
+            ];
 
             var picked = new List<int>(count);
             var pickedSet = new HashSet<int>();
@@ -180,9 +233,9 @@ namespace VenueGo.Services.Reviews
                       .Where(r => r.RepliedAt != null || r.CreatedAt <= cutoff);
         }
 
-        /// <summary>類型、時間範圍、有無內容。星等「不」放進來——分布圖要用這個結果算。</summary>
+        /// <summary>類型、時間範圍、提及（10/17 取代「有無內容」）。星等「不」放進來——分布圖要用這個結果算。</summary>
         private static IQueryable<VReviewPublicCard> ApplyCardFilters(
-            IQueryable<VReviewPublicCard> q, int? sportTypeId, string range, bool hasContentOnly, DateTime todayStart)
+            IQueryable<VReviewPublicCard> q, int? sportTypeId, string range, string mention, DateTime todayStart)
         {
             if (sportTypeId is int st)
                 q = q.Where(r => r.SportTypeId == st);
@@ -194,8 +247,21 @@ namespace VenueGo.Services.Reviews
                 q = q.Where(r => r.CreatedAt >= from);
             }
 
-            if (hasContentOnly)
-                q = q.Where(r => r.ReviewContent != null && r.ReviewContent != "");
+            // 原本：if (hasContentOnly) q = q.Where(r => r.ReviewContent != null && r.ReviewContent != "");
+            switch (mention)
+            {
+                case ReviewMention.All:
+                    break;
+                case ReviewMention.Venue:
+                    q = q.Where(r => r.MentionsVenue);
+                    break;
+                case ReviewMention.Staff:
+                    q = q.Where(r => r.MentionsStaff);
+                    break;
+                default:
+                    // Normalize 過的值不會走到這裡
+                    throw new ArgumentOutOfRangeException(nameof(mention), mention, "不認得的提及篩選");
+            }
 
             return q;
         }

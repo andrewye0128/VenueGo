@@ -101,6 +101,12 @@ const router = createRouter({
           name: "reservations",
           component: () => import("../views/member/MyReservationsView.vue"),
         },
+        // 訂單與付款（選單、頁尾的連結原本就有）
+        {
+          path: "orders",
+          name: "orders",
+          component: () => import("../views/member/MyOrdersView.vue"),
+        },
         // 我的票券
         {
           path: "tickets",

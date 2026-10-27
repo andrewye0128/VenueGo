@@ -41,7 +41,7 @@ namespace VenueGo.Controllers.Api.ReservationApi
         ///
         /// 需要會員的 JWT（Authorization: Bearer ...）。
         ///
-        /// 排序：預約日期新到舊 → 開始時間晚到早 → 預約編號大到小。
+        /// 排序：建立時間新到舊 → 預約編號大到小。
         /// </remarks>
         /// <param name="query">篩選條件與分頁</param>
         /// <param name="cancellationToken">使用者離開頁面時取消查詢</param>
@@ -81,7 +81,7 @@ namespace VenueGo.Controllers.Api.ReservationApi
         ///
         /// body 沒有金額：後端重新查證時段、重新計價。
         /// 建立後一律是 待確認／待付款／未付款；付款期限依付款方式計算
-        /// （線上＝現在＋30 分鐘但不晚於時段開始；現場＝時段開始前 1 天，距離使用日 3 天以上才能選）。
+        /// （線上＝現在＋50 分鐘但不晚於時段開始；現場＝時段開始前 1 天，距離使用日 3 天以上才能選）。
         /// </remarks>
         /// <param name="request">預約內容（slotTimes 用 "17:00" 格式）</param>
         /// <param name="cancellationToken">使用者中斷請求時取消</param>

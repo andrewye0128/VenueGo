@@ -14,18 +14,17 @@ namespace VenueGo.Services.Reviews
     {
         /// <summary>
         /// 評論專區的完整資料（規格 2-1）。
-        /// 不認得的 range、sort 一律改用預設值；star 不在 1～5 當成不篩選。
+        /// 不認得的 range、mention、sort 一律改用預設值；star 不在 1～5 當成不篩選。
+        /// 10/17：沒選星等時只列有文字的評論（一則都沒有時全部列出）；選了星等就全部列出。
         /// take（10/13）：最多回傳幾則卡片，null 代表全部；只限制卡片，不影響星等分布與平均。
         /// </summary>
         Task<PublicReviewListDto> GetPublicReviewsAsync(
-            int? sportTypeId, string? range, int? star, bool hasContentOnly, string? sort, int? take = null);
+            int? sportTypeId, string? range, int? star, string? mention, string? sort, int? take = null);
 
         /// <summary>
-        /// 首頁「顧客評價」輪播（規格 2-11，10/15）：只挑有文字、星等夠高的評價，最多 12 則，隨機順序。
+        /// 首頁「顧客評價」輪播（規格 2-11，10/16 改版）：最多 12 則 3 星以上的評價，隨機順序。
         /// <para>
-        /// 依序找：近 3 個月 5 星 → 近 3 個月 4 星 → 近 1 年 5 星 → 近 1 年 4 星 → 全部 3 星以上。
-        /// 前面階段找到的全部保留；某一階段湊滿會超過 12 則時，只從「這一階段」隨機抽補滿 12 則，後面的階段不看。
-        /// 最後全部打亂順序。「近 3 個月、近 1 年」看評論的建立時間。
+        /// 挑選規則寫在 PublicReviewQueryService.PickFeatured：有館方回覆、30 字以上的優先，只給星等的最後。一則都沒有時回空清單。
         /// </para>
         /// <para>每次呼叫結果都不一樣，所以這支 API 不能被快取。</para>
         /// </summary>

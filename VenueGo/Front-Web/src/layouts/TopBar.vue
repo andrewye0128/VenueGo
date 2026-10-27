@@ -7,6 +7,7 @@ import IconCalendar from "@/components/icons/IconCalendar.vue";
 import IconClock from "@/components/icons/IconClock.vue";
 import ConfirmModal from "@/components/ConfirmModal.vue";
 import { useSiteClock } from "@/composables/useSiteClock";
+import TopBarWeather from "@/components/weather/TopBarWeather.vue";
 
 defineProps({
   // 目前先寫死，之後改接後端 API
@@ -164,6 +165,7 @@ async function confirmReset() {
           class="h-4 w-px bg-neutral-border"
           :class="traveling ? 'block' : 'hidden md:block'"
         ></span>
+        <TopBarWeather />
       </div>
 
       <div class="flex items-center gap-3">

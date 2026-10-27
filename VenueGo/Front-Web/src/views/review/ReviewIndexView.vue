@@ -1,6 +1,7 @@
 <!--
     ReviewIndexView.vue — 評論專區（取代 Views/CReview/Index.cshtml；導覽列「會員評價」連到這裡）
-    路由：/reviews?sportTypeId=&range=&star=&hasContentOnly=&sort=
+    路由：/reviews?sportTypeId=&range=&star=&mention=&sort=
+    （10/17：hasContentOnly 拿掉了，改成「沒選星等就只列有文字的」，由後端決定；舊連結帶著它也沒關係，會被忽略）
 
     ── 篩選條件放在網址上，不是放在元件的變數裡 ─────────────
     Razor 版的設計理由沿用：顧客端的網址要能分享、能加書籤、能按上一頁。
@@ -19,6 +20,7 @@ import { useRoute, useRouter, RouterLink } from "vue-router";
 import { getPublicReviews } from "@/api/reviewApi";
 import StarView from "@/components/review/StarView.vue";
 import ReviewCard from "@/components/review/ReviewCard.vue";
+import { MENTION_TAGS } from "@/constants/review";
 
 const route = useRoute();
 const router = useRouter();
@@ -34,9 +36,7 @@ function filterFromQuery(q) {
   if (q.sportTypeId) f.sportTypeId = q.sportTypeId;
   if (q.range) f.range = q.range;
   if (q.star) f.star = q.star;
-  // 'true'／'false' 兩種都明確送出；網址上沒寫（例如直接打 /reviews）才交給後端補預設值
-  if (q.hasContentOnly === "true" || q.hasContentOnly === "false")
-    f.hasContentOnly = q.hasContentOnly === "true";
+  if (q.mention) f.mention = q.mention;
   if (q.sort) f.sort = q.sort;
   return f;
 }
@@ -45,7 +45,7 @@ function filterFromQuery(q) {
 //  以「後端確認過的目前條件」為底，只改傳進來的那幾個。
 //  傳 null 代表「清掉這個條件」（例如取消星等篩選）。
 //
-//  ⚠️ 時間範圍、排序、只看有留言，這三個「一律寫進網址」，就算是預設值也寫。
+//  ⚠️ 時間範圍、提及、排序，這三個「一律寫進網址」，就算是預設值也寫。（10/17：「只看有留言」換成「提及」）
 //     （2026-09-26 修正：第一版把「等於預設值的」省略掉，讓後端落到「不認得 → 用預設」那一支。）
 //     省略的問題：後端哪天改了預設值，舊的分享連結意思就變了——
 //     使用者分享的是「一年內」，對方打開看到的卻是新預設的「一個月內」。
@@ -59,19 +59,19 @@ function queryFor(changes = {}) {
   if (merged.sportTypeId != null) q.sportTypeId = String(merged.sportTypeId);
   q.range = merged.range;
   if (merged.star != null) q.star = String(merged.star);
-  q.hasContentOnly = merged.hasContentOnly ? "true" : "false";
+  q.mention = merged.mention;
   q.sort = merged.sort;
   return q;
 }
 
-// 「清除全部篩選」：把每個條件明確設回後端給的預設值，而不是給一個空網址讓後端自己補
+// 「恢復預設」（10/17 改名，原本叫「清除全部篩選」）：把每個條件明確設回後端給的預設值，而不是給一個空網址讓後端自己補
 function resetLink() {
   const d = vm.value.defaults;
   return linkFor({
     sportTypeId: null,
     range: d.range,
     star: null,
-    hasContentOnly: false,
+    mention: d.mention,
     sort: d.sort,
   });
 }
@@ -154,7 +154,7 @@ const hasFilter = computed(() => {
   return (
     f.sportTypeId != null ||
     f.star != null ||
-    f.hasContentOnly ||
+    f.mention !== d.mention ||
     f.range !== d.range ||
     f.sort !== d.sort
   );
@@ -186,10 +186,18 @@ const sort = computed({
   get: () => vm.value?.filter.sort,
   set: (v) => router.push(linkFor({ sort: v })),
 });
-const hasContentOnly = computed({
-  get: () => vm.value?.filter.hasContentOnly ?? false,
-  set: (v) => router.push(linkFor({ hasContentOnly: v })),
-});
+// 原本：「只看有留言的」開關。10/17 拿掉，改成沒選星等時後端只列有文字的（見 ratingOnlyHidden）
+// const hasContentOnly = computed({ ... });
+
+// ── 提及篩選分頁（10/17）：全部／場地設施／人員服務。選項由後端給，圖示跟評論卡上的標籤同一套 ──
+const mentionTabs = computed(() =>
+  vm.value.options.mentions.map((o) => ({
+    value: o.value,
+    label: o.text,
+    icon: MENTION_TAGS[o.value]?.icon,
+    active: vm.value.filter.mention === o.value,
+  })),
+);
 </script>
 
 <template>
@@ -313,17 +321,46 @@ const hasContentOnly = computed({
           <USelect v-model="sort" :items="sortItems" class="w-36" />
         </UFormField>
 
-        <!-- h-10：跟旁邊的下拉選單同高、底部對齊（只調位置，不改開關本身的樣式） -->
-        <USwitch v-model="hasContentOnly" label="只看有留言的" class="h-10" />
+        <!-- 原本：「只看有留言的」開關（10/17 拿掉）
+    <USwitch v-model="hasContentOnly" label="只看有留言的" class="h-10" /> -->
 
         <UButton
           v-if="hasFilter"
           :to="resetLink()"
           color="primary"
           variant="outline"
-          label="清除全部篩選"
+          label="恢復預設"
         />
+
+        <!-- 提及篩選分頁（10/17）：同一行、靠右（ml-auto）。手機放不下時會換到下一行，一樣靠右。
+             樣式跟館方後台的「全部／現場／預約」一樣是一組相連的按鈕；h-10 跟下拉選單同高。 -->
+        <nav
+          aria-label="評論提到的內容"
+          class="ml-auto flex h-10 overflow-hidden rounded-md border border-neutral-border bg-neutral-surface"
+        >
+          <RouterLink
+            v-for="tab in mentionTabs"
+            :key="tab.value"
+            :to="linkFor({ mention: tab.value })"
+            :aria-current="tab.active ? 'page' : undefined"
+            class="inline-flex items-center gap-1.5 border-l border-neutral-border px-3 text-sm whitespace-nowrap first:border-l-0 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-primary"
+            :class="
+              tab.active
+                ? 'bg-brand-primary font-semibold text-white'
+                : 'text-neutral-text-primary hover:bg-brand-primary/8'
+            "
+          >
+            <UIcon v-if="tab.icon" :name="tab.icon" class="size-4 shrink-0" aria-hidden="true" />
+            {{ tab.label }}
+          </RouterLink>
+        </nav>
       </div>
+
+      <!-- 10/17：沒選星等時，只給星等的評論不列出；告訴使用者還有幾則、怎麼看到 -->
+      <p v-if="vm.ratingOnlyHidden > 0" class="mb-4 text-sm text-neutral-text-secondary">
+        另有
+        {{ vm.ratingOnlyHidden }} 則只給星等、沒有文字的評論沒有列出；點上方的星等就會一起顯示。
+      </p>
 
       <!-- ── 卡片 ── -->
       <!-- 換篩選時先讓舊清單變淡，不要整塊清空再長回來，畫面才不會閃 -->
@@ -339,7 +376,7 @@ const hasContentOnly = computed({
           />
           <template v-if="hasFilter">
             <div>目前的條件沒有找到評論</div>
-            <div class="mt-1 text-sm">可以放寬時間範圍，或按「清除全部篩選」</div>
+            <div class="mt-1 text-sm">可以放寬時間範圍，或按「恢復預設」</div>
           </template>
           <template v-else>這裡還沒有公開的評論</template>
         </div>

@@ -19,6 +19,14 @@
         <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
     </div>
 }
+@if (TempData["VenueWarningMessage"] != null)
+{
+    <!-- 關閉時段成功但有步驟沒做完(取消票券失敗、寄信失敗),提醒後台人員手動處理 -->
+    <div class="alert alert-warning alert-dismissible fade show" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>@TempData["VenueWarningMessage"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
 @if (TempData["VenueErrorMessage"] != null)
 {
     <div class="alert alert-danger alert-dismissible fade show" role="alert">
@@ -78,48 +86,106 @@
         }
         else
         {
-            <div class="d-flex flex-wrap gap-2">
-                @foreach (var hour in Model.Hours)
-                {
-                    if (hour.IsPast)
-                    {
-                        <button type="button" class="btn btn-outline-secondary" style="min-width: 90px;" disabled title="已經過去">
-                            @hour.Time.ToString("HH:mm")
-                        </button>
-                    }
-                    else if (hour.IsUnavailable)
-                    {
-                        //目前不開放,點下去直接切換回開放,不需要填任何東西,用confirm()做二次確認就好
-                        <form asp-action="VenueUnavailableSlotToggle" method="post" class="d-inline">
-                            @Html.AntiForgeryToken()
-                            <input type="hidden" name="venueId" value="@Model.VenueId" />
-                            <input type="hidden" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" />
-                            <input type="hidden" name="time" value="@hour.Time.ToString("HH:mm")" />
-                            <button type="submit" class="btn btn-danger" style="min-width: 90px;" title="@hour.Reason"
-                                    onclick="return confirm('確定要恢復開放這個時段嗎?')">
-                                @hour.Time.ToString("HH:mm")
-                            </button>
-                        </form>
-                    }
-                    else
-                    {
-                        //目前開放,點下去要先跳Modal填不開放原因,不直接送出表單
-                        <button type="button" class="btn btn-outline-success" style="min-width: 90px;"
-                                data-bs-toggle="modal" data-bs-target="#unavailableReasonModal"
-                                data-time="@hour.Time.ToString("HH:mm")">
-                            @hour.Time.ToString("HH:mm")
-                        </button>
-                    }
-                }
-            </div>
-            <div class="form-text mt-3">
-                <span class="badge bg-success-subtle text-success border border-success-subtle me-1">綠色</span>開放中
-                <span class="badge bg-danger-subtle text-danger border border-danger-subtle me-1">紅色</span>不開放（滑鼠移過去看原因）
-                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle me-1">灰色</span>已經過去
+            <!-- 一個時段一列:狀態、預約資訊、不開放原因都直接顯示,不用滑鼠移過去才看得到 -->
+            <!-- 已有預約的時段整列用 table-warning 標示,提醒後台人員 -->
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 130px;">時段</th>
+                            <th style="width: 90px;">狀態</th>
+                            <th>預約資訊</th>
+                            <th>不開放原因</th>
+                            <th style="width: 120px;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var hour in Model.Hours)
+                        {
+                            string timeText = hour.Time.ToString("HH:mm");
+                            //訂單查不到時改顯示預約編號,格式跟預約管理頁的 R 開頭編號一致
+                            string bookingNo = hour.OrderNo ?? $"R{hour.ReservationId}";
+
+                            <tr class="@(hour.IsBooked ? "table-warning" : "")">
+                                <td class="fw-semibold">@timeText–@hour.Time.AddHours(1).ToString("HH:mm")</td>
+                                <td>
+                                    @if (hour.IsPast)
+                                    {
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">已過去</span>
+                                    }
+                                    else if (hour.IsUnavailable)
+                                    {
+                                        <span class="badge bg-danger-subtle text-danger border border-danger-subtle">不開放</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle">開放</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (hour.IsBooked)
+                                    {
+                                        <!-- 第一行:訂單編號(連到預約詳細頁)+預約狀態;第二行:會員姓名與 Email -->
+                                        <div>
+                                            <a asp-controller="Reservation" asp-action="Details" asp-route-id="@hour.ReservationId"
+                                               class="fw-semibold">@bookingNo</a>
+                                            <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1">@hour.ReservationStatusText</span>
+                                        </div>
+                                        <div class="small text-muted">@hour.MemberName ・ @hour.MemberEmail</div>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (hour.IsUnavailable)
+                                    {
+                                        @hour.Reason
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                </td>
+                                <td>
+                                    @if (hour.IsPast)
+                                    {
+                                        <span class="text-muted">—</span>
+                                    }
+                                    else if (hour.IsUnavailable)
+                                    {
+                                        //目前不開放,點下去先跳Modal確認,不需要填任何東西
+                                        //data-reason 讓 Modal 顯示原本的不開放原因,避免按錯
+                                        <button type="button" class="btn btn-outline-success btn-sm"
+                                                data-bs-toggle="modal" data-bs-target="#restoreSlotModal"
+                                                data-time="@timeText"
+                                                data-reason="@hour.Reason">
+                                            恢復開放
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        //目前開放,點下去先跳Modal詢問並填原因,不直接送出表單
+                                        //data-booked 讓 Modal 開啟時判斷要用哪一句詢問文字;data-booking-range 是整筆預約的使用時間
+                                        <button type="button" class="btn btn-outline-danger btn-sm"
+                                                data-bs-toggle="modal" data-bs-target="#unavailableReasonModal"
+                                                data-time="@timeText"
+                                                data-booked="@(hour.IsBooked ? "true" : "false")"
+                                                data-booking-range="@hour.ReservationTimeRange">
+                                            關閉時段
+                                        </button>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
 
-            <!-- 標記不開放用的共用Modal,所有"開放"按鈕共用同一個,點擊時用JS把venueId/date/time塞進去 -->
-            <div class="modal fade" id="unavailableReasonModal" tabindex="-1" aria-hidden="true">
+            <!-- 關閉時段用的共用Modal,所有"關閉時段"按鈕共用同一個,點擊時用JS把time與預約資訊塞進去 -->
+            <!-- 用 Bootstrap Modal 詢問,不用瀏覽器預設的 confirm() -->
+            <div class="modal fade" id="unavailableReasonModal" tabindex="-1" aria-labelledby="unavailableReasonTitle" aria-hidden="true">
                 <div class="modal-dialog">
                     <div class="modal-content">
                         <form asp-action="VenueUnavailableSlotToggle" method="post">
@@ -129,17 +195,51 @@
                             <input type="hidden" name="time" id="unavailableReasonTime" />
 
                             <div class="modal-header">
-                                <h5 class="modal-title">標記時段不開放</h5>
+                                <h5 class="modal-title" id="unavailableReasonTitle">關閉時段</h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
-                                <p class="mb-2">時段：<strong id="unavailableReasonTimeText"></strong></p>
+                                <p class="fw-semibold mb-2" id="unavailableConfirmQuestion">確認關閉該時段？</p>
+                                <!-- 有預約時才顯示:關閉會取消整筆預約並寄信,且無法復原 -->
+                                <p class="text-danger small mb-2 d-none" id="unavailableBookedNotice">
+                                    關閉後會取消整筆預約（<span id="unavailableBookedRange"></span>）並寄信通知會員，恢復開放也不會恢復預約。
+                                </p>
+                                <p class="mb-3">日期：@Model.Date.ToString("yyyy-MM-dd")　時段：<strong id="unavailableReasonTimeText"></strong></p>
+
                                 <label for="unavailableReasonInput" class="form-label">不開放原因</label>
                                 <textarea name="reason" id="unavailableReasonInput" class="form-control" rows="3" required></textarea>
                             </div>
                             <div class="modal-footer">
                                 <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
-                                <button type="submit" class="btn btn-danger">確認標記不開放</button>
+                                <button type="submit" class="btn btn-danger">確認關閉</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 恢復開放用的共用Modal,所有"恢復開放"按鈕共用同一個,點擊時用JS把time與原因塞進去 -->
+            <div class="modal fade" id="restoreSlotModal" tabindex="-1" aria-labelledby="restoreSlotTitle" aria-hidden="true">
+                <div class="modal-dialog">
+                    <div class="modal-content">
+                        <form asp-action="VenueUnavailableSlotToggle" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="venueId" value="@Model.VenueId" />
+                            <input type="hidden" name="date" value="@Model.Date.ToString("yyyy-MM-dd")" />
+                            <input type="hidden" name="time" id="restoreSlotTime" />
+
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="restoreSlotTitle">恢復開放</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p class="fw-semibold mb-2">確認恢復開放該時段？</p>
+                                <p class="mb-2">日期：@Model.Date.ToString("yyyy-MM-dd")　時段：<strong id="restoreSlotTimeText"></strong></p>
+                                <p class="mb-0">原本的不開放原因：<span id="restoreSlotReason"></span></p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-light" data-bs-dismiss="modal">取消</button>
+                                <button type="submit" class="btn btn-success">確認恢復開放</button>
                             </div>
                         </form>
                     </div>
@@ -151,7 +251,10 @@
 
 @section Scripts {
     <script>
-        //Modal開啟時,把觸發它的按鈕(event.relatedTarget)身上的data-time讀出來,塞進Modal裡的隱藏欄位跟顯示文字
+        //Modal開啟時,把觸發它的按鈕(event.relatedTarget)身上的data-*讀出來,塞進Modal裡的隱藏欄位跟顯示文字
+        //1. data-time >> 隱藏欄位與顯示的時段
+        //2. data-booked >> 有預約時換成提醒已有預約的詢問文字,並顯示「會取消整筆預約」的提醒;沒有預約就隱藏提醒
+        //3. data-booking-range >> 整筆預約的使用時間,用 textContent 塞入
         const unavailableReasonModal = document.getElementById('unavailableReasonModal');
         if (unavailableReasonModal) {
             unavailableReasonModal.addEventListener('show.bs.modal', function (event) {
@@ -159,6 +262,26 @@
                 const time = button.getAttribute('data-time');
                 document.getElementById('unavailableReasonTime').value = time;
                 document.getElementById('unavailableReasonTimeText').textContent = time;
+
+                const isBooked = button.getAttribute('data-booked') === 'true';
+                const question = document.getElementById('unavailableConfirmQuestion');
+                const bookedNotice = document.getElementById('unavailableBookedNotice');
+                question.textContent = isBooked ? '該時段已有預約，確認要關閉該時段嗎？' : '確認關閉該時段？';
+                document.getElementById('unavailableBookedRange').textContent = button.getAttribute('data-booking-range');
+                bookedNotice.classList.toggle('d-none', !isBooked);
+            });
+        }
+
+        //恢復開放的Modal開啟時,一樣從觸發按鈕讀出時段與原本的不開放原因
+        //原因用 textContent 塞入,不用 innerHTML,避免原因裡的特殊字元被當成 HTML
+        const restoreSlotModal = document.getElementById('restoreSlotModal');
+        if (restoreSlotModal) {
+            restoreSlotModal.addEventListener('show.bs.modal', function (event) {
+                const button = event.relatedTarget;
+                const time = button.getAttribute('data-time');
+                document.getElementById('restoreSlotTime').value = time;
+                document.getElementById('restoreSlotTimeText').textContent = time;
+                document.getElementById('restoreSlotReason').textContent = button.getAttribute('data-reason');
             });
         }
     </script>

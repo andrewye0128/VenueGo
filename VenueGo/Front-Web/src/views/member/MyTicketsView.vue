@@ -1,9 +1,17 @@
 <script setup>
 import TicketCard from "@/components/tickets/TicketCard.vue";
-import { getMyTickets, createTransfer, cancelTransfer, redeemTransfer } from "@/api/ticketApi";
+import {
+  getMyTickets,
+  createTransfer,
+  cancelTransfer,
+  redeemTransfer,
+  getIncomingTransfers,
+  resendTransfer,
+} from "@/api/ticketApi";
 import TicketQrModal from "@/components/tickets/TicketQrModal.vue";
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
+const toast = useToast();
 const activeTab = ref("all");
 
 const statusCards = [
@@ -19,6 +27,20 @@ const tabs = [...statusCards, { key: "receive", label: "接收票券" }];
 const tickets = ref([]);
 const loading = ref(false);
 const errorMsg = ref("");
+
+const receiveTarget = ref(null); // 正在領取哪一筆（只用來顯示票券資訊）
+
+function openReceive(item) {
+  receiveTarget.value = item;
+  redeemCode.value = "";
+  redeemError.value = "";
+  redeemSuccess.value = false;
+}
+
+function closeReceive() {
+  if (redeeming.value) return;
+  receiveTarget.value = null;
+}
 
 async function loadTickets({ silent = false } = {}) {
   if (!silent) {
@@ -36,18 +58,71 @@ async function loadTickets({ silent = false } = {}) {
 }
 
 const busyId = ref(null);
-const actionError = ref("");
 
-async function startTransfer(ticket) {
+// 轉贈彈窗（輸入對方 Email）
+const transferTarget = ref(null); // 要轉哪一張票
+const transferEmail = ref("");
+const transferEmailError = ref("");
+
+function openTransfer(ticket) {
+  transferTarget.value = ticket;
+  transferEmail.value = "";
+  transferEmailError.value = "";
+}
+
+function closeTransfer() {
+  if (busyId.value) return;
+  transferTarget.value = null;
+}
+
+function submitTransfer() {
+  const value = transferEmail.value.trim();
+  if (!value) {
+    transferEmailError.value = "請輸入對方的 Email";
+    return;
+  }
+  if (!/^\S+@\S+\.\S+$/.test(value)) {
+    transferEmailError.value = "Email 格式不正確";
+    return;
+  }
+  startTransfer(transferTarget.value, value);
+}
+
+async function startTransfer(ticket, email) {
   if (busyId.value) return;
   busyId.value = ticket.id;
-  actionError.value = "";
+  transferEmailError.value = "";
   try {
-    const { code, expiresAt } = await createTransfer(ticket.id);
-    ticket.transferCode = code;
-    ticket.transferExpiresAt = expiresAt;
+    await createTransfer(ticket.id, email);
+    toast.add({
+      title: "已送出",
+      description: "若對方是會員，已寄出通知信，請提醒對方查看信箱。",
+      color: "success",
+      icon: "i-mdi-check-circle-outline",
+    });
+    transferTarget.value = null;
+    await loadTickets({ silent: true });
   } catch (err) {
-    actionError.value = err.message;
+    transferEmailError.value = err.message; // 錯誤顯示在彈窗內
+  } finally {
+    busyId.value = null;
+  }
+}
+
+async function handleResend(ticket) {
+  if (busyId.value) return;
+  busyId.value = ticket.id;
+  try {
+    await resendTransfer(ticket.id);
+    toast.add({
+      title: "已重新寄出通知信",
+      description: "之前的驗證碼已失效，請對方使用最新一封。",
+      color: "success",
+      icon: "i-mdi-check-circle-outline",
+    });
+    await loadTickets({ silent: true });
+  } catch (err) {
+    toast.add({ title: err.message, color: "warning", icon: "i-mdi-alert-outline" });
   } finally {
     busyId.value = null;
   }
@@ -56,13 +131,13 @@ async function startTransfer(ticket) {
 async function handleCancelTransfer(ticket) {
   if (busyId.value) return;
   busyId.value = ticket.id;
-  actionError.value = "";
   try {
     await cancelTransfer(ticket.id);
-    ticket.transferCode = null;
+    ticket.transferToMasked = null;
     ticket.transferExpiresAt = null;
+    toast.add({ title: "已取消轉贈", color: "success", icon: "i-mdi-check-circle-outline" });
   } catch (err) {
-    actionError.value = err.message;
+    toast.add({ title: err.message, color: "warning", icon: "i-mdi-alert-outline" });
   } finally {
     busyId.value = null;
   }
@@ -73,6 +148,25 @@ const redeemCode = ref("");
 const redeeming = ref(false);
 const redeemError = ref("");
 const redeemSuccess = ref(false);
+const incoming = ref([]);
+const incomingError = ref("");
+
+async function loadIncoming() {
+  incomingError.value = "";
+  try {
+    incoming.value = await getIncomingTransfers();
+  } catch (err) {
+    incomingError.value = err.message;
+  }
+}
+
+function formatTime(value) {
+  return new Date(value).toLocaleString("zh-TW", { hour12: false });
+}
+
+watch(activeTab, (key) => {
+  if (key === "receive") loadIncoming();
+});
 
 async function handleRedeem() {
   const code = redeemCode.value.trim().toUpperCase();
@@ -88,8 +182,10 @@ async function handleRedeem() {
   try {
     await redeemTransfer(code);
     redeemCode.value = "";
+    receiveTarget.value = null;
     redeemSuccess.value = true;
     loadTickets({ silent: true });
+    loadIncoming();
   } catch (err) {
     redeemError.value = err.message;
   } finally {
@@ -99,98 +195,21 @@ async function handleRedeem() {
 
 onMounted(loadTickets);
 
-// 統計卡與 tab 共用 statusCards，數字在這裡算
-function countOf(key) {
-  return key === "all"
-    ? tickets.value.length
-    : tickets.value.filter((t) => t.status === key).length;
+// 分頁篩選規則：「可使用」包含場內，人在場內的票還沒結束，仍屬於可使用
+function matchesTab(ticket, key) {
+  if (key === "all") return true;
+  if (key === "available") return ticket.status === "available" || ticket.status === "inside";
+  return ticket.status === key;
 }
 
-const filteredTickets = computed(() =>
-  activeTab.value === "all"
-    ? tickets.value
-    : tickets.value.filter((t) => t.status === activeTab.value),
-);
+// 統計卡與 tab 共用 statusCards，數字在這裡算
+function countOf(key) {
+  return tickets.value.filter((t) => matchesTab(t, key)).length;
+}
 
-//  const tickets = ref([
-//   {
-//     id: 1,
-//     venueName: "羽球場 A",
-//     sportType: "羽球",
-//     date: "2026/09/30",
-//     timeRange: "18:00-20:00",
-//     status: "available",
-//   },
-//   {
-//     id: 2,
-//     venueName: "第一籃球場",
-//     sportType: "籃球",
-//     date: "2026/09/10",
-//     timeRange: "20:00-21:00",
-//     status: "used",
-//   },
-//   {
-//     id: 3,
-//     venueName: "桌球室 3 號台",
-//     sportType: "桌球",
-//     date: "2026/09/18",
-//     timeRange: "09:00-10:00",
-//     status: "transferred",
-//   },
-// ]);
-
-// 依票券分類
-// const stats = computed(() => [
-//   { label: "全部票券", value: tickets.value.length },
-//   {
-//     label: "可使用",
-//     value: tickets.value.filter((t) => t.status === "available").length,
-//   },
-//   {
-//     label: "已使用",
-//     value: tickets.value.filter((t) => t.status === "used").length,
-//   },
-//   {
-//     label: "已轉贈",
-//     value: tickets.value.filter((t) => t.status === "transferred").length,
-//   },
-// ]);
-
-const receivedtickets = ref([
-  {
-    id: 1,
-    venueName: "綜合排球場",
-    from: "陳美華",
-    date: "2026/10/05",
-    timeRange: "16:00-17:00",
-    status: "pending",
-  },
-  {
-    id: 2,
-    venueName: "羽球場 B",
-    from: "林建宏",
-    date: "2026/09/22",
-    timeRange: "10:00-11:00",
-    status: "accepted",
-  },
-  {
-    id: 3,
-    venueName: "桌球室 2 號台",
-    from: "張裕婷",
-    date: "2026/09/15",
-    timeRange: "14:00-15:00",
-    status: "rejected",
-  },
-]);
-
-const transferStatusMap = {
-  pending: { label: "待接收", prefix: "待接收" },
-  accepted: { label: "已接收", prefix: "已接收" },
-  rejected: { label: "已拒絕", prefix: "已拒絕" },
-};
+const filteredTickets = computed(() => tickets.value.filter((t) => matchesTab(t, activeTab.value)));
 
 const qrOpen = ref(false);
-// const transferCode = ref(false);
 const selectedTicket = ref(null);
 
 function openQr(ticket) {
@@ -232,7 +251,6 @@ function openQr(ticket) {
 
     <!-- 票券列表 -->
     <template v-if="activeTab !== 'receive'">
-      <p v-if="actionError" class="text-sm text-red-600 mb-4">{{ actionError }}</p>
       <p v-if="loading" class="text-sm text-gray-500 mb-10">載入中…</p>
       <p v-else-if="errorMsg" class="text-sm text-red-600 mb-10">{{ errorMsg }}</p>
       <div v-else-if="filteredTickets.length" class="grid grid-cols-2 gap-4 mb-10">
@@ -242,43 +260,23 @@ function openQr(ticket) {
           :ticket="t"
           :busy="busyId === t.id"
           @view-qr="openQr(t)"
-          @transfer="startTransfer(t)"
+          @transfer="openTransfer(t)"
           @cancel-transfer="handleCancelTransfer(t)"
           @transfer-expired="loadTickets({ silent: true })"
+          @resend="handleResend(t)"
         />
       </div>
       <p v-else class="text-sm text-gray-500 mb-10">目前沒有符合的票券</p>
     </template>
 
     <!-- 接收票券 -->
-
-    <!-- 接收票券:輸入驗證碼領取 -->
-    <section v-else class="border border-gray-200 rounded bg-white p-6 max-w-md">
-      <h2 class="text-base font-bold text-gray-900 mb-1">輸入驗證碼領取票券</h2>
+    <section v-else class="border border-gray-200 rounded bg-white p-6">
+      <h2 class="text-base font-bold text-gray-900 mb-1">接收票券</h2>
       <p class="text-xs text-gray-500 mb-4">
-        請輸入朋友提供的驗證碼,領取後票券會加入你的票券列表。
+        驗證碼已寄到你的信箱，按「接收」後輸入驗證碼即可領取。
       </p>
 
-      <form class="flex gap-2" @submit.prevent="handleRedeem">
-        <input
-          v-model="redeemCode"
-          type="text"
-          placeholder="例如 AB3K7M9P"
-          autocomplete="off"
-          class="flex-1 rounded border border-gray-300 px-3 py-2 font-mono tracking-widest uppercase focus:border-gray-900 focus:outline-none"
-          @input="redeemCode = redeemCode.toUpperCase()"
-        />
-        <button
-          type="submit"
-          :disabled="redeeming"
-          class="px-4 py-2 text-sm font-medium rounded bg-gray-900 text-white hover:bg-gray-700 disabled:bg-gray-300"
-        >
-          {{ redeeming ? "領取中…" : "領取" }}
-        </button>
-      </form>
-
-      <p v-if="redeemError" class="mt-3 text-sm text-red-600">{{ redeemError }}</p>
-      <p v-if="redeemSuccess" class="mt-3 text-sm text-gray-900">
+      <p v-if="redeemSuccess" class="mb-4 text-sm text-gray-900">
         領取成功!
         <button
           type="button"
@@ -291,55 +289,129 @@ function openQr(ticket) {
           查看我的票券
         </button>
       </p>
-    </section>
-    <!-- <section class="border border-gray-200 rounded bg-white p-6">
-      <h2 class="text-base font-bold text-gray-900 mb-4">接收票券</h2>
-      <div class="flex flex-col gap-3">
+
+      <p v-if="incomingError" class="text-sm text-red-600">{{ incomingError }}</p>
+      <div v-else-if="incoming.length" class="flex flex-col gap-3">
         <div
-          v-for="item in receivedtickets"
-          :key="item.id"
-          class="rounded border p-4 flex justify-between items-center"
-          :class="
-            item.status === 'pending'
-              ? 'border-gray-400 bg-white'
-              : 'border-gray-100 bg-gray-50 text-gray-400'
-          "
+          v-for="(item, i) in incoming"
+          :key="i"
+          class="rounded border border-gray-400 bg-white p-4 flex justify-between items-center"
         >
           <div>
-            <p
-              class="text-sm font-semibold"
-              :class="item.status === 'pending' ? 'text-gray-900' : 'text-gray-500'"
-            >
-              {{ transferStatusMap[item.status].prefix }}:{{ item.venueName }}
-            </p>
+            <p class="text-sm font-semibold text-gray-900">待接收:{{ item.venueName }}</p>
             <p class="text-xs text-gray-500 my-1">
-              轉贈人：{{ item.from }} 日期：{{ item.date }} 時段：{{ item.timeRange }}
+              轉贈人：{{ item.fromName }} 日期：{{ item.date }} 時段：{{ item.timeRange }}
             </p>
             <span class="inline-block text-xs px-2 py-0.5 border border-gray-300 rounded">
-              {{ transferStatusMap[item.status].label }}
+              待接收
+            </span>
+            <span class="ml-2 text-xs text-gray-500">
+              {{ formatTime(item.expiresAt) }} 前領取
             </span>
           </div>
-          只有待接收才有按鈕
-          <div v-if="item.status === 'pending'" class="flex gap-2">
-            <button
-              class="px-4 py-1.5 text-sm border border-gray-400 rounded text-gray-700 hover:bg-gray-100"
-              @click="rejectTransfer(item)"
-            >
-              拒絕
-            </button>
-            <button
-              class="px-4 py-1.5 text-sm rounded bg-gray-900 text-white hover:bg-gray-700"
-              @click="acceptTransfer(item)"
-            >
-              接收
-            </button>
-          </div>
+          <button
+            class="px-4 py-1.5 text-sm rounded bg-gray-900 text-white hover:bg-gray-700"
+            @click="openReceive(item)"
+          >
+            接收
+          </button>
         </div>
       </div>
-    </section> -->
+      <p v-else class="text-sm text-gray-500">目前沒有待領取的轉讓</p>
+    </section>
 
+    <!-- 輸入驗證碼視窗 -->
+    <div
+      v-if="receiveTarget"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      @click.self="closeReceive"
+    >
+      <div class="w-full max-w-sm rounded-lg bg-white p-6">
+        <h2 class="text-base font-bold text-gray-900 mb-1">輸入驗證碼領取</h2>
+        <p class="text-sm text-gray-700">{{ receiveTarget.venueName }}</p>
+        <p class="text-xs text-gray-500 mb-4">
+          {{ receiveTarget.date }} · {{ receiveTarget.timeRange }} · 轉贈人
+          {{ receiveTarget.fromName }}
+        </p>
+        <p class="text-xs text-gray-500 mb-2">請輸入信件中的驗證碼。</p>
+
+        <form class="flex flex-col gap-3" @submit.prevent="handleRedeem">
+          <input
+            v-model="redeemCode"
+            type="text"
+            placeholder="例如 AB3K7M9P"
+            autocomplete="off"
+            class="rounded border border-gray-300 px-3 py-2 font-mono tracking-widest uppercase focus:border-gray-900 focus:outline-none"
+            @input="redeemCode = redeemCode.toUpperCase()"
+          />
+          <p v-if="redeemError" class="text-sm text-red-600">{{ redeemError }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              class="py-2 text-sm rounded border border-gray-300 text-gray-600 hover:bg-gray-100"
+              @click="closeReceive"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              :disabled="redeeming"
+              class="py-2 text-sm font-medium rounded bg-gray-900 text-white hover:bg-gray-700 disabled:bg-gray-300"
+            >
+              {{ redeeming ? "領取中…" : "領取" }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div
+      v-if="transferTarget"
+      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      @click.self="closeTransfer"
+    >
+      <div class="w-full max-w-sm rounded-lg bg-white p-6">
+        <h2 class="text-base font-bold text-gray-900 mb-1">轉贈票券</h2>
+        <p class="text-sm text-gray-700">{{ transferTarget.venueName }}</p>
+        <p class="text-xs text-gray-500 mb-4">
+          {{ transferTarget.date }} · {{ transferTarget.timeRange }}
+        </p>
+        <p class="text-xs text-gray-500 mb-2">輸入對方的會員 Email，驗證碼會寄到對方信箱。</p>
+
+        <form class="flex flex-col gap-3" @submit.prevent="submitTransfer">
+          <input
+            v-model="transferEmail"
+            type="email"
+            placeholder="對方的會員 Email"
+            autocomplete="off"
+            class="rounded border border-gray-300 px-3 py-2 text-sm focus:border-gray-900 focus:outline-none"
+          />
+          <p v-if="transferEmailError" class="text-sm text-red-600">{{ transferEmailError }}</p>
+          <div class="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              class="py-2 text-sm rounded border border-gray-300 text-gray-600 hover:bg-gray-100"
+              @click="closeTransfer"
+            >
+              取消
+            </button>
+            <button
+              type="submit"
+              :disabled="busyId !== null"
+              class="py-2 text-sm font-medium rounded bg-gray-900 text-white hover:bg-gray-700 disabled:bg-gray-300"
+            >
+              {{ busyId !== null ? "寄送中…" : "寄出" }}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
     <!-- QRcode -->
-    <TicketQrModal v-model:open="qrOpen" :ticket="selectedTicket" />
+    <TicketQrModal
+      v-model:open="qrOpen"
+      :ticket="selectedTicket"
+      @status-changed="loadTickets({ silent: true })"
+    />
   </div>
 </template>
 <style scoped></style>

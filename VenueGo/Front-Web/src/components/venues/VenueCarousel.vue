@@ -33,6 +33,11 @@ const filteredVenues = computed(() =>
     : venues.value.filter((venue) => venue.sportTypeId === selectedSportTypeId.value),
 );
 
+// 「看全部場地」連到場館資訊頁：選「全部」時不帶運動類型，選了某一類就直接進那一類的介紹
+const allVenuesLink = computed(() =>
+  selectedSportTypeId.value === null ? "/venues" : `/venues/${selectedSportTypeId.value}`,
+);
+
 // 進頁面時呼叫一次 API，切換篩選只在前端過濾，不重新呼叫
 onMounted(async () => {
   try {
@@ -49,22 +54,33 @@ onMounted(async () => {
 const carouselUi = {
   // 卡片等高
   container: "items-stretch",
-  // 一次顯示幾張：手機 85%（露出下一張邊緣，提示可以滑動）、平板 2 張、電腦 4 張
-  item: "basis-[85%] md:basis-1/2 lg:basis-1/4",
-  // 手機用滑的，不顯示箭頭；左右兩個箭頭都不能按（張數不超過一頁）時整組隱藏
-  arrows: "max-md:hidden has-[[data-slot=prev]:disabled]:has-[[data-slot=next]:disabled]:hidden",
-  // 箭頭放在卡片內側（預設在外側，會超出版面）
-  prev: "start-2 sm:start-2 rounded text-neutral-text-primary",
-  next: "end-2 sm:end-2 rounded text-neutral-text-primary",
+  // 一次顯示幾張：手機 5/6（約 83%，露出下一張邊緣，提示可以滑動）、平板 2 張、電腦 4 張
+  item: "basis-5/6 md:basis-1/2 lg:basis-1/4",
+  // 箭頭樣式跟首頁評價輪播（HomeReviewCarousel）一致：
+  // 平板以下用滑的、不顯示箭頭（左右留白不夠放）；左右都不能按（張數不超過一頁）時整組隱藏
+  arrows: "max-lg:hidden has-[[data-slot=prev]:disabled]:has-[[data-slot=next]:disabled]:hidden",
+  // 箭頭放在卡片外側（壓在版面左右的留白上），不蓋住卡片內容
+  prev: "-start-5 sm:-start-5 rounded text-neutral-text-primary",
+  next: "-end-5 sm:-end-5 rounded text-neutral-text-primary",
 };
 </script>
 
 <template>
   <section>
-    <!-- 區塊標題：h2（首頁的 h1 在 HomeView） -->
-    <div class="flex items-center gap-2">
-      <IconMapPin class="size-6 text-brand-accent" />
-      <h2 class="text-2xl font-bold text-neutral-text-primary">場地介紹</h2>
+    <!-- 區塊標題：h2（首頁的 h1 在 HomeView）；右邊「看全部場地」連到場館資訊頁 -->
+    <div class="flex items-center justify-between gap-2">
+      <div class="flex items-center gap-2">
+        <IconMapPin class="size-6 text-brand-accent" />
+        <h2 class="text-2xl font-bold text-neutral-text-primary">場地介紹</h2>
+      </div>
+      <UButton
+        color="primary"
+        variant="link"
+        trailing-icon="i-mdi-chevron-right"
+        :to="allVenuesLink"
+      >
+        看全部場地
+      </UButton>
     </div>
 
     <!-- 載入中：灰色卡片骨架，張數跟輪播一樣（手機 1、平板 2、電腦 4） -->

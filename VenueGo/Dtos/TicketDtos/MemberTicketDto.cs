@@ -7,11 +7,11 @@
         public string SportType { get; set; } = null!;
         public string Date { get; set; } = null!;
         public string TimeRange { get; set; } = null!;
-        public string Status { get; set; } = null!;     // available / used / expired / transferred
-        public string? QrToken { get; set; }            // 只有 available 才給
+        public string Status { get; set; } = null!;      // available / inside / used / expired / transferred
 
         // 轉發
-        public string? TransferCode { get; set; }          // 只有持有人本人看得到
+        //public string? TransferCode { get; set; }          // 只有持有人本人看得到
+        public string? TransferToMasked { get; set; }      // 例如 b***@gmail.com
         public DateTime? TransferExpiresAt { get; set; }
     }
 }

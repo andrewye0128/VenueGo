@@ -83,8 +83,11 @@ namespace VenueGo.ViewModels.ReservationViewModels
         /// <summary>尖峰單價（每小時）。查無計價規則時為 null。</summary>
         public int? PeakPrice { get; init; }
 
-        /// <summary>尖峰起始時間。null 表示全天同價。</summary>
-        public TimeOnly? PeakStartTime { get; init; }
+        /// <summary>
+        /// 這種運動是否有任何一天設定了尖峰時間。false 表示每天都不分尖峰/離峰（全天同價）。
+        /// 尖峰從幾點開始每天可能不同，卡片上不顯示時間，選時段時每一格會標示尖峰或離峰。
+        /// </summary>
+        public bool HasPeakHours { get; init; }
 
         /// <summary>是否可被選為預約場地。</summary>
         public bool IsSelectable => IsActive;
@@ -121,7 +124,7 @@ namespace VenueGo.ViewModels.ReservationViewModels
                 }
 
                 var hasDifferentPeakPrice =
-                    PeakPrice.HasValue && PeakStartTime.HasValue && PeakPrice != OffPeakPrice;
+                    PeakPrice.HasValue && HasPeakHours && PeakPrice != OffPeakPrice;
 
                 if (!hasDifferentPeakPrice)
                 {
@@ -134,7 +137,7 @@ namespace VenueGo.ViewModels.ReservationViewModels
                 return new[]
                 {
                     new PriceRow { Label = "離峰價格", Value = $"NT$ {OffPeakPrice:N0} / 小時" },
-                    new PriceRow { Label = "尖峰價格", Value = $"NT$ {PeakPrice:N0} / 小時（{PeakStartTime:HH\\:mm} 起）" }
+                    new PriceRow { Label = "尖峰價格", Value = $"NT$ {PeakPrice:N0} / 小時（尖峰時段依星期而定）" }
                 };
             }
         }

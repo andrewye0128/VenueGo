@@ -11,5 +11,10 @@ namespace VenueGo.Services.Ticket
         /// </summary>
         Task<List<MemberTicketDto>> GetMyTicketsAsync(
             int userId, CancellationToken cancellationToken = default);
+        /// </summary>
+        Task<TicketQrDto?> GetQrAsync(
+            int ticketId, int userId, CancellationToken cancellationToken = default);
+
+        Task<List<IncomingTransferDto>> GetIncomingTransfersAsync(int userId, CancellationToken cancellationToken = default);
     }
 }

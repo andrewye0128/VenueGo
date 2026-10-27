@@ -21,6 +21,10 @@ namespace VenueGo.Dtos.ReviewDtos.MyReviews
         bool MentionsStaff,
         TimeView CreatedAt,
         bool IsPublic,
+        // 10/27：顧客選公開的話，從什麼時候起會出現在評論專區：館方回覆的時間，或建立後滿 ReviewPolicy.PublicBufferDays 天，取比較早的
+        TimeView PublicFrom,
+        // 10/27：「現在」是不是已經過了 PublicFrom（不管顧客有沒有選公開）。公開開關旁顯示「尚未公開／已公開」用
+        bool PublicFromReached,
         bool IsSpamMarked,
         string? SpamReasonText,      // 被下架時給顧客看的理由（ReviewPolicy.SpamReasonInfos 的 CustomerText）；沒下架是 null
         bool CanToggleVisibility,

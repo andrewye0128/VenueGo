@@ -152,7 +152,7 @@ namespace VenueGo.Services.Reviews
                                   .FirstOrDefaultAsync(d => d.ReviewId == reviewId);
             return detail == null
                 ? MemberReviewResult<MyReviewDto>.Fail(MemberReviewOutcome.NotFound)
-                : MemberReviewResult<MyReviewDto>.Ok(ToMyReview(detail));
+                : MemberReviewResult<MyReviewDto>.Ok(ToMyReview(detail, _timeService.Now));   // 10/27：多傳現在時間
         }
 
         private async Task<MemberReviewResult<MyReviewDto>> GetOwnReviewAsync(ReviewEligibility r)
@@ -164,7 +164,7 @@ namespace VenueGo.Services.Reviews
             var detail = await _db.VReviewDetails.FirstOrDefaultAsync(d => d.ReviewId == reviewId);
             return detail == null   // 理論上不會：檢視表對 Reviews 全部 LEFT JOIN，Reviews 有就一定有
                 ? MemberReviewResult<MyReviewDto>.Fail(MemberReviewOutcome.NotFound)
-                : MemberReviewResult<MyReviewDto>.Ok(ToMyReview(detail));
+                : MemberReviewResult<MyReviewDto>.Ok(ToMyReview(detail, _timeService.Now));   // 10/27：多傳現在時間
         }
 
         // ════════════════════════════════════════════════════════
@@ -422,7 +422,8 @@ namespace VenueGo.Services.Reviews
         /// v_ReviewDetail 的一列 → 我的評論單筆頁（員工預覽也用這個）。
         /// 顯示名稱：匿名用暱稱；實名但會員資料查不到時顯示「已停用的帳號」。
         /// </summary>
-        private static MyReviewDto ToMyReview(VReviewDetail d)
+        // 10/27：多了 now（公開開關旁顯示「尚未公開／已公開」用）
+        private static MyReviewDto ToMyReview(VReviewDetail d, DateTime now)
         {
             var context = d.ReviewKind == (byte)ReviewKindCode.Visit
                 ? ReviewMapper.VisitContext(d.VenueName, d.RentStartTime)
@@ -432,7 +433,7 @@ namespace VenueGo.Services.Reviews
                 ? d.AnonymousNickname ?? "匿名使用者"
                 : d.MemberName ?? "已停用的帳號";
 
-            return ReviewMapper.ToMyReview(d, context, displayName);
+            return ReviewMapper.ToMyReview(d, context, displayName, now);
         }
 
         /// <summary>

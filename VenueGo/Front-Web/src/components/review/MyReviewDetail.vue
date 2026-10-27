@@ -33,6 +33,7 @@ import {
 import { ErrorCodes } from "@/constants/errorCodes";
 import { MENTION_TAGS, REPLY_SATISFACTION } from "@/constants/review";
 import { kindInfo } from "@/utils/review/reviewKinds";
+import { shortDate } from "@/utils/review/shortDate";
 import StarView from "@/components/review/StarView.vue";
 
 // 顧客模式傳 kind + ticket；預覽模式只傳 previewId（種類由 API 回傳的 kind 決定）
@@ -122,6 +123,21 @@ const isPublic = computed({
       savingVisibility.value = false;
     }
   },
+});
+
+// ── 10/27：公開開關旁的狀態（尚未公開／已公開／不公開）──
+// 顧客選了公開，也要等館方回覆、或建立後滿 7 天（以先到的為準）才會出現在評論專區。
+// 這個時間（publicFrom）和「現在是不是已經過了」（publicFromReached）由後端算好，天數不寫死在前端。
+// 切換開關之後 vm.isPublic 會跟著變，這行字也會跟著變。
+const visibilityText = computed(() => {
+  const r = vm.value;
+  if (!r) return "";
+  if (!r.isPublic) return "不公開：其他顧客看不到這則評論，你隨時可以再打開。";
+  if (r.isPublic && r.publicFromReached)
+    return "已公開：其他顧客在評論專區看得到這則評論，關閉後就看不到了。";
+  if (r.isPublic && !r.publicFromReached)
+    return `尚未公開：館方回覆後，或最晚 ${shortDate(r.publicFrom?.value)} 起，會顯示在評論專區。`;
+  return "";
 });
 
 // ── 對回覆表態 ──
@@ -374,13 +390,14 @@ async function rate(value) {
       />
 
       <!-- ── 公開切換：放在卡片外面，因為它是「對這則評論的操作」，不是評論內容 ── -->
+      <!-- 10/27：description 改成顯示公開狀態（visibilityText）。原本：description="關閉後其他顧客就看不到，你隨時可以再打開。" -->
       <USwitch
         v-if="vm.canToggleVisibility"
         v-model="isPublic"
         :disabled="savingVisibility || isPreview"
         :loading="savingVisibility"
         label="公開這則評論"
-        description="關閉後其他顧客就看不到，你隨時可以再打開。"
+        :description="visibilityText"
         :class="compact ? 'mt-3' : 'mt-4'"
       />
     </template>

@@ -110,7 +110,8 @@ namespace VenueGo.Mappers
 
         /// <summary>「我的評論」（規格 2-4），員工預覽（2-8）也用同一個。</summary>
         /// <remarks>10/15：改從檢視表 v_ReviewDetail 轉換（評論本身的欄位都在裡面，種類也從那裡來）。</remarks>
-        public static MyReviewDto ToMyReview(VReviewDetail review, ReviewContextDto context, string displayName)
+        /// <param name="now">10/27 新增：現在時間（ITimeService.Now），算「是不是已經會出現在評論專區」用。</param>
+        public static MyReviewDto ToMyReview(VReviewDetail review, ReviewContextDto context, string displayName, DateTime now)
         {
             string kind = ReviewKindCodeExtensions.ToRouteKind(review.ReviewKind);
 
@@ -124,6 +125,11 @@ namespace VenueGo.Mappers
                 : null;
 
             bool isSpam = review.SpamMarkedAt != null;
+
+            // 10/27：什麼時候起會出現在評論專區（跟 PublicReviewQueryService.PublishedReviews 同一個規則）：
+            //   館方回覆了 → 回覆的時間；還沒回覆 → 建立後滿 PublicBufferDays 天。兩個都有的話取比較早的
+            DateTime bufferEnds = review.CreatedAt.AddDays(ReviewPolicy.PublicBufferDays);
+            DateTime publicFrom = review.RepliedAt is DateTime replied && replied < bufferEnds ? replied : bufferEnds;
 
             // 作者看到的是公開版本（遮蔽後），跟其他顧客看到的一樣。
             // 原文仍然完整存在資料庫裡，員工端需要時可以看原文。
@@ -142,6 +148,8 @@ namespace VenueGo.Mappers
                 MentionsStaff: review.MentionsStaff,
                 CreatedAt: TimeView.From(review.CreatedAt),
                 IsPublic: review.IsPublic,
+                PublicFrom: TimeView.From(publicFrom),
+                PublicFromReached: now >= publicFrom,
                 IsSpamMarked: isSpam,
                 SpamReasonText: isSpam ? CustomerSpamReason(review.SpamReason) : null,
                 // 非垃圾 且 是現場評論（預約評論一律不公開）

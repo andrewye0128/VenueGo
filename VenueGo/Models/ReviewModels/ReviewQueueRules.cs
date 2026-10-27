@@ -86,6 +86,17 @@ namespace VenueGo.Models.ReviewModels
             _                   => QueueSource.All
         };
 
+        /// <summary>10/27：滿意度篩選。不認得的一律改回 All。</summary>
+        public static string NormalizeSatisfaction(string? satisfaction) => satisfaction switch
+        {
+            QueueSatisfaction.All         => QueueSatisfaction.All,
+            QueueSatisfaction.Unsatisfied => QueueSatisfaction.Unsatisfied,
+            QueueSatisfaction.Neutral     => QueueSatisfaction.Neutral,
+            QueueSatisfaction.Satisfied   => QueueSatisfaction.Satisfied,
+            QueueSatisfaction.None        => QueueSatisfaction.None,
+            _                             => QueueSatisfaction.All
+        };
+
         public static string NormalizeRange(string? range) => range switch
         {
             QueueRange.Today    => QueueRange.Today,

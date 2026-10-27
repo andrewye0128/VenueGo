@@ -32,7 +32,9 @@
       // 10/23：多了 page（分頁）。換任何篩選條件都回到第 1 頁：篩選連結的網址本來就不帶 page，
       //        下拉選單、搜尋那幾個地方則在送出前把 page 清掉（見 uiFilter）。
       //        處理完一則評論（置頂、回覆、標記垃圾）後重新載入時用 currentFilter，會留在同一頁。
-      const FILTER_KEYS = ['tab', 'source', 'range', 'field', 'keyword', 'grouped', 'sportTypeId', 'venueId', 'page'];
+      // 10/27：多了 satisfaction（已完成清單的滿意度篩選）。原本：
+      // const FILTER_KEYS = ['tab', 'source', 'range', 'field', 'keyword', 'grouped', 'sportTypeId', 'venueId', 'page'];
+      const FILTER_KEYS = ['tab', 'source', 'range', 'field', 'keyword', 'grouped', 'sportTypeId', 'venueId', 'satisfaction', 'page'];
 
       /* ── 共用工具 ─────────────────────────────────────── */
 
@@ -337,7 +339,8 @@
                   return JSON.parse(st.dataset.defaults);
             } catch (e) {
                   // 萬一讀不到也要有得用，不能讓「重置」整個壞掉
-                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'false', sportTypeId: '', venueId: '', page: '' };
+                  // 10/27：多了 satisfaction
+                  return { tab: 'unread', source: 'all', range: 'month', field: 'content', keyword: '', grouped: 'false', sportTypeId: '', venueId: '', satisfaction: '', page: '' };
             }
       }
 

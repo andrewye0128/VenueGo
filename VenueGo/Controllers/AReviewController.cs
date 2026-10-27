@@ -578,6 +578,42 @@ namespace VenueGo.Controllers
         }
 
         /// <summary>
+        /// 10/27：已完成清單依顧客對館方回覆的表態篩選（ReplySatisfaction：0 不滿意／1 普通／2 滿意／null 未表態）。
+        /// 「未表態」包含顧客還沒看到回覆的。
+        /// </summary>
+        private static IQueryable<Review> ApplySatisfaction(IQueryable<Review> q, string satisfaction) => satisfaction switch
+        {
+            QueueSatisfaction.All         => q,
+            QueueSatisfaction.Unsatisfied => q.Where(r => r.ReplySatisfaction == 0),
+            QueueSatisfaction.Neutral     => q.Where(r => r.ReplySatisfaction == 1),
+            QueueSatisfaction.Satisfied   => q.Where(r => r.ReplySatisfaction == 2),
+            QueueSatisfaction.None        => q.Where(r => r.ReplySatisfaction == null),
+            _ => throw new ArgumentOutOfRangeException(nameof(satisfaction), satisfaction, "未定義的滿意度篩選")
+        };
+
+        /// <summary>
+        /// 10/27：已完成清單裡各種表態各有幾則。條件跟已完成清單一樣（有回覆），只查一次資料庫。
+        /// 跟 ApplySatisfaction 一樣，0／1／2／null 各自寫出來，不靠 else。
+        /// </summary>
+        private static Dictionary<string, int> CountSatisfaction(IQueryable<Review> q)
+        {
+            var counts = q.Where(r => r.RepliedAt != null)
+                          .GroupBy(r => r.ReplySatisfaction)
+                          .Select(g => new { Satisfaction = g.Key, Count = g.Count() })
+                          .ToList();
+
+            int CountOf(byte? value) => counts.Where(c => c.Satisfaction == value).Sum(c => c.Count);
+
+            return new Dictionary<string, int>
+            {
+                [QueueSatisfaction.Unsatisfied] = CountOf(0),
+                [QueueSatisfaction.Neutral]     = CountOf(1),
+                [QueueSatisfaction.Satisfied]   = CountOf(2),
+                [QueueSatisfaction.None]        = CountOf(null)
+            };
+        }
+
+        /// <summary>
         /// 10/26 負評優先：清單（或一組裡面）的順序。
         ///   未讀、待回覆：置頂 → 有文字的在前、只有星等的放最後 → 期限早的在前 → 評論早的在前。
         ///     評分越低期限越短，所以負評自然排在前面；同樣星等，越早進來的越前面（期限表在 ReviewUrgency_Claude.cs）。
@@ -666,9 +702,12 @@ namespace VenueGo.Controllers
         private ReviewQueueVM BuildQueueVm(
             string? tab, string? source, string? range,
             string? field, string? keyword, bool grouped,
-            int? sportTypeId, int? venueId, int? page)
+            int? sportTypeId, int? venueId, int? page,
+            string? satisfaction = null)   // 10/27 新增：已完成清單的滿意度篩選
         {
             string t = NormalizeTab(tab);
+            // 10/27：只有已完成清單用得到；其他清單一律當作「全部」，才不會被當成有篩選條件（例如不會因此列出只有星等的評論）
+            string sat = t == QueueTab.Completed ? NormalizeSatisfaction(satisfaction) : QueueSatisfaction.All;
             string s = NormalizeSource(source);
             string rg = NormalizeRange(range);
             string f = NormalizeSearchField(field);
@@ -706,6 +745,13 @@ namespace VenueGo.Controllers
             //   先切的話兩則會被拆到不同頁，分組就失去「放在一起看」的意義。
             //   所以有分組時，用「分組之後」的順序切頁；同一組被切到兩頁時，組的標題會標「接上一頁／下一頁還有」。
             //   目前資料量小，整份在記憶體裡排；資料量變大之後，不分組的情況可以改成在資料庫 Skip / Take。
+            // 10/27：已完成清單各種表態的數字（套用滿意度篩選之前算，數字才跟按鈕對得上）
+            Dictionary<string, int> satisfactionCounts = new();
+            if (t == QueueTab.Completed) satisfactionCounts = CountSatisfaction(listBase);
+
+            // 10/27：已完成清單依滿意度篩選
+            if (t == QueueTab.Completed) listBase = ApplySatisfaction(listBase, sat);
+
             var reviews = ApplyTab(listBase, t).ToList();
 
             // 10/26：全部、已完成清單在預設條件下，不列「只有星等」的評論（跟顧客端評論專區一樣）。
@@ -719,7 +765,8 @@ namespace VenueGo.Controllers
                                   && keywords.Count == 0
                                   && sport == null
                                   && venue == null
-                                  && !grouped;
+                                  && !grouped
+                                  && sat == QueueSatisfaction.All;   // 10/27：選了滿意度也算篩選條件
             int ratingOnlyHidden = 0;
             if (hideRatingOnly)
             {
@@ -833,6 +880,8 @@ namespace VenueGo.Controllers
                 TotalItemCount = ordered.Count,
                 RatingOnlyHidden       = ratingOnlyHidden,
                 RatingOnlySectionCount = ratingOnlySection,
+                Satisfaction           = sat,
+                SatisfactionCounts     = satisfactionCounts,
 
                 UnreadCount  = countBase.Count(UnreadRule),
                 PendingCount = countBase.Count(PendingRule),
@@ -857,20 +906,24 @@ namespace VenueGo.Controllers
 
         /// <summary>整頁。第一次進來、按 F5、從書籤打開都走這裡。</summary>
         [HttpGet]
+        // 10/27：多了 satisfaction（已完成清單的滿意度篩選）
         public IActionResult Index(string? tab, string? source, string? range,
                                    string? field, string? keyword, bool grouped = false,
-                                   int? sportTypeId = null, int? venueId = null, int? page = null)
+                                   int? sportTypeId = null, int? venueId = null, int? page = null,
+                                   string? satisfaction = null)
         {
-            return View(BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page));
+            return View(BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
         }
 
         /// <summary>只有清單那一塊。切換篩選、搜尋、處理完一則之後，由 axios 呼叫。</summary>
         [HttpGet]
+        // 10/27：多了 satisfaction（已完成清單的滿意度篩選）
         public IActionResult QueueList(string? tab, string? source, string? range,
                                        string? field, string? keyword, bool grouped = false,
-                                       int? sportTypeId = null, int? venueId = null, int? page = null)
+                                       int? sportTypeId = null, int? venueId = null, int? page = null,
+                                       string? satisfaction = null)
         {
-            return PartialView("_QueueList", BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page));
+            return PartialView("_QueueList", BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
         }
 
         /// <summary>

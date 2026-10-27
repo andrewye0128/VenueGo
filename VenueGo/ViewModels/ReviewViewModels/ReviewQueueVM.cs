@@ -22,6 +22,19 @@ namespace VenueGo.ViewModels.ReviewViewModels
     }
 
     /// <summary>
+    /// 10/27：已完成清單依顧客對館方回覆的表態篩選（Reviews.ReplySatisfaction：0 不滿意／1 普通／2 滿意／null 未表態）。
+    /// 只有已完成清單用得到；其他清單一律當作 All。
+    /// </summary>
+    public static class QueueSatisfaction
+    {
+        public const string All         = "all";
+        public const string Unsatisfied = "unsatisfied";
+        public const string Neutral     = "neutral";
+        public const string Satisfied   = "satisfied";
+        public const string None        = "none";
+    }
+
+    /// <summary>
     /// 時間範圍篩選。
     ///
     /// 比的是哪一個欄位由清單決定：
@@ -271,6 +284,15 @@ namespace VenueGo.ViewModels.ReviewViewModels
         /// </summary>
         public int RatingOnlySectionCount { get; init; }
 
+        /// <summary>10/27：已完成清單的滿意度篩選（QueueSatisfaction）。其他清單一律是 All。</summary>
+        public string Satisfaction { get; init; } = QueueSatisfaction.All;
+
+        /// <summary>
+        /// 10/27：已完成清單裡，各種表態各有幾則（鍵是 QueueSatisfaction 的值，不含 All）。
+        /// 套用來源、時間範圍、場地、搜尋，但不套用滿意度本身，數字才會跟按鈕對得上。其他清單是空的。
+        /// </summary>
+        public Dictionary<string, int> SatisfactionCounts { get; init; } = new();
+
         /// <summary>已經打亂順序的罐頭回覆，整頁共用一組。</summary>
         public List<CannedReply> CannedReplies { get; init; } = new();
 
@@ -298,6 +320,7 @@ namespace VenueGo.ViewModels.ReviewViewModels
             || !string.IsNullOrEmpty(Keyword)
             || Grouped
             || SportTypeId != null
-            || VenueId != null;
+            || VenueId != null
+            || Satisfaction != QueueSatisfaction.All;   // 10/27
     }
 }

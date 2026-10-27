@@ -82,14 +82,19 @@
             ["keyword"]     = Model.Keyword,
             ["grouped"]     = Model.Grouped ? "true" : "false",
             ["sportTypeId"] = Model.SportTypeId,
-            ["venueId"]     = Model.VenueId
+            ["venueId"]     = Model.VenueId,
+            // 10/27：已完成清單的滿意度篩選。「全部」不放進網址（值是 null 的鍵，Url.Action 不會放進網址）
+            ["satisfaction"] = Model.Satisfaction == QueueSatisfaction.All ? null : Model.Satisfaction
       };
 
-      RouteValueDictionary RouteFor(string? tab = null, string? source = null)
+      // 10/27：多了 satisfaction
+      RouteValueDictionary RouteFor(string? tab = null, string? source = null, string? satisfaction = null)
       {
             var r = CurrentRoute();
             if (tab != null) r["tab"] = tab;
             if (source != null) r["source"] = source;
+            if (satisfaction == QueueSatisfaction.All) r["satisfaction"] = null;
+            if (satisfaction != null && satisfaction != QueueSatisfaction.All) r["satisfaction"] = satisfaction;
             return r;
       }
 
@@ -122,7 +127,8 @@
             keyword = "",
             grouped = "false",
             sportTypeId = "",
-            venueId = ""
+            venueId = "",
+            satisfaction = ""   // 10/27
       });
 }
 
@@ -635,6 +641,7 @@
      data-grouped="@(Model.Grouped ? "true" : "false")"
      data-sport-type-id="@Model.SportTypeId"
      data-venue-id="@Model.VenueId"
+     data-satisfaction="@(Model.Satisfaction == QueueSatisfaction.All ? "" : Model.Satisfaction)"
      data-page="@Model.Page"
      data-keywords="@System.Text.Json.JsonSerializer.Serialize(Model.Keywords)"
      data-defaults="@defaults"
@@ -772,6 +779,43 @@
             </a>
       </div>
 </div>
+
+@* ── 10/27：已完成清單的滿意度篩選 ──────────────────
+   顧客對館方回覆的表態。最常用的是「不滿意」：回覆之後顧客還是不滿意的，館方可能要再聯絡或追蹤。
+   數字是目前條件下（來源、時間範圍、場地、搜尋）各有幾則，不受滿意度本身影響。
+   圖示和顏色跟評論摘要列上的表態標籤一樣（SatisfactionFace）。 *@
+@if (Model.Tab == QueueTab.Completed)
+{
+      var satOptions = new (string Value, byte? Face, string Text)[]
+      {
+            (QueueSatisfaction.Unsatisfied, 0, "不滿意"),
+            (QueueSatisfaction.Neutral,     1, "普通"),
+            (QueueSatisfaction.Satisfied,   2, "滿意"),
+            (QueueSatisfaction.None,        null, "未表態")
+      };
+      <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <span class="small text-muted">顧客對回覆的表態：</span>
+            <div class="btn-group btn-group-sm" role="group" aria-label="顧客對回覆的表態">
+                  <a class="btn js-queue-link @(Model.Satisfaction == QueueSatisfaction.All ? "btn-secondary" : "btn-outline-secondary")"
+                     href="@Url.Action("Index", RouteFor(satisfaction: QueueSatisfaction.All))">全部</a>
+                  @foreach (var opt in satOptions)
+                  {
+                        var face = SatisfactionFace(opt.Face);
+                        int count = Model.SatisfactionCounts.GetValueOrDefault(opt.Value);
+                        <a class="btn js-queue-link @(Model.Satisfaction == opt.Value ? "btn-secondary" : "btn-outline-secondary")"
+                           href="@Url.Action("Index", RouteFor(satisfaction: opt.Value))"
+                           title="@(opt.Value == QueueSatisfaction.None ? "顧客還沒表態（包含還沒看到回覆的）" : null)">
+                              @if (face.Icon != "")
+                              {
+                                    <i class="bi @face.Icon"></i>
+                              }
+                              @opt.Text
+                              <span class="badge rounded-pill text-bg-light border ms-1">@count</span>
+                        </a>
+                  }
+            </div>
+      </div>
+}
 
 @* ── 目前條件的說明 ── *@
 @if (Model.VenueId != null)

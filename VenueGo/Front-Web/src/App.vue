@@ -2,6 +2,28 @@
 import { RouterView } from "vue-router";
 import AppHeader from "@/layouts/AppHeader.vue";
 import AppFooter from "@/layouts/AppFooter.vue";
+import { onMounted } from "vue";
+import { useMemberStore } from "@/stores/member";
+
+const memberStore = useMemberStore();
+
+// 網站啟動時，恢復目前登入會員的資料
+onMounted(async () => {
+  const token = localStorage.getItem("token");
+
+  // 沒有 Token，就不需要載入會員資料
+  if (!token) return;
+
+  // Pinia 尚未取得會員資料時，向後端確認登入狀態
+  if (!memberStore.member) {
+    try {
+      await memberStore.fetchCurrentMember();
+    } catch (error) {
+      // Token 無效或過期時，清除登入狀態
+      memberStore.logout();
+    }
+  }
+});
 </script>
 
 <template>

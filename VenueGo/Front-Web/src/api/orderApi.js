@@ -54,3 +54,18 @@ export async function getMyOrder(orderId) {
   const { data } = await http.get(`/orders/${orderId}`);
   return data;
 }
+
+/**
+ * 開始線上付款：[POST] /api/orders/{orderId}/payment/start
+ * 後端檢查可以付款後，把付款改成「付款處理中」，並開出一張綠界付款單
+ * 拿到的付款單交給 utils/ecpayRedirect.js 的 submitToEcpay，畫面就會跳到綠界刷卡頁
+ * @param {number} orderId
+ * @returns {Promise<{ actionUrl: string, fields: Record<string, string> }>}
+ *   fields 的名稱是綠界規定的大小寫（MerchantID…），要原封不動送出，改一個字防偽章就對不上
+ *   錯誤（error.errorCode）：InProgress、AlreadyPaid、NotPayable、PastStartDeadline、NotOnlinePayment、
+ *   Conflict、InvalidAmount（409）；NotFound（404）；NotConfigured、TradeNoUnavailable（503）；NotLoggedIn（401）
+ */
+export async function startPayment(orderId) {
+  const { data } = await http.post(`/orders/${orderId}/payment/start`);
+  return data;
+}

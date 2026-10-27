@@ -3,12 +3,13 @@
   跟「我的預約」的差別：這頁的重點是「錢付了沒、要付多少、什麼時候前要付」，排序是下單時間新到舊
   資料來自 [GET] /api/orders（api/orderApi.js）；明細視窗另外讀 /api/orders/{orderId}
   付款期限到了會自動重新讀取（useDueRefresh），後端排程改成已逾期後不用重新整理
-  「付款」按鈕：3-A 先顯示按鈕和倒數，按下去提示「製作中」；3-D 再接上綠界付款流程（onPay）
+  「付款」按鈕：向後端開一張綠界付款單（[POST] /api/orders/{orderId}/payment/start），再整頁跳到綠界刷卡頁（onPay）
+  刷完卡按「返回商店」會回到這一頁；付款結果由後端接收，回來時先顯示「付款處理中」
   訂單編號跟「我的預約」同一個編號；點編號跳到我的預約並只查這一筆
   UFormField、UInput、USelect、UAlert、UButton 與 useOverlay、useToast 由 Nuxt UI 自動匯入
 -->
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRouter } from "vue-router";
 import DatePickerInput from "@/components/DatePickerInput.vue";
 import EmptyState from "@/components/EmptyState.vue";
@@ -16,7 +17,7 @@ import ListFilterPanel from "@/components/list/ListFilterPanel.vue";
 import ListTable from "@/components/list/ListTable.vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import OrderDetailModal from "@/components/orders/OrderDetailModal.vue";
-import { getMyOrders } from "@/api/orderApi";
+import { getMyOrders, startPayment } from "@/api/orderApi";
 import { useDueRefresh } from "@/composables/useDueRefresh";
 import { useKeywordQuery } from "@/composables/useKeywordQuery";
 import { useSiteClock } from "@/composables/useSiteClock";
@@ -24,6 +25,7 @@ import { ErrorCodes } from "@/constants/errorCodes";
 import { PAYMENT_METHOD, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_OPTIONS } from "@/constants/payment";
 import { ALL, PAYMENT_STATUS, PAYMENT_STATUS_OPTIONS } from "@/constants/statuses";
 import { useMemberStore } from "@/stores/member";
+import { submitToEcpay } from "@/utils/ecpayRedirect";
 import { formatAmount, formatDate, formatDateTime, formatTimeRange } from "@/utils/format";
 import { canPay, formatRemaining, showsDueAt } from "@/utils/order";
 
@@ -106,8 +108,7 @@ async function load({ silent = false } = {}) {
     if (requestId !== latestRequestId) return;
     // 登入失效：登出並回登入頁，登入後回到這一頁（跟路由守衛的處理一致）
     if (err.errorCode === ErrorCodes.NotLoggedIn) {
-      memberStore.logout();
-      router.push({ name: "login", query: { redirect: "/member/orders" } });
+      redirectToLogin();
       return;
     }
     if (silent) return;
@@ -117,6 +118,12 @@ async function load({ silent = false } = {}) {
     // 不分一般或安靜模式都要關：安靜模式可能剛好蓋掉使用者按的那一次，不關的話會一直顯示讀取中
     if (requestId === latestRequestId) loading.value = false;
   }
+}
+
+// 登入失效：登出並回登入頁，登入後回到這一頁（讀取列表、付款都用這個）
+function redirectToLogin() {
+  memberStore.logout();
+  router.push({ name: "login", query: { redirect: "/member/orders" } });
 }
 
 // 條件改變 → 回到第 1 頁再查；已經在第 1 頁時 page 不會變，所以直接查
@@ -191,16 +198,66 @@ async function openDetail(order) {
   if (choice === "pay") onPay(order);
 }
 
-// 表格、手機卡片、明細視窗三個入口都走這裡
-// 3-A：綠界還沒串接，先提示；3-D 改成呼叫建立付款 API，帶客人到綠界付款頁
-function onPay(order) {
-  toast.add({
-    title: "付款功能製作中",
-    description: `訂單 ${order.orderNo}：線上付款（綠界）串接完成後即可付款。`,
-    color: "info",
-    icon: "i-mdi-information-outline",
-  });
+// 正在付款的訂單編號：這筆的按鈕轉圈，其他付款按鈕暫時不能按；null 表示沒有在付款
+// 不用全站的自動轉圈（loadingAuto）：它只轉到 onPay 結束，但送出表單後瀏覽器還要一下子才換頁，
+// 這段時間按鈕會恢復成可以按，客人可能再按一次。所以成功後不清掉，讓它一直轉到離開這一頁
+const payingOrderId = ref(null);
+const isPaying = (order) => payingOrderId.value === order.orderId;
+
+// 表格、手機卡片、明細視窗三個入口都走這裡：向後端開付款單 → 整頁跳到綠界刷卡頁
+async function onPay(order) {
+  if (payingOrderId.value !== null) return;
+  payingOrderId.value = order.orderId;
+  try {
+    const checkout = await startPayment(order.orderId);
+    submitToEcpay(checkout);
+  } catch (err) {
+    payingOrderId.value = null;
+    handlePayError(err);
+  }
 }
+
+// 訊息一律用後端的 message：規則只寫在後端，之後改文字也只改一個地方
+function handlePayError(err) {
+  switch (err.errorCode) {
+    case ErrorCodes.InProgress:
+      // 上一筆付款還在確認中：重新讀取後會顯示「付款處理中」，付款按鈕也會消失
+      toast.add({ title: err.message, color: "warning", icon: "i-mdi-alert-outline" });
+      load({ silent: true });
+      return;
+    case ErrorCodes.AlreadyPaid:
+    case ErrorCodes.NotPayable:
+    case ErrorCodes.PastStartDeadline:
+    case ErrorCodes.NotOnlinePayment:
+    case ErrorCodes.Conflict:
+    case ErrorCodes.NotFound:
+      // 畫面上的狀態已經過時（例如另一個分頁付過了、剛好逾期）：提示後重新讀取
+      toast.add({ title: err.message, color: "error", icon: "i-mdi-alert-circle-outline" });
+      load({ silent: true });
+      return;
+    case ErrorCodes.NotLoggedIn:
+      redirectToLogin();
+      return;
+    default:
+      // 線上付款暫時不能用（NotConfigured、TradeNoUnavailable）、連不到伺服器、付款網址異常：
+      // 訂單本身沒有變，不用重新讀取
+      toast.add({
+        title: err.message || "無法開始付款，請稍後再試",
+        color: "error",
+        icon: "i-mdi-alert-circle-outline",
+      });
+  }
+}
+
+// 從綠界按「上一頁」回來：瀏覽器可能直接拿出離開前的畫面（bfcache），付款按鈕會停在轉圈
+// event.persisted 為 true 就是這種情況：停止轉圈，並重新讀取（這時付款已經是「付款處理中」）
+function onPageShow(event) {
+  if (!event.persisted) return;
+  payingOrderId.value = null;
+  load({ silent: true });
+}
+onMounted(() => window.addEventListener("pageshow", onPageShow));
+onBeforeUnmount(() => window.removeEventListener("pageshow", onPageShow));
 </script>
 
 <template>
@@ -331,13 +388,17 @@ function onPay(order) {
           >
             查看
           </UButton>
-          <!-- 倒數放在按鈕下方：放在按鈕裡面會讓這一欄太寬 -->
+          <!-- 倒數放在按鈕下方：放在按鈕裡面會讓這一欄太寬
+               轉圈、停用由 payingOrderId 控制（原因見 onPay 上方的說明），所以關掉 loadingAuto -->
           <div v-if="isPayable(row.original)" class="flex flex-col items-center gap-0.5">
             <UButton
               color="action"
               size="sm"
               class="whitespace-nowrap"
               :aria-label="`付款：訂單 ${row.original.orderNo}，${remaining(row.original)}`"
+              :loading="isPaying(row.original)"
+              :disabled="payingOrderId !== null"
+              :loading-auto="false"
               @click="onPay(row.original)"
             >
               付款
@@ -387,6 +448,9 @@ function onPay(order) {
               v-if="isPayable(row)"
               color="action"
               :aria-label="`付款：訂單 ${row.orderNo}，${remaining(row)}`"
+              :loading="isPaying(row)"
+              :disabled="payingOrderId !== null"
+              :loading-auto="false"
               @click="onPay(row)"
             >
               付款

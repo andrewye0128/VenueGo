@@ -49,6 +49,9 @@ namespace VenueGo.Extensions
             // 收款確認：後台標記已付款、綠界付款成功共用（改狀態、建票券、逾期後收款的處理）
             services.AddScoped<IPaymentConfirmationService, PaymentConfirmationService>();
 
+            // 開始線上付款：檢查能不能付、付款改成處理中、產生綠界付款單
+            services.AddScoped<IEcpayCheckoutService, EcpayCheckoutService>();
+
             // 逾期排程：每 1 分鐘把超過付款期限、還沒付款的預約改成已逾期，並釋放時段
             services.AddScoped<IReservationExpiryService, ReservationExpiryService>();
 

@@ -58,6 +58,9 @@ namespace VenueGo.Extensions
 
             // 綠界付款結果：記錄和綠界的每一次往來（PaymentTransactions）、處理伺服器通知和瀏覽器帶回
             services.AddScoped<IPaymentTransactionRecorder, PaymentTransactionRecorder>();
+
+            // 付款確認員：綠界說付了→收款；問綠界→依回答處理（通知、排程對帳、開始付款共用）
+            services.AddScoped<IEcpayPaymentVerifier, EcpayPaymentVerifier>();
             services.AddScoped<IEcpayNotificationService, EcpayNotificationService>();
 
             // 逾期排程：每 1 分鐘把超過付款期限、還沒付款的預約改成已逾期，並釋放時段

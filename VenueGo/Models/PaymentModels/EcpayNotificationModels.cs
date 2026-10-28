@@ -34,56 +34,10 @@
         string? PaymentType,
         bool IsSimulated);
 
-    /// <summary>處理綠界付款結果的結論</summary>
-    public enum EcpayNotificationOutcome
-    {
-        // ── 收到錢（交給 PaymentConfirmationService）──
-
-        /// <summary>收款成功：預約已確認、票券已建立</summary>
-        Confirmed,
-
-        /// <summary>這筆已經處理過了：同一則通知又送一次，或兩條路都送到</summary>
-        AlreadyProcessed,
-
-        /// <summary>逾期後才收到錢，時段還空著，已重新佔位</summary>
-        ReoccupiedAfterExpiry,
-
-        /// <summary>逾期後才收到錢，預約已失效，付款改成退款處理中</summary>
-        RefundingAfterExpiry,
-
-        /// <summary>⚠️ 已經付過錢，又收到另一筆綠界交易的付款成功：客人被扣兩次，要退款</summary>
-        DuplicatePayment,
-
-        /// <summary>綠界說的金額跟訂單不一樣，狀態沒有改</summary>
-        AmountMismatch,
-
-        // ── 沒收到錢 ──
-
-        /// <summary>問過綠界，確定交易失敗：付款改成失敗，客人可以重新付款</summary>
-        MarkedFailed,
-
-        /// <summary>綠界說「待確認」（10300066）：維持處理中，之後由排程查詢</summary>
-        PendingConfirmation,
-
-        /// <summary>收到失敗通知，但綠界回答「還沒付款」或問不到：維持處理中，等綠界再送一次</summary>
-        ResultUnknown,
-
-        // ── 不處理 ──
-
-        /// <summary>不用處理：模擬付款、舊付款單的失敗通知、付款已經不在處理中</summary>
-        Ignored,
-
-        /// <summary>不能相信或對不上：防偽章不對、特店編號不對、找不到付款單、缺少金額</summary>
-        Rejected,
-
-        /// <summary>暫時性的問題（被別的操作搶先、建立票券失敗）：整筆已經復原，等綠界再送一次</summary>
-        RetryLater,
-    }
-
     /// <summary>處理綠界付款結果的結果</summary>
     /// <param name="Outcome">結論</param>
     /// <param name="OrderNo">訂單編號（VG 開頭），瀏覽器帶回時用來把客人導回這一筆；找不到或不能相信時是 null</param>
-    public sealed record EcpayNotificationResult(EcpayNotificationOutcome Outcome, string? OrderNo)
+    public sealed record EcpayNotificationResult(EcpayPaymentOutcome Outcome, string? OrderNo)
     {
         /// <summary>
         /// 要不要回綠界「1|OK」（只有伺服器通知會用到）。
@@ -92,8 +46,8 @@
         /// 不能相信的通知也不回：那不是綠界送的
         /// </summary>
         public bool ShouldAcknowledge => Outcome is not (
-            EcpayNotificationOutcome.ResultUnknown
-            or EcpayNotificationOutcome.Rejected
-            or EcpayNotificationOutcome.RetryLater);
+            EcpayPaymentOutcome.ResultUnknown
+            or EcpayPaymentOutcome.Rejected
+            or EcpayPaymentOutcome.RetryLater);
     }
 }

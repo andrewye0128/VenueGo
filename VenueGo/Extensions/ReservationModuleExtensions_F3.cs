@@ -69,6 +69,12 @@ namespace VenueGo.Extensions
             // 預約逾期背景排程
             services.AddHostedService<ReservationExpiryHostedService>();
 
+            // 付款對帳：主動問綠界卡在「付款處理中」的付款（3-C-5）
+            services.AddScoped<IPaymentReconciliationService, PaymentReconciliationService>();
+
+            // 付款對帳背景排程：每 1 分鐘一輪
+            services.AddHostedService<PaymentReconciliationHostedService>();
+
             return services;
         }
     }

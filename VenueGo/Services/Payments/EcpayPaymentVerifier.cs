@@ -1,8 +1,11 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using VenueGo.Data;
 using VenueGo.Enums;
 using VenueGo.Models.Entities;
+using VenueGo.Models.Options;
 using VenueGo.Models.PaymentModels;
+using VenueGo.Services.Time;
 using Outcome = VenueGo.Models.PaymentModels.EcpayPaymentOutcome;
 using ProcessResult = VenueGo.Enums.PaymentTransactionProcessResult;
 
@@ -18,12 +21,19 @@ namespace VenueGo.Services.Payments
     /// 綠界說其實付了就照收款處理；不知道結果就不動，絕對不能當成失敗，否則客人可能被扣兩次錢
     /// </para>
     /// <para>
+    /// 【沒刷卡就離開】綠界說「還沒付款」，而且付款單送出超過 AbandonAfterMinutes（預設 20 分鐘），
+    /// 就改回未付款（3-C-5 決定 1：A）。之後客人才付款也沒關係：收款確認接受從未付款改成已付款，
+    /// 如果客人已經用新的付款單付過，會被認出是重複付款
+    /// </para>
+    /// <para>
     /// 收到通知（3-C-4）、排程對帳、處理中又按付款（3-C-5）都用這裡，規則只有一份
     /// </para>
     /// </summary>
     public class EcpayPaymentVerifier : IEcpayPaymentVerifier
     {
         private readonly dbVenueContext _db;
+        private readonly ITimeService _timeService;
+        private readonly EcpayReconciliationOptions _reconciliation;
         private readonly IPaymentConfirmationService _confirmation;
         private readonly IEcpayTradeQueryService _tradeQuery;
         private readonly IPaymentTransactionRecorder _recorder;
@@ -31,12 +41,19 @@ namespace VenueGo.Services.Payments
 
         public EcpayPaymentVerifier(
             dbVenueContext db,
+            ITimeService timeService,
+            IOptionsSnapshot<EcpayOptions> ecpay,
             IPaymentConfirmationService confirmation,
             IEcpayTradeQueryService tradeQuery,
             IPaymentTransactionRecorder recorder,
             ILogger<EcpayPaymentVerifier> logger)
         {
             _db = db;
+
+            // 網站時間：跟 PaymentTransactions.CreatedAt 比「送出多久了」，兩邊都是網站時間才對得上
+            _timeService = timeService;
+
+            _reconciliation = ecpay.Value.Reconciliation;
             _confirmation = confirmation;
             _tradeQuery = tradeQuery;
             _recorder = recorder;
@@ -135,13 +152,21 @@ namespace VenueGo.Services.Payments
             // 判斷的依據是綠界的回答，所以處理結果記在查詢這一列
             await _recorder.RecordQueryAsync(
                 target.PaymentId, merchantTradeNo, query, decision.ProcessResult, cancellationToken);
-            return decision;
+
+            // 帶上問的時候發生的錯誤：排程看到被擋（RateLimited）就會停下來
+            return decision with { QueryError = query.Error };
         }
 
-        /// <summary>依綠界的回答處理。之後要加新的規則（例如「還沒付款太久就改回未付款」），加在這裡</summary>
+        /// <summary>依綠界的回答處理。之後要加新的規則，加在這裡，三個呼叫的地方會一起套用</summary>
         private async Task<EcpayPaymentDecision> ApplyQueryResultAsync(
             EcpayPaymentTarget target, string merchantTradeNo, EcpayTradeQueryResult query, CancellationToken ct)
         {
+            // 還沒付款，而且等很久了：客人應該是沒刷卡就離開了
+            if (query.Status == EcpayTradeQueryStatus.NotYetPaid && await IsAbandonedAsync(merchantTradeNo, ct))
+            {
+                return await RevertToUnpaidAsync(target, merchantTradeNo, ct);
+            }
+
             return query.Status switch
             {
                 // 綠界說其實付款成功了：照收款處理（金額、綠界交易編號用查詢的回答）
@@ -151,11 +176,45 @@ namespace VenueGo.Services.Payments
                 EcpayTradeQueryStatus.Failed
                     => await MarkFailedAsync(target, merchantTradeNo, ct),
 
-                // 還沒付款（銀行可能還沒回覆）、問不到：結果不明，維持處理中
+                // 還沒付款但還不久（銀行可能還沒回覆）、問不到：結果不明，維持處理中
                 _ => new EcpayPaymentDecision(
                     Outcome.ResultUnknown,
                     query.Error == EcpayTradeQueryError.InvalidMac ? ProcessResult.InvalidMac : ProcessResult.LogOnly),
             };
+        }
+
+        /// <summary>這張付款單送出已經超過 AbandonAfterMinutes 了嗎？</summary>
+        private async Task<bool> IsAbandonedAsync(string merchantTradeNo, CancellationToken ct)
+        {
+            var sentAt = await _db.PaymentTransactions.AsNoTracking()
+                .Where(t => t.MerchantTradeNo == merchantTradeNo
+                         && t.EventType == (byte)PaymentTransactionEventType.Send)
+                .Select(t => (DateTime?)t.CreatedAt)
+                .FirstOrDefaultAsync(ct);
+
+            return sentAt is not null && _timeService.Now - sentAt.Value >= _reconciliation.AbandonAfter;
+        }
+
+        /// <summary>
+        /// 付款改回未付款。條件同 MarkFailedAsync（AwaitingResult）：問綠界的這段時間狀態變了，就改不到。
+        /// 改回未付款之後：期限還沒到，客人可以重新付款；期限過了，逾期排程下一輪就會取消預約、釋放時段
+        /// </summary>
+        private async Task<EcpayPaymentDecision> RevertToUnpaidAsync(
+            EcpayPaymentTarget target, string merchantTradeNo, CancellationToken ct)
+        {
+            var updated = await AwaitingResult(target.PaymentId, merchantTradeNo)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(p => p.PaymentStatus, (byte)PaymentStatus.Unpaid), ct);
+
+            if (updated == 0)
+            {
+                return new EcpayPaymentDecision(Outcome.Ignored, ProcessResult.LogOnly);
+            }
+
+            _logger.LogInformation(
+                "訂單 {OrderNo} 付款單 {MerchantTradeNo} 送出超過 {Minutes} 分鐘綠界仍未付款，改回未付款",
+                target.OrderNo, merchantTradeNo, _reconciliation.AbandonAfterMinutes);
+            return new EcpayPaymentDecision(Outcome.RevertedToUnpaid, ProcessResult.RevertedToUnpaid);
         }
 
         /// <summary>

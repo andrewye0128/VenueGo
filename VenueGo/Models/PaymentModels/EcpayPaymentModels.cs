@@ -10,7 +10,14 @@ namespace VenueGo.Models.PaymentModels
     /// <summary>處理的結果：結論，以及要記進 PaymentTransactions 的處理結果</summary>
     /// <param name="Outcome">結論</param>
     /// <param name="ProcessResult">記進 PaymentTransactions.ProcessResult 的值</param>
-    public sealed record EcpayPaymentDecision(EcpayPaymentOutcome Outcome, PaymentTransactionProcessResult ProcessResult);
+    /// <param name="QueryError">
+    /// 有問綠界的話，問的時候發生的錯誤；沒問或沒錯誤是 None。
+    /// 排程用它判斷要不要停下來（例如被綠界擋了 RateLimited，這一輪就不要再問）
+    /// </param>
+    public sealed record EcpayPaymentDecision(
+        EcpayPaymentOutcome Outcome,
+        PaymentTransactionProcessResult ProcessResult,
+        EcpayTradeQueryError QueryError = EcpayTradeQueryError.None);
 
     /// <summary>處理綠界付款結果的結論（收到通知、排程對帳、開始付款前確認共用）</summary>
     public enum EcpayPaymentOutcome
@@ -42,6 +49,9 @@ namespace VenueGo.Models.PaymentModels
 
         /// <summary>綠界說「待確認」（10300066）：維持處理中，之後由排程查詢</summary>
         PendingConfirmation,
+
+        /// <summary>綠界說「還沒付款」，而且付款單送出已經很久了：當成客人放棄，改回未付款（3-C-5）</summary>
+        RevertedToUnpaid,
 
         /// <summary>問綠界的結果是「還沒付款」或問不到：維持處理中，之後再問</summary>
         ResultUnknown,

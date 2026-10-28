@@ -38,6 +38,8 @@
     }
 
     /// <summary>開始付款的結果</summary>
+    /// <param name="Outcome">結果：成功，或不能付款的原因（前端用它當 errorCode）</param>
+    /// <param name="Message">給客人看的中文說明</param>
     /// <param name="ActionUrl">綠界付款頁的網址（成功才有）</param>
     /// <param name="Fields">要送給綠界的欄位，已經包含 CheckMacValue（成功才有）</param>
     public sealed record StartPaymentResult(

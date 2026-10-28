@@ -52,6 +52,14 @@ namespace VenueGo.Extensions
             // 開始線上付款：檢查能不能付、付款改成處理中、產生綠界付款單
             services.AddScoped<IEcpayCheckoutService, EcpayCheckoutService>();
 
+            // 主動問綠界付款結果（QueryTradeInfo）：收到失敗通知時確認、3-C-5 排程也會用。連線 10 秒逾時
+            services.AddHttpClient(EcpayTradeQueryService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(10));
+            services.AddScoped<IEcpayTradeQueryService, EcpayTradeQueryService>();
+
+            // 綠界付款結果：記錄和綠界的每一次往來（PaymentTransactions）、處理伺服器通知和瀏覽器帶回
+            services.AddScoped<IPaymentTransactionRecorder, PaymentTransactionRecorder>();
+            services.AddScoped<IEcpayNotificationService, EcpayNotificationService>();
+
             // 逾期排程：每 1 分鐘把超過付款期限、還沒付款的預約改成已逾期，並釋放時段
             services.AddScoped<IReservationExpiryService, ReservationExpiryService>();
 

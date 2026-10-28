@@ -10,6 +10,7 @@ namespace VenueGo.Services.Payments
     {
         /// <param name="userId">登入的會員（只能付自己的訂單）</param>
         /// <param name="orderId">Orders.OrderId</param>
+        /// <param name="cancellationToken">呼叫的地方要取消時用（例如客人關掉頁面）</param>
         Task<StartPaymentResult> StartAsync(int userId, int orderId, CancellationToken cancellationToken = default);
     }
 }

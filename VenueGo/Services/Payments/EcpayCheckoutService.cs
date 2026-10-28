@@ -1,10 +1,11 @@
-﻿using System.Globalization;
+﻿using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using System.Globalization;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Unicode;
-using Microsoft.Data.SqlClient;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Options;
+using VenueGo.Constants;
 using VenueGo.Data;
 using VenueGo.Enums;
 using VenueGo.Models.Entities;
@@ -28,15 +29,6 @@ namespace VenueGo.Services.Payments
     /// </summary>
     public class EcpayCheckoutService : IEcpayCheckoutService
     {
-        /// <summary>綠界伺服器通知（ReturnURL）的路徑。3-C-4 的接收 API 要用同一個路徑</summary>
-        public const string ReturnPath = "/api/payments/ecpay/return";
-
-        /// <summary>
-        /// 綠界付款結果頁「返回商店」按鈕回到哪裡。
-        /// 3-C-4 做好 OrderResultURL 之前先用這個（ClientBackURL 只是一個按鈕，不會帶付款結果回來）
-        /// </summary>
-        private const string ClientBackPath = "/member/orders";
-
         /// <summary>交易編號撞號時最多試幾次</summary>
         private const int MaxTradeNoAttempts = 3;
 
@@ -252,8 +244,7 @@ namespace VenueGo.Services.Payments
                 ["MerchantID"] = _ecpay.MerchantId,
                 ["MerchantTradeNo"] = tradeNo,
 
-                // InvariantCulture：格式字串裡的 / 在某些語系會被換成別的符號，綠界只認 yyyy/MM/dd
-                ["MerchantTradeDate"] = realNow.ToString("yyyy/MM/dd HH:mm:ss", CultureInfo.InvariantCulture),
+                ["MerchantTradeDate"] = EcpayProtocol.FormatDateTime(realNow),
                 ["PaymentType"] = "aio",
 
                 // 金額只從資料庫來，前端沒辦法指定
@@ -263,9 +254,13 @@ namespace VenueGo.Services.Payments
                 ["TradeDesc"] = "VenueGo場地預約",
                 ["ItemName"] = $"場地預約 {t.OrderNo}",
 
-                // 網址都從後端設定來，不接受前端傳入
-                ["ReturnURL"] = CombineUrl(_ecpay.GetNotifyBaseUrl(), ReturnPath),
-                ["ClientBackURL"] = CombineUrl(_ecpay.FrontendBaseUrl, ClientBackPath),
+                // 網址都從後端設定來，不接受前端傳入。
+                // ReturnURL 是綠界的伺服器連過來，要對外連得到（ngrok）；OrderResultURL 是客人的瀏覽器連過來，localhost 就可以
+                ["ReturnURL"] = CombineUrl(_ecpay.GetNotifyBaseUrl(), EcpayProtocol.Routes.Return),
+                ["OrderResultURL"] = CombineUrl(_ecpay.BackendBaseUrl, EcpayProtocol.Routes.Result),
+                // 「返回商店」按鈕。有 OrderResultURL 時綠界會優先用它；OrderResultURL 不支援的付款方式（例如銀聯卡）
+                // 才會顯示這個按鈕（只是一個連結，不會帶付款結果回來）
+                ["ClientBackURL"] = CombineUrl(_ecpay.FrontendBaseUrl, FrontendRoutes.MemberOrders),
 
                 ["ChoosePayment"] = "Credit",
                 ["EncryptType"] = "1",

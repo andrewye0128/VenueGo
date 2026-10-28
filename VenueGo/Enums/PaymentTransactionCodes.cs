@@ -31,5 +31,11 @@
         AmountMismatch = 5,
         ReoccupiedAfterExpiry = 6,
         RefundingAfterExpiry = 7,
+
+        /// <summary>
+        /// 重複付款：這筆已經收過錢，又收到另一筆綠界交易的付款成功。
+        /// 客人被扣了兩次錢，付款狀態不改，要由櫃檯退款
+        /// </summary>
+        DuplicatePayment = 8,
     }
 }

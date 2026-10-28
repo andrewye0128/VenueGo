@@ -448,7 +448,11 @@
       function adjustCount(name, delta) {
             const badge = root.querySelector('[data-count-for="' + name + '"]');
             if (!badge) return;
-            badge.textContent = Math.max(0, Number(badge.textContent) + delta);
+            // 10/29：減到 0 就藏起來、從 0 加上來就顯示（標籤一律由 _QueueList.cshtml 畫出來，0 時帶 d-none）。原本：
+            // badge.textContent = Math.max(0, Number(badge.textContent) + delta);
+            const next = Math.max(0, Number(badge.textContent) + delta);
+            badge.textContent = next;
+            badge.classList.toggle('d-none', next === 0);
       }
 
       /* ── 關鍵字標註 ───────────────────────────────────────

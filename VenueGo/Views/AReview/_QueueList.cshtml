@@ -752,20 +752,27 @@
                   <a class="nav-link js-queue-link @(Model.Tab == QueueTab.Unread ? "active" : "")"
                      href="@Url.Action("Index", RouteFor(tab: QueueTab.Unread))">
                         未讀
+                        @* 10/29：數字一律畫出來、是 0 就藏起來（d-none）。展開最後一則未讀時，JS 要能把數字藏掉；
+                           待回覆原本是 0 時根本沒有這個標籤，JS 加 1 也顯示不出來。原本：
                         @if (Model.UnreadCount != 0)
                         {
                               <span class="badge rounded-pill text-bg-danger ms-1" data-count-for="unread">@Model.UnreadCount</span>
                         }
+                        *@
+                        <span class="badge rounded-pill text-bg-danger ms-1 @(Model.UnreadCount != 0 ? "" : "d-none")" data-count-for="unread">@Model.UnreadCount</span>
                   </a>
             </li>
             <li class="nav-item">
                   <a class="nav-link js-queue-link @(Model.Tab == QueueTab.Pending ? "active" : "")"
                      href="@Url.Action("Index", RouteFor(tab: QueueTab.Pending))">
                         待回覆
+                        @* 10/29：同上面的未讀。原本：
                         @if (Model.PendingCount != 0)
                         {
                               <span class="badge rounded-pill text-bg-primary ms-1" data-count-for="pending">@Model.PendingCount</span>
                         }
+                        *@
+                        <span class="badge rounded-pill text-bg-primary ms-1 @(Model.PendingCount != 0 ? "" : "d-none")" data-count-for="pending">@Model.PendingCount</span>
                   </a>
             </li>
             <li class="nav-item">
@@ -779,7 +786,13 @@
                      href="@Url.Action("Index", RouteFor(tab: QueueTab.Spam))">
                         封存
                         @* 10/26：點開過封存清單之後，這個分頁就不再顯示數字（Index.cshtml 的 js-spam-count） *@
+                        @* 10/29：是 0 就不顯示，跟未讀、待回覆一致。原本：
                         <span class="badge rounded-pill text-bg-secondary ms-1 js-spam-count">@Model.SpamCount</span>
+                        *@
+                        @if (Model.SpamCount != 0)
+                        {
+                              <span class="badge rounded-pill text-bg-secondary ms-1 js-spam-count">@Model.SpamCount</span>
+                        }
                   </a>
             </li>
       </ul>

@@ -151,6 +151,7 @@ namespace VenueGo.Services.Payments
                 EcpayProtocol.TradeStatuses.Paid => EcpayTradeQueryStatus.Paid,
                 EcpayProtocol.TradeStatuses.NotYetPaid => EcpayTradeQueryStatus.NotYetPaid,
                 EcpayProtocol.TradeStatuses.Failed => EcpayTradeQueryStatus.Failed,
+                EcpayProtocol.TradeStatuses.NotFound => EcpayTradeQueryStatus.NotFound,
                 _ => null,
             };
             if (status is null)

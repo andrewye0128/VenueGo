@@ -47,6 +47,13 @@ namespace VenueGo.Services.Payments
 
             /// <summary>交易失敗，客人沒有完成付款</summary>
             public const string Failed = "10200095";
+
+            /// <summary>
+            /// 綠界沒有這張付款單：我們開了付款單，但瀏覽器沒有送到綠界（客人馬上關掉分頁、網路斷線…）。
+            /// ⚠️ 官方文件沒有列出這個值，是 2026-10-29 實測「問一張綠界沒見過的交易編號」得到的
+            /// </summary>
+            public const string NotFound = "10200047";
+
         }
 
         /// <summary>DateTimeOffset → "2026/10/27 23:02:28"</summary>

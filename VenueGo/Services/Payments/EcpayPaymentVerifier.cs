@@ -21,7 +21,7 @@ namespace VenueGo.Services.Payments
     /// 綠界說其實付了就照收款處理；不知道結果就不動，絕對不能當成失敗，否則客人可能被扣兩次錢
     /// </para>
     /// <para>
-    /// 【沒刷卡就離開】綠界說「還沒付款」，而且付款單送出超過 AbandonAfterMinutes（預設 20 分鐘），
+    /// 【沒刷卡就離開】綠界說「還沒付款」或「沒有這張單」，而且付款單送出超過 AbandonAfterMinutes（預設 20 分鐘），
     /// 就改回未付款（3-C-5 決定 1：A）。之後客人才付款也沒關係：收款確認接受從未付款改成已付款，
     /// 如果客人已經用新的付款單付過，會被認出是重複付款
     /// </para>
@@ -161,8 +161,9 @@ namespace VenueGo.Services.Payments
         private async Task<EcpayPaymentDecision> ApplyQueryResultAsync(
             EcpayPaymentTarget target, string merchantTradeNo, EcpayTradeQueryResult query, CancellationToken ct)
         {
-            // 還沒付款，而且等很久了：客人應該是沒刷卡就離開了
-            if (query.Status == EcpayTradeQueryStatus.NotYetPaid && await IsAbandonedAsync(merchantTradeNo, ct))
+            // 還沒付款（或付款單根本沒送到綠界），而且等很久了：客人應該是沒付款就離開了
+            if (query.Status is EcpayTradeQueryStatus.NotYetPaid or EcpayTradeQueryStatus.NotFound
+                && await IsAbandonedAsync(merchantTradeNo, ct))
             {
                 return await RevertToUnpaidAsync(target, merchantTradeNo, ct);
             }
@@ -176,7 +177,8 @@ namespace VenueGo.Services.Payments
                 EcpayTradeQueryStatus.Failed
                     => await MarkFailedAsync(target, merchantTradeNo, ct),
 
-                // 還沒付款但還不久（銀行可能還沒回覆）、問不到：結果不明，維持處理中
+                // 還沒付款、綠界沒有這張單，但都還不久（銀行可能還沒回覆、瀏覽器可能還在送）、問不到：
+                // 結果不明，維持處理中
                 _ => new EcpayPaymentDecision(
                     Outcome.ResultUnknown,
                     query.Error == EcpayTradeQueryError.InvalidMac ? ProcessResult.InvalidMac : ProcessResult.LogOnly),

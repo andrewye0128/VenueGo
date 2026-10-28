@@ -26,6 +26,11 @@ namespace VenueGo.Services.Payments
     /// 【兩種時間】交易編號、MerchantTradeDate 用 TimeProvider 的真實時間（綠界是外部系統，不跟著時光機）；
     /// 能不能付款、資料庫的 CreatedAt 用 ITimeService，跟 3-B 的付款期限同一套規則
     /// </para>
+    /// <para>
+    /// 【付款處理中又按付款】（3-C-5 決定 2：B）先請付款確認員問綠界一次，再照新的狀態重新檢查：
+    /// 已付款就回「已經付款」、失敗或太久沒付就馬上開新的付款單、還不知道結果就擋下並告訴客人要等多久。
+    /// 同一筆隔 RequeryInterval 才再問，客人連按也不會讓綠界擋我們
+    /// </para>
     /// </summary>
     public class EcpayCheckoutService : IEcpayCheckoutService
     {
@@ -43,6 +48,7 @@ namespace VenueGo.Services.Payments
         private readonly TimeProvider _timeProvider;
         private readonly EcpayOptions _ecpay;
         private readonly ReservationRulesOptions _rules;
+        private readonly IEcpayPaymentVerifier _verifier;
         private readonly ILogger<EcpayCheckoutService> _logger;
 
         public EcpayCheckoutService(
@@ -51,6 +57,7 @@ namespace VenueGo.Services.Payments
             TimeProvider timeProvider,
             IOptionsSnapshot<EcpayOptions> ecpay,
             IOptionsSnapshot<ReservationRulesOptions> rules,
+            IEcpayPaymentVerifier verifier,
             ILogger<EcpayCheckoutService> logger)
         {
             _db = db;
@@ -63,6 +70,7 @@ namespace VenueGo.Services.Payments
             _ecpay = ecpay.Value;
             _rules = rules.Value;
 
+            _verifier = verifier;
             _logger = logger;
         }
 
@@ -71,11 +79,27 @@ namespace VenueGo.Services.Payments
         {
             var target = await FindTargetAsync(userId, orderId, cancellationToken);
 
+            // 付款處理中：先問綠界一次，問完狀態可能變了（已付款、失敗、改回未付款），所以重新讀一次
+            if (IsProcessing(target))
+            {
+                await AskEcpayIfAllowedAsync(target!, cancellationToken);
+                target = await FindTargetAsync(userId, orderId, cancellationToken);
+            }
+
+            // 還是處理中：不知道上一筆有沒有扣款，不能開新的付款單，告訴客人大概要等多久
+            if (IsProcessing(target))
+            {
+                return await InProgressAsync(target!, cancellationToken);
+            }
+
             var rejected = Check(target, _timeService.Now);
             if (rejected is not null) return rejected;
 
             return await CreateCheckoutAsync(target!, cancellationToken);
         }
+
+        private static bool IsProcessing(Target? t)
+            => t?.PaymentStatus == (byte)PaymentStatus.Processing;
 
         /// <summary>處理需要的資料（只讀，不追蹤）</summary>
         private sealed record Target(
@@ -127,12 +151,7 @@ namespace VenueGo.Services.Payments
                 return Fail(StartPaymentOutcome.AlreadyPaid, "這筆訂單已經付款。");
             }
 
-            // 付款處理中＝客人可能正在綠界刷卡，也可能已經刷了只是還沒通知到。
-            // 不知道結果就不能當成失敗，否則客人可能被扣兩次錢（3-C-5 會先問綠界再決定）
-            if (t.PaymentStatus == (byte)PaymentStatus.Processing)
-            {
-                return Fail(StartPaymentOutcome.InProgress, "上一筆付款仍在確認中，請稍後再查看付款結果。");
-            }
+            // 付款處理中不會走到這裡：StartAsync 已經先問過綠界，還是處理中就由 InProgressAsync 擋下
 
             if (t.ReservationStatus != (byte)ReservationStatus.Pending
                 || t.OrderStatus != (byte)OrderStatus.AwaitingPayment
@@ -161,6 +180,84 @@ namespace VenueGo.Services.Payments
             }
 
             return null;
+        }
+
+        // ══ 付款處理中又按付款（3-C-5）═══════════════════════════════
+
+        /// <summary>上一張付款單：哪一張、什麼時候送出、最後一次問綠界的時間（沒問過是 null）</summary>
+        private sealed record PendingSend(string MerchantTradeNo, DateTime SentAt, DateTime? LastQueriedAt);
+
+        private EcpayReconciliationOptions Reconciliation => _ecpay.Reconciliation;
+
+        /// <summary>
+        /// 最近沒問過的話，請付款確認員問綠界一次（處理規則跟排程對帳、收到通知一樣）。
+        /// 不用等「送出滿 10 分鐘」：客人回到網站按付款，代表已經離開綠界的頁面了。
+        /// 但「同一筆隔 RequeryInterval 才再問」要遵守：客人連按也只會問一次
+        /// </summary>
+        private async Task AskEcpayIfAllowedAsync(Target t, CancellationToken ct)
+        {
+            var send = await FindPendingSendAsync(t.PaymentId, ct);
+            if (send is null || !CanQueryAgain(send, _timeService.Now)) return;
+
+            var decision = await _verifier.VerifyAsync(
+                new EcpayPaymentTarget(t.PaymentId, t.OrderNo), send.MerchantTradeNo, ct);
+
+            _logger.LogInformation(
+                "訂單 {OrderNo} 付款處理中又按付款，先問綠界（{MerchantTradeNo}）→ {Outcome}",
+                t.OrderNo, send.MerchantTradeNo, decision.Outcome);
+        }
+
+        /// <summary>
+        /// 擋下並告訴客人大概要等多久：要等到「送出滿 AbandonAfter」而且「可以再問綠界」，
+        /// 排程（或客人再按一次）才會把付款改回未付款
+        /// </summary>
+        private async Task<StartPaymentResult> InProgressAsync(Target t, CancellationToken ct)
+        {
+            var now = _timeService.Now;
+            var send = await FindPendingSendAsync(t.PaymentId, ct);
+            var retryAt = send is null ? (DateTime?)null : EstimateRetryAt(send);
+
+            // 估不出來，或等到那時已經過了最晚開始付款時間：不給分鐘數，免得客人白等
+            if (retryAt is null || retryAt >= _rules.GetMemberOnlinePaymentStartDeadline(t.PaymentDueAt))
+            {
+                return Fail(StartPaymentOutcome.InProgress, "上一筆付款仍在確認中，結果確認後會顯示在訂單頁。");
+            }
+
+            var minutes = Math.Max(1, (int)Math.Ceiling((retryAt.Value - now).TotalMinutes));
+            return Fail(StartPaymentOutcome.InProgress,
+                $"上一筆付款仍在確認中。如果你已經關閉綠界的付款頁、沒有付款，大約 {minutes} 分鐘後可以重新付款。");
+        }
+
+        /// <summary>
+        /// 什麼時候可以重新付款：送出滿 AbandonAfter，而且距離上次問綠界滿 RequeryInterval，取比較晚的那個
+        /// </summary>
+        private DateTime EstimateRetryAt(PendingSend send)
+        {
+            var abandonedAt = send.SentAt + Reconciliation.AbandonAfter;
+            var canQueryAt = send.LastQueriedAt + Reconciliation.RequeryInterval;
+
+            return canQueryAt > abandonedAt ? canQueryAt.Value : abandonedAt;
+        }
+
+        /// <summary>同一筆隔 RequeryInterval 才再問（排程對帳 PaymentReconciliationService 也是同一個規則）</summary>
+        private bool CanQueryAgain(PendingSend send, DateTime now)
+            => send.LastQueriedAt is null || now - send.LastQueriedAt.Value >= Reconciliation.RequeryInterval;
+
+        /// <summary>最新那張付款單（處理中的就是它），以及這筆付款最後一次問綠界的時間</summary>
+        private Task<PendingSend?> FindPendingSendAsync(int paymentId, CancellationToken ct)
+        {
+            return _db.PaymentTransactions.AsNoTracking()
+                .Where(t => t.PaymentId == paymentId
+                         && t.EventType == (byte)PaymentTransactionEventType.Send)
+                .OrderByDescending(t => t.PaymentTransactionId)
+                .Select(t => new PendingSend(
+                    t.MerchantTradeNo,
+                    t.CreatedAt,
+                    _db.PaymentTransactions
+                        .Where(q => q.PaymentId == paymentId
+                                 && q.EventType == (byte)PaymentTransactionEventType.QueryTradeInfo)
+                        .Max(q => (DateTime?)q.CreatedAt)))
+                .FirstOrDefaultAsync(ct);
         }
 
         /// <summary>付款改成處理中＋記錄送出付款＋產生付款單，在同一個交易裡</summary>

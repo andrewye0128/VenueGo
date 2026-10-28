@@ -14,6 +14,17 @@ export const RESERVATION_STATUS = {
   7: { label: "已作廢", color: "neutral", icon: "i-mdi-file-cancel-outline" },
 };
 
+// 付款狀態的代碼：程式判斷時用（例如 order.paymentStatus === PAYMENT_STATUS_CODE.PAID），不要直接寫數字
+export const PAYMENT_STATUS_CODE = Object.freeze({
+  UNPAID: 0,
+  PROCESSING: 1,
+  PAID: 2,
+  FAILED: 3,
+  CANCELLED: 4,
+  REFUNDING: 5,
+  REFUNDED: 6,
+});
+
 // 付款狀態（Payments.PaymentStatus）：我的預約、訂單與付款共用
 export const PAYMENT_STATUS = {
   0: { label: "未付款", color: "error", icon: "i-mdi-alert-circle" },

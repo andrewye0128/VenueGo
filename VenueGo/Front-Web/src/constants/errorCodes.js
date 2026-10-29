@@ -41,6 +41,18 @@ export const ErrorCodes = Object.freeze({
   TermsVersionMismatch: "TermsVersionMismatch", // 沒同意條款，或條款改版了，要重新同意
   InvalidInput: "InvalidInput", // 填的內容有錯：人數超過容納人數、載具格式錯誤…（直接顯示後端的訊息）
 
+  // ── 開始線上付款（OrderApiController 的 payment/start）──
+  // 後端的值是 Models/PaymentModels/StartPaymentModels.cs 的 StartPaymentOutcome 名稱，改名時兩邊要一起改
+  NotOnlinePayment: "NotOnlinePayment", // 現場付款的訂單，要到櫃台付
+  AlreadyPaid: "AlreadyPaid", // 已經付款（或退款中、已退款）
+  InProgress: "InProgress", // 上一筆付款還在確認中，不能再開一張付款單（避免付兩次）
+  NotPayable: "NotPayable", // 預約已取消、已逾期等，不能付款
+  PastStartDeadline: "PastStartDeadline", // 超過可以開始付款的時間（付款期限前幾分鐘）
+  InvalidAmount: "InvalidAmount", // 訂單金額異常
+  NotConfigured: "NotConfigured", // 網站沒有設定綠界，線上付款暫時不能用（503）
+  Conflict: "Conflict", // 同一時間有另一個付款請求，這次被搶先了
+  TradeNoUnavailable: "TradeNoUnavailable", // 交易編號一直撞號，暫時無法開付款單（503）
+
   // ── 前台 src/api/http.js 產生（不是後端回傳）──
   ValidationFailed: "ValidationFailed", // [ApiController] 自動產生的輸入驗證錯誤
   PageExpired: "PageExpired", // 防偽 token 驗證失敗，重拿一次也不行（昱）

@@ -178,19 +178,74 @@ const router = createRouter({
 // 哪些頁面要登入：路由設定加上 meta: { requiresAuth: true }（子頁面會跟著父頁面）
 //   目前有：會員中心 /member/...、場地預約的填寫資料、預約完成
 // 帶去登入頁時，把原本要去的網址放在 ?redirect=，登入成功後 LoginView 會帶回來
-router.beforeEach(async (to) => {
-  // to.matched：這個網址對應到的所有路由（含父路由），任一個要求登入就算
-  if (!to.matched.some((record) => record.meta.requiresAuth)) return;
+// router.beforeEach(async (to) => {
+//   // to.matched：這個網址對應到的所有路由（含父路由），任一個要求登入就算
+//   if (!to.matched.some((record) => record.meta.requiresAuth)) return;
 
+//   const token = localStorage.getItem("token");
+//   const memberStore = useMemberStore();
+//   // fullPath 含查詢字串，例如 /booking/confirm?venueId=7&date=...，選擇才不會遺失
+//   const toLogin = { name: "login", query: { redirect: to.fullPath } };
+
+//   if (!token) {
+//     return toLogin;
+//   }
+
+//   if (!memberStore.member) {
+//     try {
+//       await memberStore.fetchCurrentMember();
+//     } catch (error) {
+//       memberStore.logout();
+//       return toLogin;
+//     }
+//   }
+// });
+
+router.beforeEach(async (to) => {
   const token = localStorage.getItem("token");
   const memberStore = useMemberStore();
-  // fullPath 含查詢字串，例如 /booking/confirm?venueId=7&date=...，選擇才不會遺失
-  const toLogin = { name: "login", query: { redirect: to.fullPath } };
+
+  // 1. 已登入會員進入登入頁，先確認登入狀態，再導回首頁
+  if (to.name === "login" && token) {
+    if (!memberStore.member) {
+      try {
+        await memberStore.fetchCurrentMember();
+      } catch (error) {
+        memberStore.logout();
+        // Token 無效，允許繼續進入登入頁
+        return true;
+      }
+    }
+
+    // 已登入且會員資料有效，不應再次顯示登入頁
+    if (memberStore.member) {
+      const redirect = to.query.redirect;
+
+      // 若登入頁原本帶有 redirect，保留原本要前往的頁面
+      if (typeof redirect === "string" && redirect.startsWith("/")) {
+        return redirect;
+      }
+
+      return { name: "home", replace: true };
+    }
+  }
+
+  // 2. 原本的需要登入頁面檢查
+  if (!to.matched.some((record) => record.meta.requiresAuth)) {
+    return true;
+  }
+
+  const toLogin = {
+    name: "login",
+    query: { redirect: to.fullPath },
+  };
 
   if (!token) {
+    memberStore.logout();
     return toLogin;
   }
 
+  // 3. 確認目前會員資料
   if (!memberStore.member) {
     try {
       await memberStore.fetchCurrentMember();
@@ -199,6 +254,8 @@ router.beforeEach(async (to) => {
       return toLogin;
     }
   }
+
+  return true;
 });
 
 export default router;

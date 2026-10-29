@@ -343,28 +343,31 @@ namespace VenueGo.Controllers.Api
             const string message =
                 "如果此 Email 已註冊且帳號有效，請查看您的電子郵件以繼續重設密碼。";
 
+            bool emailSentSuccessfully = false;
             // 僅在帳號有效且成功產生 Token 時寄信。
             if (rawToken != null)
             {
-                //try
-                //{
-                //    // 從設定檔讀取前端網址。
-                //    var frontendBaseUrl =
-                //        _configuration["Frontend:BaseUrl"];
 
-                //    if (string.IsNullOrWhiteSpace(frontendBaseUrl))
-                //    {
-                //        throw new InvalidOperationException(
-                //            "尚未設定 Frontend:BaseUrl。");
-                //    }
 
-                //    // 請確認 /reset-password 與 Vue Router 的路由一致。
-                //    var resetUrl =
-                //        $"{frontendBaseUrl.TrimEnd('/')}/reset-password" +
-                //        $"?email={Uri.EscapeDataString(model.Email.Trim())}" +
-                //        $"&token={Uri.EscapeDataString(rawToken)}";
 
-                //    var bodyHtml = $"""
+                //        try
+                //        {
+                //            // 從設定檔讀取前端網址。
+                //            var frontendBaseUrl = _configuration["Frontend:BaseUrl"];
+
+                //            if (string.IsNullOrWhiteSpace(frontendBaseUrl))
+                //            {
+                //                throw new InvalidOperationException(
+                //                    "尚未設定 Frontend:BaseUrl。");
+                //            }
+
+                //            // 建立重設密碼連結。
+                //            var resetUrl =
+                //                $"{frontendBaseUrl.TrimEnd('/')}/reset-password" +
+                //                $"?email={Uri.EscapeDataString(model.Email.Trim())}" +
+                //                $"&token={Uri.EscapeDataString(rawToken)}";
+
+                //            var bodyHtml = $"""
                 //<h2>VenueGo 重設密碼</h2>
                 //<p>您好，</p>
                 //<p>我們收到重設您 VenueGo 帳號密碼的要求。</p>
@@ -377,20 +380,50 @@ namespace VenueGo.Controllers.Api
                 //<p>如果您沒有提出此要求，請忽略這封郵件。</p>
                 //""";
 
-                //    await _emailService.SendEmailAsync(
-                //        model.Email.Trim(),
-                //        "VenueGo 密碼重設",
-                //        bodyHtml
-                //    );
-                //}
-                //catch (Exception ex)
-                //{
-                //    // 不記錄 Token 或完整重設網址。
-                //    _logger.LogError(
-                //        ex,
-                //        "Failed to send password reset email.");
-                //}
+                //            // 先寄信。
+                //            await _emailService.SendEmailAsync(
+                //                model.Email.Trim(),
+                //                "VenueGo 密碼重設",
+                //                bodyHtml
+                //            );
 
+                //            // 寄信成功後，才讓其他尚未使用的 Token 失效。
+                //            var confirmed =
+                //                await _passwordResetService.ConfirmResetEmailSentAsync(
+                //                    model.Email,
+                //                    rawToken
+                //                );
+
+                //            if (!confirmed)
+                //            {
+                //                _logger.LogWarning(
+                //                    "Password reset email sent, but token confirmation failed.");
+                //            }
+                //        }
+                //        catch (Exception ex)
+                //        {
+                //            // 寄信或後續處理失敗時，嘗試取消這次建立的 Token。
+                //            _logger.LogError(
+                //                ex,
+                //                "Failed to complete password reset email request.");
+
+                //            try
+                //            {
+                //                await _passwordResetService.CancelResetTokenAsync(
+                //                    model.Email,
+                //                    rawToken
+                //                );
+                //            }
+                //            catch (Exception cancelEx)
+                //            {
+                //                _logger.LogError(
+                //                    cancelEx,
+                //                    "Failed to cancel password reset token.");
+                //            }
+                //        }
+
+                // 記錄郵件是否已成功寄出。
+                //bool emailSent = false;
 
                 try
                 {
@@ -410,51 +443,38 @@ namespace VenueGo.Controllers.Api
                         $"&token={Uri.EscapeDataString(rawToken)}";
 
                     var bodyHtml = $"""
-        <h2>VenueGo 重設密碼</h2>
-        <p>您好，</p>
-        <p>我們收到重設您 VenueGo 帳號密碼的要求。</p>
-        <p>
-            <a href="{System.Net.WebUtility.HtmlEncode(resetUrl)}">
-                點此重設密碼
-            </a>
-        </p>
-        <p>此連結將於 30 分鐘後失效。</p>
-        <p>如果您沒有提出此要求，請忽略這封郵件。</p>
-        """;
+            <h2>VenueGo 重設密碼</h2>
+            <p>您好，</p>
+            <p>我們收到重設您 VenueGo 帳號密碼的要求。</p>
+            <p>
+                <a href="{System.Net.WebUtility.HtmlEncode(resetUrl)}">
+                    點此重設密碼
+                </a>
+            </p>
+            <p>此連結將於 30 分鐘後失效。</p>
+            <p>如果您沒有提出此要求，請忽略這封郵件。</p>
+            """;
 
-                    // 先寄信。
+                    // 第一階段：嘗試寄送郵件。
                     await _emailService.SendEmailAsync(
                         model.Email.Trim(),
                         "VenueGo 密碼重設",
-                        bodyHtml
-                    );
+                        bodyHtml);
 
-                    // 寄信成功後，才讓其他尚未使用的 Token 失效。
-                    var confirmed =
-                        await _passwordResetService.ConfirmResetEmailSentAsync(
-                            model.Email,
-                            rawToken
-                        );
-
-                    if (!confirmed)
-                    {
-                        _logger.LogWarning(
-                            "Password reset email sent, but token confirmation failed.");
-                    }
+                    emailSentSuccessfully = true;
                 }
                 catch (Exception ex)
                 {
-                    // 寄信或後續處理失敗時，嘗試取消這次建立的 Token。
                     _logger.LogError(
                         ex,
-                        "Failed to complete password reset email request.");
+                        "Failed to send password reset email.");
 
+                    // 只有寄信階段失敗，才取消本次 Token。
                     try
                     {
                         await _passwordResetService.CancelResetTokenAsync(
                             model.Email,
-                            rawToken
-                        );
+                            rawToken);
                     }
                     catch (Exception cancelEx)
                     {
@@ -464,41 +484,42 @@ namespace VenueGo.Controllers.Api
                     }
                 }
 
+                // 第二階段：只有寄信成功才確認 Token。
+                if (emailSentSuccessfully)
+                {
+                    try
+                    {
+                        var confirmed =
+                            await _passwordResetService.ConfirmResetEmailSentAsync(
+                                model.Email,
+                                rawToken);
+
+                        if (!confirmed)
+                        {
+                            _logger.LogWarning(
+                                "Password reset email sent, but token confirmation failed.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // 注意：此處不可取消 Token，因為郵件可能已送達。
+                        _logger.LogError(
+                            ex,
+                            "Failed to confirm password reset email.");
+                    }
+                }
+
             }
 
             // 僅供本機開發測試；正式環境不回傳 Token。
-            var data = _environment.IsDevelopment() && rawToken != null
-                ? new { resetToken = rawToken }
-                : new { resetToken = (string?)null };
+            var data = _environment.IsDevelopment() &&
+           rawToken != null &&
+           emailSentSuccessfully
+    ? new { resetToken = rawToken }
+    : new { resetToken = (string?)null };
 
             return Ok(ApiResult<object>.Ok(data, message));
         }
-        //[AllowAnonymous]
-        //[HttpPost("forgot-password")]
-        //public async Task<IActionResult> ForgotPassword(
-        //    [FromBody] ForgotPasswordRequestDto model)
-        //{
-        //    var ipAddress =
-        //        HttpContext.Connection.RemoteIpAddress?.ToString()
-        //        ?? "127.0.0.1";
-
-        //    var rawToken = await _passwordResetService.CreateResetTokenAsync(
-        //        model.Email,
-        //        ipAddress
-        //    );
-
-        //    // 不論 Email 是否存在，都回傳相同的訊息，避免洩漏帳號資訊。
-        //    const string message =
-        //        "如果此 Email 已註冊且帳號有效，您將可以繼續重設密碼流程。";
-
-        //    // 僅供本機開發測試；正式環境不回傳重設 Token。
-        //    var data = _environment.IsDevelopment() && rawToken != null
-        //        ? new { resetToken = rawToken }
-        //        : new { resetToken = (string?)null };
-
-        //    return Ok(ApiResult<object>.Ok(data, message));
-        //}
-
 
         // 驗證重設 Token 是否有效
         [AllowAnonymous]

@@ -4,6 +4,7 @@ using VenueGo.Enums;
 using VenueGo.Services.Time;
 using VenueGo.Services.CheckIn;
 using VenueGo.ViewModels.DashboardViewModels;
+using VenueGo.Dtos.TicketDtos;
 
 
 namespace VenueGo.Models.DashboardModels
@@ -122,6 +123,16 @@ namespace VenueGo.Models.DashboardModels
                 .Where(l => l.Action == (byte)CheckInAction.CheckIn)
                 .Select(l => l.TicketId)
                 .ToListAsync();
+        }
+
+        public async Task<NumberOfPeopleDto> GetVenueTotalNumber()
+        {
+            var totalList = await GetInsideTicketIdsAsync();
+            int total = totalList.Count();
+            return new NumberOfPeopleDto
+            {
+                TotalNumber = total,
+            };
         }
     }
     

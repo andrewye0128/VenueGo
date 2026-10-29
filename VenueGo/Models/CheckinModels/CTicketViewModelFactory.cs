@@ -5,9 +5,7 @@ using VenueGo.Data;
 using VenueGo.Enums;
 using VenueGo.Helpers;
 using VenueGo.Models.Entities;
-using VenueGo.Models.ReviewModels;
 using VenueGo.Services.Time;
-using VenueGo.Services.ReviewTickets;
 using VenueGo.ViewModels.CheckinViewModels;
 using VenueGo.Dtos.TicketDtos;
 
@@ -19,17 +17,15 @@ namespace VenueGo.Models.CheckinModels
         private readonly dbVenueContext _db;
         private CCheckInLogFactory _checkinLogFactory;
         private CTicketStatusLogFactory _StatusLogFactory;
-        private IVisitReviewTicketFactory _visitReviewTicketFactory;
         private COvertimeChargeFactory _overtimeChargeFactory;
         private readonly ITimeService _time;
 
-        public CTicketViewModelFactory(dbVenueContext db, CCheckInLogFactory checkInLogFactory, CTicketStatusLogFactory statusLogFactory, 
-            IVisitReviewTicketFactory visitReviewTicketFactory, COvertimeChargeFactory overtimeChargeFactory, ITimeService time)
+        public CTicketViewModelFactory(dbVenueContext db, CCheckInLogFactory checkInLogFactory, CTicketStatusLogFactory statusLogFactory
+            , COvertimeChargeFactory overtimeChargeFactory, ITimeService time)
         {
             _db = db;
             _checkinLogFactory = checkInLogFactory;
             _StatusLogFactory = statusLogFactory;
-            _visitReviewTicketFactory = visitReviewTicketFactory;
             _overtimeChargeFactory = overtimeChargeFactory;
             _time = time;
         }
@@ -91,10 +87,6 @@ namespace VenueGo.Models.CheckinModels
             });
 
             _db.SaveChanges();
-            if(isFirstEntry)
-            {
-                await _visitReviewTicketFactory.CreateReviewPerVisitAsync(ticket.Qrtoken);
-            }
             return isVaild;
         }
 
@@ -132,10 +124,6 @@ namespace VenueGo.Models.CheckinModels
                 OperatorId = 1,
             });
             _db.SaveChanges();
-            if (isValid)
-            {
-                await _visitReviewTicketFactory.RecordVisitEndTimeAsync(ticketId);
-            }
             return isValid;
         }
 

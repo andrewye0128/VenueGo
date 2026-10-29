@@ -4,20 +4,71 @@
     存在這一頁的瀏覽紀錄（history.state）裡，不放在網址上：
     - 重新整理：瀏覽器會保留，還看得到
     - 直接打網址、從書籤進來：沒有資料，請客人到「我的預約」查看
-  線上付款的「前往付款」是階段 3（模擬付款頁），目前先停用
+  線上付款的「前往付款」：
+    - 建立預約的回傳只有訂單編號，沒有訂單 Id，而且是建立那一刻的狀態
+      → 打開頁面時用訂單編號向後端查這一筆（[GET] /api/orders?keyword=），拿到訂單 Id 和最新的付款狀態
+    - 能不能付款用 canPay 判斷（同「訂單與付款」頁），按鈕顯示「剩 N 分鐘」，時間到了自動消失
+    - 付款流程（開付款單、跳到綠界、錯誤處理）由 useOrderPayment 處理，跟「訂單與付款」頁共用
   UButton、UIcon 由 Nuxt UI 自動匯入
 -->
 <script setup>
-import { computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import BookingSteps from "@/components/booking/BookingSteps.vue";
 import EmptyState from "@/components/EmptyState.vue";
+import { getMyOrders } from "@/api/orderApi";
+import { useOrderPayment } from "@/composables/useOrderPayment";
+import { useSiteClock } from "@/composables/useSiteClock";
 import { PAYMENT_METHOD, PAYMENT_METHOD_LABEL } from "@/constants/payment";
+import { PAYMENT_STATUS_CODE } from "@/constants/statuses";
 import { formatAmount, formatDateTime, formatDateWithWeekday } from "@/utils/format";
+import { canPay, formatRemaining } from "@/utils/order";
 
 // history.state 是瀏覽器的功能，不是 Vue 的資料，不會變動，讀一次就好
 const reservation = window.history.state?.reservation ?? null;
 
 const isOnline = computed(() => reservation?.paymentMethod === PAYMENT_METHOD.ONLINE);
+
+// ── 線上付款：向後端查這筆訂單的最新狀態 ──
+// 網站時間：「剩 N 分鐘」會自己倒數，時間到了付款按鈕自動消失（同「訂單與付款」頁）
+const { now } = useSiteClock();
+
+const order = ref(null); // 後端查到的訂單（有 orderId、最新的付款狀態、最晚開始付款時間）
+const orderStatus = ref("loading"); // "loading" 查詢中、"ready" 查到了、"error" 查不到
+
+async function loadOrder() {
+  try {
+    const data = await getMyOrders({ keyword: reservation.orderNo, pageSize: 1 });
+    // keyword 是「包含」：用完整的訂單編號查，最多只會有這一筆，還是比對一次比較保險
+    order.value = data.items.find((item) => item.orderNo === reservation.orderNo) ?? null;
+    orderStatus.value = order.value ? "ready" : "error";
+  } catch {
+    // 查不到也不擋客人：付款按鈕不顯示，提示到「訂單與付款」頁付款
+    orderStatus.value = "error";
+  }
+}
+onMounted(() => {
+  if (isOnline.value) loadOrder();
+});
+
+// 付款狀態可能變了（另一個分頁付過了、從綠界按上一頁回來）就重新查一次
+const { isBusy, isPaying, pay } = useOrderPayment({ onStateChanged: loadOrder });
+
+const payable = computed(() => order.value !== null && canPay(order.value, now.value));
+// 查詢中先顯示（轉圈、不能按），查到之後可以付才留著
+const showPayButton = computed(
+  () => isOnline.value && (orderStatus.value === "loading" || payable.value),
+);
+
+// 付款期限提示框的情況：付款處理中、已付款時，不再提醒「請在期限前付款」
+const paymentStage = computed(() => {
+  if (!isOnline.value) return "onsite";
+  const status = order.value?.paymentStatus;
+  if (status === PAYMENT_STATUS_CODE.PROCESSING) return "processing";
+  if (status === PAYMENT_STATUS_CODE.PAID) return "paid";
+  // 查到了但不能付（超過最晚開始付款時間）：不能再叫客人「請在期限前付款」，付款按鈕已經沒了
+  if (orderStatus.value === "ready" && !payable.value) return "closed";
+  return "due";
+});
 const details = computed(() => {
   if (!reservation) return [];
   const r = reservation;
@@ -86,27 +137,48 @@ const details = computed(() => {
             name="i-mdi-clock-alert-outline"
             class="mt-0.5 size-5 shrink-0 text-semantic-warning"
           />
-          <span v-if="isOnline">
-            請在
-            <strong class="tabular-nums">{{ formatDateTime(reservation.paymentDueAt) }}</strong>
-            前完成線上付款，逾期未付款的預約將自動取消。
-          </span>
-          <span v-else>
+          <span v-if="paymentStage === 'onsite'">
             請在
             <strong class="tabular-nums">{{ formatDateTime(reservation.paymentDueAt) }}</strong>
             前到櫃台付款，逾期未付款的預約將自動取消。
           </span>
+          <span v-else-if="paymentStage === 'processing'">
+            付款確認中，結果確認後會顯示在「訂單與付款」頁。
+          </span>
+          <span v-else-if="paymentStage === 'paid'">已完成付款，預約已確認。</span>
+          <span v-else-if="paymentStage === 'closed'">
+            已超過可以開始線上付款的時間，逾期未付款的預約將自動取消。
+          </span>
+          <span v-else>
+            請在
+            <strong class="tabular-nums">{{ formatDateTime(reservation.paymentDueAt) }}</strong>
+            前完成線上付款，逾期未付款的預約將自動取消。
+            <!-- 查不到訂單時沒有付款按鈕，告訴客人去哪裡付 -->
+            <template v-if="orderStatus === 'error'">請到「訂單與付款」頁付款。</template>
+          </span>
         </p>
 
         <div class="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-center">
-          <!-- 階段 3 做模擬付款頁之後再開放 -->
-          <UButton v-if="isOnline" color="action" size="lg" disabled title="線上付款功能製作中">
-            前往付款（製作中）
+          <!-- 轉圈、停用由 useOrderPayment 控制（原因見 useOrderPayment.js），所以關掉 loadingAuto -->
+          <UButton
+            v-if="showPayButton"
+            color="action"
+            size="lg"
+            :loading="orderStatus === 'loading' || (order !== null && isPaying(order))"
+            :disabled="isBusy || order === null"
+            :loading-auto="false"
+            @click="pay(order)"
+          >
+            前往付款
+            <template v-if="payable"
+              >（{{ formatRemaining(order.paymentStartDeadline, now) }}）</template
+            >
           </UButton>
+          <!-- 沒有付款按鈕時，「查看我的預約」就是主要的按鈕 -->
           <UButton
             :to="{ name: 'reservations' }"
-            :color="isOnline ? 'primary' : 'action'"
-            :variant="isOnline ? 'outline' : 'solid'"
+            :color="showPayButton ? 'primary' : 'action'"
+            :variant="showPayButton ? 'outline' : 'solid'"
             size="lg"
           >
             查看我的預約

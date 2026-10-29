@@ -6,6 +6,8 @@ using VenueGo.Dtos;
 using VenueGo.Dtos.OrderDtos;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Orders;
+using VenueGo.Models.PaymentModels;
+using VenueGo.Services.Payments;
 
 namespace VenueGo.Controllers.Api.OrderApi
 {
@@ -28,11 +30,16 @@ namespace VenueGo.Controllers.Api.OrderApi
     {
         private readonly IMemberOrderQueryService _orderQuery;
         private readonly ICurrentUserService _currentUser;
+        private readonly IEcpayCheckoutService _checkout;
 
-        public OrderApiController(IMemberOrderQueryService orderQuery, ICurrentUserService currentUser)
+        public OrderApiController(
+            IMemberOrderQueryService orderQuery,
+            ICurrentUserService currentUser,
+            IEcpayCheckoutService checkout)
         {
             _orderQuery = orderQuery;
             _currentUser = currentUser;
+            _checkout = checkout;
         }
 
         /// <summary>我的訂單列表（篩選、分頁）</summary>
@@ -101,6 +108,66 @@ namespace VenueGo.Controllers.Api.OrderApi
             }
 
             return Ok(ApiResult<MyOrderDetailDto>.Ok(order));
+        }
+
+        /// <summary>開始線上付款（綠界）</summary>
+        /// <remarks>
+        /// 檢查可以付款後，付款改成「付款處理中」，回傳要送給綠界的表單（actionUrl＋fields）。
+        /// 前端用表單 POST 送出，畫面就跳到綠界的信用卡付款頁。
+        ///
+        /// body 不用傳東西：金額、網址都由後端決定。
+        ///
+        /// 回傳成功不代表已付款：付款結果由綠界通知（3-C-4）決定。
+        /// 付款處理中不能再開新的付款單（不知道上一筆有沒有扣款）。
+        ///
+        /// errorCode：NotFound、NotOnlinePayment、AlreadyPaid、InProgress、NotPayable、
+        /// PastStartDeadline、InvalidAmount、Conflict、NotConfigured、TradeNoUnavailable
+        /// </remarks>
+        /// <param name="orderId">訂單 Id（Orders.OrderId）</param>
+        /// <param name="cancellationToken">使用者中斷請求時取消</param>
+        /// <response code="200">成功，data 是 actionUrl＋fields</response>
+        /// <response code="401">沒有登入或 token 失效</response>
+        /// <response code="403">登入的不是會員</response>
+        /// <response code="404">NotFound：不存在、不是自己的</response>
+        /// <response code="409">目前不能付款（errorCode 說明原因）</response>
+        /// <response code="503">NotConfigured、TradeNoUnavailable：線上付款暫時無法使用</response>
+        [HttpPost("{orderId:int}/payment/start")]
+        [ProducesResponseType<ApiResult<StartPaymentDto>>(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status404NotFound)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status409Conflict)]
+        [ProducesResponseType<ApiResult>(StatusCodes.Status503ServiceUnavailable)]
+        public async Task<IActionResult> StartPayment(int orderId, CancellationToken cancellationToken)
+        {
+            var userId = _currentUser.UserId;
+            if (userId is null)
+            {
+                return Unauthorized(ApiResult.Fail("請先登入", "NotLoggedIn"));
+            }
+
+            var result = await _checkout.StartAsync(userId.Value, orderId, cancellationToken);
+
+            // errorCode 直接用 Outcome 的名稱（InProgress、PastStartDeadline⋯），前端用它判斷，不比對中文字
+            var errorCode = result.Outcome.ToString();
+
+            return result.Outcome switch
+            {
+                StartPaymentOutcome.Started => Ok(ApiResult<StartPaymentDto>.Ok(new StartPaymentDto
+                {
+                    ActionUrl = result.ActionUrl!,
+                    Fields = result.Fields!
+                })),
+
+                StartPaymentOutcome.NotFound => NotFound(ApiResult.Fail(result.Message, errorCode)),
+
+                // 不是客人的問題，是網站暫時不能線上付款
+                StartPaymentOutcome.NotConfigured or StartPaymentOutcome.TradeNoUnavailable
+                    => StatusCode(StatusCodes.Status503ServiceUnavailable, ApiResult.Fail(result.Message, errorCode)),
+
+                // 其餘都是「訂單目前的狀態不能付款」
+                _ => Conflict(ApiResult.Fail(result.Message, errorCode))
+            };
         }
     }
 }

@@ -9,11 +9,11 @@ using VenueGo.Models.ReservationModels;
 using VenueGo.Services.Auth;
 using VenueGo.Services.Members;
 using VenueGo.Services.Reservations;
+using VenueGo.Services.Time;
 using VenueGo.Services.TimeSlots;
 using VenueGo.Services.Venues;
 using VenueGo.ViewModels.ReservationViewModels;
 using VenueGo.Options;
-using VenueGo.Services.Time;
 
 namespace VenueGo.Controllers.Reservations
 {
@@ -34,8 +34,8 @@ namespace VenueGo.Controllers.Reservations
         private readonly IReservationCreationService _creationService;
         private readonly IReservationDraftStore _draftStore;
         private readonly ICurrentUserService _currentUser;
-        private readonly ReservationRulesOptions _rules;
         private readonly ITimeService _timeService;
+        private readonly ReservationRulesOptions _rules;
 
         public ReservationCreateController(
             IMemberQueryService memberQueryService,
@@ -46,8 +46,8 @@ namespace VenueGo.Controllers.Reservations
             IReservationCreationService creationService,
             IReservationDraftStore draftStore,
             ICurrentUserService currentUser,
-            IOptionsSnapshot<ReservationRulesOptions> rules,
-            ITimeService timeService)
+            ITimeService timeService,
+            IOptionsSnapshot<ReservationRulesOptions> rules)
         {
             _memberQueryService = memberQueryService;
             _venueQueryService = venueQueryService;
@@ -57,9 +57,16 @@ namespace VenueGo.Controllers.Reservations
             _creationService = creationService;
             _draftStore = draftStore;
             _currentUser = currentUser;
-            _rules = rules.Value;
             _timeService = timeService;
+            _rules = rules.Value;
         }
+
+        /// <summary>
+        /// 網站時間的今天：日曆的「今天」、可選日期的範圍都用它。
+        /// 不用 DateTime.Now：開時光機時會跟時段（TimeSlotService）用的「今天」不一樣，
+        /// 日曆會出現「點得到卻沒有時段」「30 天內卻點不到」的矛盾
+        /// </summary>
+        private DateOnly Today => DateOnly.FromDateTime(_timeService.Today);
 
         /// <summary>
         /// 流程入口。清除上一次殘留的暫存資料後導向步驟 1。
@@ -326,7 +333,7 @@ namespace VenueGo.Controllers.Reservations
                 return View(await BuildSelectDateViewModel(null, null, null, cancellationToken));
             }
 
-            var today = DateOnly.FromDateTime(_timeService.Now);
+            var today = Today;
 
             // 驗證一：日期必須落在允許範圍內。
             // 畫面上超出範圍的日期已無法點選，但仍必須在伺服器端再驗一次，
@@ -391,7 +398,7 @@ namespace VenueGo.Controllers.Reservations
             int? year, int? month, DateOnly? selectedDate, CancellationToken cancellationToken)
         {
             var draft = _draftStore.Get();
-            var today = DateOnly.FromDateTime(_timeService.Now);
+            var today = Today;
 
             var minDate = _rules.GetAdminMinDate(today);
             var maxDate = _rules.GetAdminMaxDate(today);

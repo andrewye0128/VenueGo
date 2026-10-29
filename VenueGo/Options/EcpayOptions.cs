@@ -45,6 +45,9 @@
         /// <summary>前台網址：付款完成後，把客人導回前台的付款結果頁</summary>
         public string FrontendBaseUrl { get; set; } = "http://localhost:5173";
 
+        /// <summary>付款對帳排程的設定（Ecpay:Reconciliation），都有預設值</summary>
+        public EcpayReconciliationOptions Reconciliation { get; set; } = new();
+
         /// <summary>
         /// 特店編號、金鑰都有填，才算有開線上付款。
         /// 組員沒設定也要能跑網站：只是按「前往付款」時會回「線上付款尚未設定」

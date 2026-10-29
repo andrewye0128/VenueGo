@@ -3,22 +3,25 @@
   跟「我的預約」的差別：這頁的重點是「錢付了沒、要付多少、什麼時候前要付」，排序是下單時間新到舊
   資料來自 [GET] /api/orders（api/orderApi.js）；明細視窗另外讀 /api/orders/{orderId}
   付款期限到了會自動重新讀取（useDueRefresh），後端排程改成已逾期後不用重新整理
-  「付款」按鈕：3-A 先顯示按鈕和倒數，按下去提示「製作中」；3-D 再接上綠界付款流程（onPay）
+  「付款」按鈕：向後端開一張綠界付款單（[POST] /api/orders/{orderId}/payment/start），再整頁跳到綠界刷卡頁（onPay）
+  付完錢綠界會把客人帶回這一頁（?keyword=訂單編號&from=ecpay），跳出付款結果視窗（PaymentResultModal）
   訂單編號跟「我的預約」同一個編號；點編號跳到我的預約並只查這一筆
   UFormField、UInput、USelect、UAlert、UButton 與 useOverlay、useToast 由 Nuxt UI 自動匯入
 -->
 <script setup>
 import { computed, onMounted, ref, watch } from "vue";
-import { useRouter } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import DatePickerInput from "@/components/DatePickerInput.vue";
 import EmptyState from "@/components/EmptyState.vue";
 import ListFilterPanel from "@/components/list/ListFilterPanel.vue";
 import ListTable from "@/components/list/ListTable.vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import OrderDetailModal from "@/components/orders/OrderDetailModal.vue";
+import PaymentResultModal from "@/components/orders/PaymentResultModal.vue";
 import { getMyOrders } from "@/api/orderApi";
 import { useDueRefresh } from "@/composables/useDueRefresh";
 import { useKeywordQuery } from "@/composables/useKeywordQuery";
+import { useOrderPayment } from "@/composables/useOrderPayment";
 import { useSiteClock } from "@/composables/useSiteClock";
 import { ErrorCodes } from "@/constants/errorCodes";
 import { PAYMENT_METHOD, PAYMENT_METHOD_LABEL, PAYMENT_METHOD_OPTIONS } from "@/constants/payment";
@@ -26,9 +29,11 @@ import { ALL, PAYMENT_STATUS, PAYMENT_STATUS_OPTIONS } from "@/constants/statuse
 import { useMemberStore } from "@/stores/member";
 import { formatAmount, formatDate, formatDateTime, formatTimeRange } from "@/utils/format";
 import { canPay, formatRemaining, showsDueAt } from "@/utils/order";
+import { RETURN_FROM_ECPAY } from "@/utils/paymentResult";
 
 const PAGE_SIZE = 10;
 
+const route = useRoute();
 const router = useRouter();
 const memberStore = useMemberStore();
 const toast = useToast();
@@ -106,8 +111,7 @@ async function load({ silent = false } = {}) {
     if (requestId !== latestRequestId) return;
     // 登入失效：登出並回登入頁，登入後回到這一頁（跟路由守衛的處理一致）
     if (err.errorCode === ErrorCodes.NotLoggedIn) {
-      memberStore.logout();
-      router.push({ name: "login", query: { redirect: "/member/orders" } });
+      redirectToLogin();
       return;
     }
     if (silent) return;
@@ -119,6 +123,12 @@ async function load({ silent = false } = {}) {
   }
 }
 
+// 登入失效：登出並回登入頁，登入後回到這一頁（付款的登入失效由 useOrderPayment 處理）
+function redirectToLogin() {
+  memberStore.logout();
+  router.push({ name: "login", query: { redirect: "/member/orders" } });
+}
+
 // 條件改變 → 回到第 1 頁再查；已經在第 1 頁時 page 不會變，所以直接查
 watch(filters, () => {
   if (page.value !== 1) page.value = 1;
@@ -126,7 +136,11 @@ watch(filters, () => {
 });
 // 用箭頭函式包起來：watch 會把新舊頁碼當參數傳進去，直接寫 watch(page, load) 會傳到 options
 watch(page, () => load());
-onMounted(() => load());
+// 第一次讀完列表，才知道要顯示哪一筆的付款結果
+onMounted(async () => {
+  await load();
+  showPaymentResultIfReturned();
+});
 
 // 付款期限到了自動重新讀取，不用重新整理就會看到「已逾期」（說明見 useDueRefresh.js）
 useDueRefresh(
@@ -191,15 +205,49 @@ async function openDetail(order) {
   if (choice === "pay") onPay(order);
 }
 
-// 表格、手機卡片、明細視窗三個入口都走這裡
-// 3-A：綠界還沒串接，先提示；3-D 改成呼叫建立付款 API，帶客人到綠界付款頁
-function onPay(order) {
-  toast.add({
-    title: "付款功能製作中",
-    description: `訂單 ${order.orderNo}：線上付款（綠界）串接完成後即可付款。`,
-    color: "info",
-    icon: "i-mdi-information-outline",
-  });
+// 表格、手機卡片、明細視窗三個入口都走這裡：向後端開付款單 → 整頁跳到綠界刷卡頁（說明見 useOrderPayment.js）
+// 付款狀態可能變了（另一個分頁付過了、從綠界按上一頁回來）就安靜地重新讀取列表
+const {
+  isBusy: isPayingAny,
+  isPaying,
+  pay: onPay,
+} = useOrderPayment({
+  onStateChanged: () => load({ silent: true }),
+});
+
+// ── 從綠界付完錢回來：跳出付款結果視窗 ──
+const resultModal = useOverlay().create(PaymentResultModal);
+
+/**
+ * 網址有 ?from=ecpay（後端把客人從綠界帶回來）時，找出 keyword 那一筆，打開付款結果視窗
+ * 找不到時（沒有 keyword、列表沒有這一筆）：後端判斷那次的付款結果不能相信，就不會帶訂單編號，
+ * 只能請客人稍後查看
+ */
+async function showPaymentResultIfReturned() {
+  if (route.query[RETURN_FROM_ECPAY.key] !== RETURN_FROM_ECPAY.value) return;
+
+  // 一進來就拿掉 from=ecpay，keyword 留著（列表還是只顯示這一筆）：
+  // 之後重新整理、從綠界按上一頁回來，都不會再跳一次
+  router.replace({ query: { ...route.query, [RETURN_FROM_ECPAY.key]: undefined } });
+
+  const keyword = filters.value.keyword.trim();
+  const order = result.value.items.find((item) => item.orderNo === keyword);
+  if (!order) {
+    toast.add({
+      title: "無法確認這次的付款結果",
+      description: "請稍後重新整理頁面，查看訂單的付款狀態。",
+      color: "warning",
+      icon: "i-mdi-alert-outline",
+    });
+    return;
+  }
+
+  const choice = await resultModal.open({ order });
+
+  // 視窗裡看到的是最新的狀態，列表也重新讀一次，兩邊才一致
+  load({ silent: true });
+  if (choice === "pay") onPay(order);
+  else if (choice === "detail") openDetail(order);
 }
 </script>
 
@@ -331,13 +379,17 @@ function onPay(order) {
           >
             查看
           </UButton>
-          <!-- 倒數放在按鈕下方：放在按鈕裡面會讓這一欄太寬 -->
+          <!-- 倒數放在按鈕下方：放在按鈕裡面會讓這一欄太寬
+               轉圈、停用由 useOrderPayment 控制（原因見 useOrderPayment.js），所以關掉 loadingAuto -->
           <div v-if="isPayable(row.original)" class="flex flex-col items-center gap-0.5">
             <UButton
               color="action"
               size="sm"
               class="whitespace-nowrap"
               :aria-label="`付款：訂單 ${row.original.orderNo}，${remaining(row.original)}`"
+              :loading="isPaying(row.original)"
+              :disabled="isPayingAny"
+              :loading-auto="false"
               @click="onPay(row.original)"
             >
               付款
@@ -387,6 +439,9 @@ function onPay(order) {
               v-if="isPayable(row)"
               color="action"
               :aria-label="`付款：訂單 ${row.orderNo}，${remaining(row)}`"
+              :loading="isPaying(row)"
+              :disabled="isPayingAny"
+              :loading-auto="false"
               @click="onPay(row)"
             >
               付款

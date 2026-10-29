@@ -13,7 +13,8 @@ namespace VenueGo.Services.Reservations
     /// <para>
     /// 【處理範圍】預約「待確認」＋最新一筆付款是「未付款」或「付款失敗」＋付款期限 &lt;= 現在。
     /// 線上、現場、後台代客都算，期限一到就逾期，不另外寬限。
-    /// 「付款處理中」（客人正在綠界付款頁）先跳過，3-C 再改成先問綠界。
+    /// 「付款處理中」不在這裡處理：由付款對帳排程（PaymentReconciliationService）問綠界，
+    /// 確定沒付款會改回未付款或付款失敗，下一輪就會被這裡處理。
     /// </para>
     /// <para>
     /// 【不用排除後台補登單】ReservationStatus.Expired 的註解提醒補登單的期限會在過去，

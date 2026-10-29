@@ -305,7 +305,8 @@ namespace VenueGo.Services.Reservations
             {
                 ReservationId = reservation.ReservationId,
                 UserId = model.UserId,
-                OrderNo = await _orderNoGenerator.GenerateAsync(cancellationToken),
+                // 編號的日期跟下單時間用同一個值（model.Now 是網站時間，會跟著時光機）
+                OrderNo = await _orderNoGenerator.GenerateAsync(model.Now, cancellationToken),
                 InvoiceType = (byte)model.InvoiceType,
                 CarrierNo = model.CarrierNo,
                 OrderCreatedAt = model.Now,

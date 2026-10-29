@@ -133,7 +133,7 @@ namespace VenueGo.Services.Auth
                 return false;
             }
 
-            if (tokenRecord.ExpiresAt < _time.Now)
+            if (tokenRecord.ExpiresAt <= _time.Now)
             {
                 return false;
             }
@@ -173,7 +173,7 @@ namespace VenueGo.Services.Auth
 
             if (tokenRecord == null ||
                 tokenRecord.UsedAt != null ||
-                tokenRecord.ExpiresAt < _time.Now)
+                tokenRecord.ExpiresAt <= _time.Now)
             {
                 return false;
             }

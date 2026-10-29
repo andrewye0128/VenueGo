@@ -6,6 +6,7 @@ using VenueGo.Dtos;
 using VenueGo.Dtos.TicketDtos;
 using VenueGo.Extensions;
 using VenueGo.Helpers;
+using VenueGo.Models.DashboardModels;
 using VenueGo.Services.Ticket;
 using VenueGo.ViewModels;
 namespace VenueGo.Controllers.Api.TicketApi
@@ -20,11 +21,13 @@ namespace VenueGo.Controllers.Api.TicketApi
         private readonly IMemberTicketQueryService _ticketQuery;
         private readonly IWebHostEnvironment _env;
         private readonly IEntryTicketService _entryTicketService;
+        private readonly VenueMonitorFactory _monitorFactory;
 
-        public TicketApiController(IMemberTicketQueryService ticketQuery, IWebHostEnvironment env, IEntryTicketService entryTicketService)
+        public TicketApiController(IMemberTicketQueryService ticketQuery, IWebHostEnvironment env, IEntryTicketService entryTicketService, VenueMonitorFactory monitorFactory)
         {
             _ticketQuery = ticketQuery;
             _entryTicketService = entryTicketService;
+            _monitorFactory = monitorFactory;
             _env = env;
         }
 
@@ -208,5 +211,15 @@ namespace VenueGo.Controllers.Api.TicketApi
 
             return Ok(ApiResult.Ok("領取成功"));
         }
+
+        [HttpGet("venue-headcount")]
+        // Get /api/tickets/venue-headcount
+        public async Task<IActionResult> GetPeopleNumber()
+        {
+            NumberOfPeopleDto GetPeopleNumber = await _monitorFactory.GetVenueTotalNumber();
+
+            return Ok(ApiResult<NumberOfPeopleDto>.Ok(GetPeopleNumber));
+        }
+
     }
 }

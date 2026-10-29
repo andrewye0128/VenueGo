@@ -68,6 +68,21 @@ namespace VenueGo.ViewModels.ReviewViewModels
             _        => null
         };
 
+        /// <summary>
+        /// 10/29：未讀、待回覆清單是空的時候，下一個要試的時間範圍。null＝已經是「全部」，不能再放寬。
+        /// 今天、一週內 → 一個月內（先看近一點的）；一個月內、三個月內、半年內 → 全部。
+        /// </summary>
+        public static string? Widen(string range) => range switch
+        {
+            Today    => Month,
+            Week     => Month,
+            Month    => All,
+            Quarter  => All,
+            HalfYear => All,
+            All      => null,
+            _        => throw new ArgumentOutOfRangeException(nameof(range), range, "未定義的時間範圍")
+        };
+
         /// <summary>下拉選單的文字，順序就是顯示順序。</summary>
         public static readonly (string Value, string Text)[] Options =
         {
@@ -322,5 +337,26 @@ namespace VenueGo.ViewModels.ReviewViewModels
             || SportTypeId != null
             || VenueId != null
             || Satisfaction != QueueSatisfaction.All;   // 10/27
+
+        /// <summary>
+        /// 10/29：看的是不是「整個清單」：時間範圍是「全部」，而且沒有任何會讓清單變少的篩選。
+        /// 分組方式、搜尋欄位（沒有關鍵字時）只影響怎麼呈現，不會讓清單變少，所以不算。
+        /// 被藏起來的「只有星等」評論也要是 0，清單才是真的空了。
+        /// 用來決定清單空的時候，要恭喜員工清完了，還是建議放寬條件（_QueueList.cshtml 的空清單）。
+        /// </summary>
+        public bool CoversWholeTab =>
+            Range == QueueRange.All
+            && Source == QueueSource.All
+            && string.IsNullOrEmpty(Keyword)
+            && SportTypeId == null
+            && VenueId == null
+            && Satisfaction == QueueSatisfaction.All
+            && RatingOnlyHidden == 0;
+
+        /// <summary>
+        /// 10/29：未讀、待回覆在員工選的時間範圍裡是空的，後端自動放寬了時間範圍（AReviewController.BuildQueueVmWidened）。
+        /// 這裡記「原本選的範圍」，畫面上方提示「已改為顯示…」。null＝沒有放寬。
+        /// </summary>
+        public string? WidenedFromRange { get; init; }
     }
 }

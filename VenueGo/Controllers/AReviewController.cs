@@ -909,11 +909,48 @@ namespace VenueGo.Controllers
                 PendingCount = countBase.Count(PendingRule),
                 SpamCount    = countBase.Count(SpamRule),
 
-                // 每次載入順序不同，員工比較不會永遠點第一個
-                CannedReplies = ReviewPolicy.CannedReplies
-                                            .OrderBy(_ => Random.Shared.Next())
-                                            .ToList()
+                // 10/29：順序改成固定（ReviewPolicy 裡的順序），按鈕位置不變，員工才不容易按錯。原本：
+                // // 每次載入順序不同，員工比較不會永遠點第一個
+                // CannedReplies = ReviewPolicy.CannedReplies
+                //                             .OrderBy(_ => Random.Shared.Next())
+                //                             .ToList()
+                CannedReplies = ReviewPolicy.CannedReplies.ToList()
             };
+        }
+
+        /// <summary>
+        /// 10/29：未讀、待回覆是空的，就放寬時間範圍再查一次（QueueRange.Widen），直到有評論或已經是「全部」。
+        /// 這兩個清單的目標是整個清空：員工選的範圍裡沒有，不代表沒有要處理的評論，可能只是在範圍外。
+        /// 放寬之後回到第 1 頁；畫面上方會提示原本選的範圍（WidenedFromRange）。
+        /// 全部、已完成、封存不放寬：那是員工在找東西，空的就請他自己調整範圍（_QueueList.cshtml 的空清單）。
+        /// </summary>
+        private ReviewQueueVM BuildQueueVmWidened(
+            string? tab, string? source, string? range,
+            string? field, string? keyword, bool grouped,
+            int? sportTypeId, int? venueId, int? page,
+            string? satisfaction)
+        {
+            var vm = BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction);
+
+            bool widens = vm.Tab switch
+            {
+                QueueTab.Unread    => true,
+                QueueTab.Pending   => true,
+                QueueTab.All       => false,
+                QueueTab.Completed => false,
+                QueueTab.Spam      => false,
+                _ => throw new ArgumentOutOfRangeException(nameof(tab), vm.Tab, "未定義的清單")
+            };
+            if (!widens) return vm;
+
+            string from = vm.Range;
+            while (vm.IsEmpty)
+            {
+                string? wider = QueueRange.Widen(vm.Range);
+                if (wider == null) break;   // 已經是「全部」
+                vm = BuildQueueVm(vm.Tab, source, wider, field, keyword, grouped, sportTypeId, venueId, page: null, satisfaction);
+            }
+            return vm.Range == from ? vm : vm with { WidenedFromRange = from };
         }
 
         // ════════════════════════════════════════════════════════
@@ -935,7 +972,9 @@ namespace VenueGo.Controllers
                                    int? sportTypeId = null, int? venueId = null, int? page = null,
                                    string? satisfaction = null)
         {
-            return View(BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
+            // 10/29：未讀、待回覆是空的就自動放寬時間範圍。原本：
+            // return View(BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
+            return View(BuildQueueVmWidened(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
         }
 
         /// <summary>只有清單那一塊。切換篩選、搜尋、處理完一則之後，由 axios 呼叫。</summary>
@@ -947,7 +986,9 @@ namespace VenueGo.Controllers
                                        int? sportTypeId = null, int? venueId = null, int? page = null,
                                        string? satisfaction = null)
         {
-            return PartialView("_QueueList", BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
+            // 10/29：未讀、待回覆是空的就自動放寬時間範圍。原本：
+            // return PartialView("_QueueList", BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
+            return PartialView("_QueueList", BuildQueueVmWidened(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
         }
 
         /// <summary>

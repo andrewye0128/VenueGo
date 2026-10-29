@@ -59,6 +59,8 @@ namespace VenueGo.Models.ReviewModels
         /// 罐頭回覆。Label 是 chip 上的短字，Text 是點了之後插入輸入框的內容。
         /// 期中先寫死，之後要讓館方自己維護再搬進資料表。
         /// </summary>
+        /* 10/29：加上分組（CannedReplyGroup），順序固定：負評致歉在最左、好評道謝在最右，設施／服務、現場／預約各自並排。
+           分組決定按鈕顏色（_QueueList.cshtml 的 CannedClass），員工比較不容易按錯。原本：
         public static readonly CannedReply[] CannedReplies =
         {
             new("感謝評價",   "感謝您撥空留下評價，我們會持續維持服務品質，期待您再次光臨。"),
@@ -71,9 +73,36 @@ namespace VenueGo.Models.ReviewModels
             new("轉達同仁",   "感謝您對服務人員的回饋，我們已轉達給相關同仁，會持續加強服務品質。"),
             new("改善流程",   "感謝您對預約與付款流程的建議，我們會持續改善，讓操作更方便。")
         };
+        */
+        public static readonly CannedReply[] CannedReplies =
+        {
+            // 負評：致歉、轉交
+            new("致歉改善",   "很抱歉這次未能帶給您愉快的體驗，我們已檢討並著手改善，希望下次能讓您感到滿意。", CannedReplyGroup.Apology),
+            new("已轉交處理", "感謝您的反映，我們已將這個問題轉交相關人員處理，造成不便深感抱歉。",           CannedReplyGroup.Apology),
+            // 設施／服務
+            new("會檢查設施", "感謝您的提醒，我們會盡快檢查相關設施，處理完成前可能仍有不便，敬請見諒。",     CannedReplyGroup.FacilityService),
+            new("轉達同仁",   "感謝您對服務人員的回饋，我們已轉達給相關同仁，會持續加強服務品質。",           CannedReplyGroup.FacilityService),
+            // 現場／預約
+            new("請聯繫櫃檯", "若方便，歡迎到服務櫃檯或來電告知更多細節，讓我們能更完整地協助您。",           CannedReplyGroup.VisitBooking),
+            new("改善流程",   "感謝您對預約與付款流程的建議，我們會持續改善，讓操作更方便。",                 CannedReplyGroup.VisitBooking),
+            // 好評：道謝
+            new("感謝評價",   "感謝您撥空留下評價，我們會持續維持服務品質，期待您再次光臨。",                 CannedReplyGroup.Thanks),
+            new("歡迎再來",   "很高興您這次的體驗愉快，歡迎再來運動！",                                       CannedReplyGroup.Thanks)
+        };
 
     }
 
     public sealed record SpamReasonInfo(string Label, string StaffHint, string CustomerText);
-    public sealed record CannedReply(string Label, string Text);
+    // 10/29：多了 Group。原本：
+    // public sealed record CannedReply(string Label, string Text);
+    public sealed record CannedReply(string Label, string Text, CannedReplyGroup Group);
+
+    /// <summary>10/29：罐頭回覆的分組，決定按鈕顏色。</summary>
+    public enum CannedReplyGroup
+    {
+        Apology,           // 負評：致歉、轉交
+        FacilityService,   // 設施／服務
+        VisitBooking,      // 現場／預約
+        Thanks             // 好評：道謝
+    }
 }

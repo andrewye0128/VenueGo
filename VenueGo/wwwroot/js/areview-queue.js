@@ -274,7 +274,65 @@
             return '操作失敗，請稍後再試';
       }
 
+      /* 10/29：成功的訊息（已送出回覆、已標記等）改成右上角滑出的小提示（toast），不再在清單上方佔一整條。
+         警告、錯誤維持原本的提示條：那些需要員工注意，不該一下就滑走。
+         位置：頁首下方，貼著畫面右緣往左延伸，長度是「右緣到頁首使用者姓名第二個字」的 0.55 倍。
+         樣式在 site.css 的 .queue-toast；只有 top、寬度要看頁首，在這裡算好放在行內樣式。 */
+      let toastEl = null;
+      let toastTimer = null;
+      const TOAST_MS = 3000;
+      const TOAST_WIDTH_RATIO = 0.55;
+      const TOAST_FALLBACK_WIDTH = 160;   // 找不到姓名（例如窄螢幕把姓名藏起來）時的寬度，約 10rem
+
+      function toastWidth() {
+            const nameEl = document.querySelector('.admin-header .user-name');
+            const textNode = nameEl ? nameEl.firstChild : null;
+            if (textNode && textNode.nodeType === Node.TEXT_NODE && textNode.length >= 2) {
+                  const range = document.createRange();
+                  range.setStart(textNode, 1);
+                  range.setEnd(textNode, 2);
+                  const width = window.innerWidth - range.getBoundingClientRect().left;
+                  if (width >= 200 && width < window.innerWidth) return Math.round(width * TOAST_WIDTH_RATIO);
+            }
+            return TOAST_FALLBACK_WIDTH;
+      }
+
+      function showToast(message) {
+            if (toastEl) toastEl.remove();   // 前一個還在就直接換掉，不疊在一起
+            clearTimeout(toastTimer);
+
+            const header = document.querySelector('.admin-header');
+            const el = document.createElement('div');
+            el.setAttribute('role', 'status');
+            el.setAttribute('aria-live', 'polite');
+            el.className = 'queue-toast bg-white border border-end-0 rounded-start shadow-sm text-success d-flex align-items-center gap-2 px-3 py-2';
+            el.style.top = ((header ? header.getBoundingClientRect().bottom : 0) + 8) + 'px';
+            el.style.width = toastWidth() + 'px';
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-check-circle-fill flex-shrink-0';
+            const text = document.createElement('span');
+            text.textContent = message;   // 用 textContent，訊息裡有特殊字元也不會被當成 HTML
+            el.append(icon, text);
+            document.body.appendChild(el);
+            toastEl = el;
+
+            // 先放在畫面外、下一個畫格再移進來，才有滑出的動畫
+            requestAnimationFrame(function () {
+                  requestAnimationFrame(function () { el.classList.add('show'); });
+            });
+            toastTimer = setTimeout(function () {
+                  el.classList.remove('show');
+                  el.addEventListener('transitionend', function () { el.remove(); }, { once: true });
+                  if (toastEl === el) toastEl = null;
+            }, TOAST_MS);
+      }
+
       function flash(message, type) {
+            // 10/29：沒指定類型（預設就是成功）或指定 success，改用 toast
+            if (type === undefined || type === 'success') {
+                  showToast(message);
+                  return;
+            }
             const div = document.createElement('div');
             div.className = 'alert alert-' + (type || 'success') + ' alert-dismissible fade show';
             div.textContent = message;     // 用 textContent，訊息裡有特殊字元也不會被當成 HTML
@@ -395,7 +453,9 @@
                         root.innerHTML = res.data;
                         restoreAfterRender(draftsBefore);
                         highlight();
-                        syncUrl(filter);
+                        // 10/29：未讀、待回覆是空的時，後端會自動放寬時間範圍，所以網址改用後端實際採用的條件（#queueState）。原本：
+                        // syncUrl(filter);
+                        syncUrl(currentFilter());
                         // 10/23：換頁之後，如果清單開頭已經捲到畫面外（例如在最後一則按了下一頁），捲回清單開頭
                         if (options.revealList) revealListTop();
 
@@ -414,6 +474,8 @@
                                     }
                               }
                         }
+                        // 10/29：清單是空的時候，焦點改移到畫面推薦的下一步
+                        focusEmptyAction();
                   })
                   .catch(function (err) {
                         flash(errorMessage(err), 'danger');
@@ -443,6 +505,94 @@
             const top = el.getBoundingClientRect().top;
             if (top >= offset) return;
             window.scrollTo({ top: window.scrollY + top - offset });
+      }
+
+      /* ── 10/29：焦點與捲動 ─────────────────────────────── */
+
+      // 清單是空的時候，焦點移到畫面推薦的下一步（「前往…」按鈕、重置或時間範圍）。
+      // 要移到哪裡由後端決定，放在 #queueState 的 data-empty-focus（_QueueList.cshtml 的 EmptyKind），空字串＝不移。
+      function focusEmptyAction() {
+            const st = stateEl();
+            const id = st ? st.dataset.emptyFocus : '';
+            if (!id) return;
+            const el = root.querySelector('#' + id);
+            if (el) el.focus();
+      }
+
+      // 展開：這一則的頂端貼齊頁首（白色 bar）下緣，展開的內容才看得完整
+      function scrollItemBelowHeader(item) {
+            const header = document.querySelector('.admin-header');
+            const offset = (header ? header.offsetHeight : 0) + 8;
+            const top = item.getBoundingClientRect().top;
+            window.scrollTo({ top: window.scrollY + top - offset, behavior: 'smooth' });
+      }
+
+      // 收合、送出後換到下一則：這一則的中心放在畫面中上方，大約對齊側邊欄「會員管理」那一列。
+      // 找不到那一列（例如沒有權限所以沒顯示），就用畫面高度的 35%。
+      function readingLineY() {
+            const link = document.querySelector('#adminSidebar a[title="會員管理"]');
+            if (link) {
+                  const r = link.getBoundingClientRect();
+                  const y = r.top + r.height / 2;
+                  if (y > 0 && y < window.innerHeight) return y;
+            }
+            return window.innerHeight * 0.35;
+      }
+      function scrollItemToReadingLine(item) {
+            const r = item.getBoundingClientRect();
+            const center = r.top + r.height / 2;
+            window.scrollTo({ top: window.scrollY + center - readingLineY(), behavior: 'smooth' });
+      }
+
+      // 送出（回覆或標記垃圾）之前，記下「下一則」是哪一則、這一則排在第幾個。
+      // 清單重新載入之後由 focusNextItem 把焦點移過去：第一則處理完，接著要處理的本來就是下一則。
+      function nextItemTarget(item) {
+            const items = Array.from(root.querySelectorAll('.accordion-item'));
+            const index = item ? items.indexOf(item) : -1;
+            if (index === -1) return null;
+            const next = items[index + 1];
+            const nextCollapse = next ? next.querySelector('.accordion-collapse') : null;
+            return { id: nextCollapse ? nextCollapse.id : null, index: index };
+      }
+
+      // 只移焦點、不展開：展開會記錄「已閱覽」，員工還沒真的看就不該記。按 Enter 或空白鍵就能展開。
+      function focusNextItem(target) {
+            if (!target) return;
+            const items = Array.from(root.querySelectorAll('.accordion-item'));
+            if (items.length === 0) return;   // 清單空了：焦點交給 focusEmptyAction
+            let item = null;
+            if (target.id) {
+                  const collapse = document.getElementById(target.id);
+                  if (collapse && root.contains(collapse)) item = collapse.closest('.accordion-item');
+            }
+            // 下一則不在這一頁了（例如處理的是這一頁最後一則）：用原本的位置，處理掉的那則移出清單後，後面的會補上來
+            if (!item) item = items[Math.min(target.index, items.length - 1)];
+            const btn = item.querySelector('.accordion-button');
+            if (!btn) return;
+            btn.focus({ preventScroll: true });
+            scrollItemToReadingLine(item);
+      }
+
+      // 等 modal 完全關好（關閉動畫結束）。焦點要在那之後才移，不然 Bootstrap 收尾時可能又把焦點搶走。
+      // 萬一 hidden 事件沒有來（例如早就關了），600 毫秒後照樣往下走。
+      function modalHidden(modalEl) {
+            return new Promise(function (resolve) {
+                  modalEl.addEventListener('hidden.bs.modal', function () { resolve(); }, { once: true });
+                  setTimeout(resolve, 600);
+            });
+      }
+
+      // 輸入框是空的（或只有空白）時停用「預覽並送出」，按鈕上直接寫要做什麼。
+      const REPLY_SUBMIT_READY = '<i class="bi bi-eye"></i> 預覽並送出';
+      const REPLY_SUBMIT_EMPTY = '輸入回覆內容後即可送出';
+      function syncReplySubmit(form) {
+            const btn = form.querySelector('.js-reply-submit');
+            const textarea = form.querySelector('.js-reply-text');
+            if (!btn || !textarea) return;
+            const ready = textarea.value.trim() !== '';
+            if (btn.disabled === !ready) return;   // 狀態沒變就不動，不必每打一個字就重畫按鈕
+            btn.disabled = !ready;
+            btn.innerHTML = ready ? REPLY_SUBMIT_READY : REPLY_SUBMIT_EMPTY;
       }
 
       function adjustCount(name, delta) {
@@ -866,6 +1016,7 @@
             // counter.parentElement.classList.toggle('text-danger', len > e.target.maxLength);
             counter.parentElement.classList.toggle('text-danger', len > replyMax(e.target));
             updateCannedFit(form);   // 10/25：放不下的罐頭回覆變淡
+            syncReplySubmit(form);   // 10/29：空的時候停用「預覽並送出」
 
             rememberDraft(e.target);   // 10/24：沒送出的回覆
 
@@ -981,6 +1132,7 @@
                   const form = previewForm;
                   previewError.textContent = '';
                   setPreviewLocked(true);
+                  const next = nextItemTarget(form.closest('.accordion-item'));   // 10/29：送出後焦點移到下一則
 
                   // new FormData(form) 會包含表單裡自動產生的防偽 token（template 裡的東西不會被送出）
                   post(form.action, new FormData(form))
@@ -990,7 +1142,10 @@
                               setPreviewLocked(false); // 先解鎖，hide 才不會被攔下來
                               previewModal.hide();
                               flash(res.data.message || '回覆已送出');
-                              return loadList(currentFilter());
+                              // 10/29：清單換好、預覽視窗也關好之後，焦點移到下一則。原本：
+                              // return loadList(currentFilter());
+                              return Promise.all([loadList(currentFilter()), modalHidden(previewModalEl)])
+                                    .then(function () { focusNextItem(next); });
                         })
                         .catch(function (err) {
                               // 例如別的員工剛回覆或標記了這則（409）。訊息顯示在視窗裡，關掉之後輸入框的內容還在
@@ -1043,6 +1198,23 @@
                         item.dataset.read = '0';    // 失敗就讓下次展開再試
                         flash('閱覽紀錄沒有存到：' + errorMessage(err), 'warning');
                   });
+      });
+
+      /* ── 10/29：展開、收合時捲動畫面 ─────────────────────
+         shown／hidden 在動畫結束後才觸發，這時量到的位置才是最後的位置。
+         只看每一則本身的展開區（accordion-collapse），不管裡面其他可能會展開的東西。 */
+      root.addEventListener('shown.bs.collapse', function (e) {
+            if (!e.target.classList.contains('accordion-collapse')) return;
+            const item = e.target.closest('.accordion-item');
+            if (item) scrollItemBelowHeader(item);
+      });
+
+      root.addEventListener('hidden.bs.collapse', function (e) {
+            if (!e.target.classList.contains('accordion-collapse')) return;
+            // 展開另一則時，原本展開的這則會被自動收合（data-bs-parent）。那是「換一則看」，畫面跟著新展開的那則走，這裡不捲
+            if (root.querySelector('.accordion-collapse.show, .accordion-collapse.collapsing')) return;
+            const item = e.target.closest('.accordion-item');
+            if (item) scrollItemToReadingLine(item);
       });
 
       /* ── 確認標記垃圾（modal 在 root 外面，直接掛）──────── */
@@ -1100,14 +1272,24 @@
             const buttons = [spamFinal, spamBack, spamConfirm].filter(Boolean);
             spamSending = true;
             buttons.forEach(function (b) { b.disabled = true; });
+            // 10/29：送出後焦點移到下一則
+            const spamCollapse = document.getElementById('rev-' + reviewIdOfUrl(spamUrl));
+            const next = nextItemTarget(spamCollapse ? spamCollapse.closest('.accordion-item') : null);
 
             post(spamUrl, { reason: reason })
                   .then(function (res) {
                         spamSending = false; // 先解除，hide 才不會被攔下來
                         replyDrafts.delete(reviewIdOfUrl(spamUrl));   // 10/24：標記成垃圾了，草稿不用留
                         spamModal.hide();
-                        flash(res.data.message || '已標記為垃圾');
-                        return loadList(currentFilter());
+                        // 10/29：通知 Index.cshtml 讓封存的數字重新顯示（自己點開過封存清單後是藏起來的）
+                        document.dispatchEvent(new CustomEvent('queue:spam-marked'));
+                        // 10/29：提示改成「已封存」（跟分頁標籤的名稱一致），用 toast 顯示。原本：
+                        // flash(res.data.message || '已標記為垃圾');
+                        flash('已封存');
+                        // 10/29：清單換好、視窗也關好之後，焦點移到下一則。原本：
+                        // return loadList(currentFilter());
+                        return Promise.all([loadList(currentFilter()), modalHidden(spamModalEl)])
+                              .then(function () { focusNextItem(next); });
                   })
                   .catch(function (err) {
                         spamError.textContent = errorMessage(err);
@@ -1127,6 +1309,9 @@
          整頁是由伺服器 render 的，沒有經過 loadList，
          所以要在這裡補標註一次（例如從書籤或別人給的網址進來）。 */
       highlight();
+      // 10/29：送出鈕的狀態（瀏覽器可能把上一次的輸入框內容自己填回去，不會觸發 input），空清單的焦點
+      root.querySelectorAll('.js-reply-form').forEach(syncReplySubmit);
+      focusEmptyAction();
 
 })();
 

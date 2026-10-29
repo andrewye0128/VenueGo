@@ -52,6 +52,13 @@
                   const state = document.getElementById('queueState');
                   if (state && state.dataset.tab === '@QueueTab.Spam') markSeen();
             });
+
+            // 10/29：自己標記了一則封存（數字變多），就把「看過了」清掉，封存的數字重新顯示；再點開封存清單一樣會藏起來。
+            //        areview-queue.js 標記成功、重新載入清單之前發出 queue:spam-marked
+            document.addEventListener('queue:spam-marked', function () {
+                  document.documentElement.removeAttribute(SEEN_ATTR);
+                  try { sessionStorage.removeItem(STORE_KEY); } catch { /* 存不了就只在這次載入有效 */ }
+            });
       })();
 </script>
 
@@ -119,10 +126,19 @@
                   <div class="modal-footer">
                         @* 10/23：第 1 個畫面用原本的「取消」「確定標記」（確定標記改成換到確認畫面，不送出）；
                            第 2 個畫面用「返回」「確定，標記為垃圾」。切換畫面時由 JS 換 d-none。原本的兩行沒有改。 *@
+                        @* 10/29：跟回覆預覽一樣，兩顆按鈕各佔一半、佔滿整行。四顆放在同一個兩欄的格子裡，
+                           JS 用 d-none 藏起來的那兩顆不佔格子，所以每個畫面都剛好是左右各一顆。原本：
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">取消</button>
                         <button type="button" class="btn btn-danger" id="spamConfirm">確定標記</button>
                         <button type="button" class="btn btn-outline-secondary d-none" id="spamBack">返回</button>
                         <button type="button" class="btn btn-danger d-none" id="spamFinal">確定，標記為垃圾</button>
+                        *@
+                        <div class="queue-modal-actions">
+                              <button type="button" class="btn btn-outline-secondary py-2" data-bs-dismiss="modal">取消</button>
+                              <button type="button" class="btn btn-danger py-2" id="spamConfirm">確定標記</button>
+                              <button type="button" class="btn btn-outline-secondary py-2 d-none" id="spamBack">返回</button>
+                              <button type="button" class="btn btn-danger py-2 d-none" id="spamFinal">確定，標記為垃圾</button>
+                        </div>
                   </div>
             </div>
       </div>
@@ -141,6 +157,10 @@
                         <h5 class="modal-title" id="replyPreviewTitle">
                               <i class="bi bi-eye me-2"></i>送出前預覽
                         </h5>
+                        @* 10/29：「送出後無法修改或刪除」從底部按鈕列移到標題右邊，按鈕列才能整行給兩顆按鈕 *@
+                        <span class="small text-danger-emphasis ms-3">
+                              <i class="bi bi-exclamation-circle"></i> 送出後無法修改或刪除
+                        </span>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="關閉"></button>
                   </div>
                   <div class="modal-body">
@@ -149,11 +169,19 @@
                         <div id="replyPreviewError" class="text-danger small mt-2"></div>
                   </div>
                   <div class="modal-footer">
+                        @* 10/29：兩顆按鈕各佔一半、佔滿整行，按鈕放大；提示文字移到標題右邊。原本：
                         <span class="small text-muted me-auto">送出後無法修改或刪除</span>
                         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">返回修改</button>
                         <button type="button" class="btn btn-primary" id="replyPreviewSend">
                               <i class="bi bi-send"></i> 確定送出
                         </button>
+                        *@
+                        <div class="queue-modal-actions">
+                              <button type="button" class="btn btn-outline-secondary py-2" data-bs-dismiss="modal">返回修改</button>
+                              <button type="button" class="btn btn-primary py-2" id="replyPreviewSend">
+                                    <i class="bi bi-send"></i> 確定送出
+                              </button>
+                        </div>
                   </div>
             </div>
       </div>

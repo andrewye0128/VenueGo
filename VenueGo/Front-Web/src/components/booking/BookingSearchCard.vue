@@ -20,7 +20,9 @@ const router = useRouter();
 // 圖示名稱要寫完整，Nuxt UI 打包時才掃描得到
 const linkTo = (label) => mainNavItems.find((item) => item.label === label)?.to;
 const tabLinks = [
-  { label: "收費標準", to: linkTo("收費標準"), icon: "i-mdi-cash-multiple" },
+  // 10/30 先註解：Header 主選單（navigation.js 的 mainNavItems）已經沒有「收費標準」，
+  // linkTo 找不到網址會是 undefined，RouterLink 會發出警告。收費標準頁做好、加回主選單後再打開
+  // { label: "收費標準", to: linkTo("收費標準"), icon: "i-mdi-cash-multiple" },
   { label: "場館資訊", to: linkTo("場館資訊"), icon: "i-mdi-office-building-outline" },
   { label: "最新消息", to: linkTo("最新消息"), icon: "i-mdi-newspaper-variant-outline" },
 ];

@@ -1,16 +1,39 @@
 <script setup>
 // 原本：import { ref, computed, onMounted, onUnmounted } from "vue";
-import { ref, computed } from "vue";
+import { ref, computed, onMounted } from "vue";
 import { RouterLink } from "vue-router";
 import IconUsers from "@/components/icons/IconUsers.vue";
 import IconCalendar from "@/components/icons/IconCalendar.vue";
 import IconClock from "@/components/icons/IconClock.vue";
 import ConfirmModal from "@/components/ConfirmModal.vue";
 import { useSiteClock } from "@/composables/useSiteClock";
+import { GetCurrentPeopleCount } from "@/api/ticketApi";
 
-defineProps({
-  // 目前先寫死，之後改接後端 API
-  onlineCount: { type: Number, default: 86 },
+// defineProps({
+//   // 目前先寫死，之後改接後端 API
+//   onlineCount: { type: Number, default: 0 },
+// });
+const attendeesNumber = ref({ totalNumber: 0 });
+const loading = ref(false);
+const errorMsg = ref("");
+
+async function getattendeesNumber({ silent = false } = {}) {
+  if (!silent) {
+    loading.value = true;
+    errorMsg.value = "";
+  }
+  try {
+    attendeesNumber.value = await GetCurrentPeopleCount();
+  } catch (err) {
+    console.log("loading人數發生錯誤", err);
+    errorMsg.value = err.message;
+  } finally {
+    loading.value = false;
+  }
+}
+
+onMounted(() => {
+  getattendeesNumber();
 });
 
 // ── 原本的寫法（昱 10/8：計時器搬進 useSiteClock，元件移除時它會自己清掉）──
@@ -176,7 +199,7 @@ async function confirmReset() {
         <span class="flex items-center gap-1.5">
           <IconUsers class="h-4 w-4" />
           <span class="hidden xl:inline">站內</span>
-          <span class="tabular-nums">{{ onlineCount }} 人</span>
+          <span class="tabular-nums">{{ attendeesNumber.totalNumber }} 人</span>
         </span>
       </div>
     </div>

@@ -216,7 +216,10 @@
       /* 10/25：罐頭回覆放不放得下。放不下的按鈕變淡（aria-disabled），還是可以按，按了會說明為什麼沒有加進去。
          不用 disabled：停用的按鈕不會觸發點擊，也不會顯示提示文字，員工只會覺得「按了沒反應」。 */
       function cannedInsertText(textarea, canned) {
-            return textarea.value ? '\n' + canned.dataset.text : canned.dataset.text;
+            // 10/29：最後一行是空的（還沒打字，或剛按了 Enter）就直接插在這一行，不再多換一行。原本：
+            // return textarea.value ? '\n' + canned.dataset.text : canned.dataset.text;
+            const lastLineEmpty = textarea.value === '' || textarea.value.endsWith('\n');
+            return lastLineEmpty ? canned.dataset.text : '\n' + canned.dataset.text;
       }
       function updateCannedFit(form) {
             const textarea = form.querySelector('.js-reply-text');

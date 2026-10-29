@@ -47,8 +47,8 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useRepeatPress } from "@/composables/useRepeatPress";
-import { RouterLink } from "vue-router";
 import { getFeaturedReviews } from "@/api/reviewApi";
+import SectionMoreLink from "@/components/SectionMoreLink.vue";
 import ReviewCard from "@/components/review/ReviewCard.vue";
 import StarView from "@/components/review/StarView.vue";
 import IconChevronLeftBold from "@/components/icons/IconChevronLeftBold.vue";
@@ -238,13 +238,8 @@ const carouselUi = {
         />
         <h2 class="text-2xl font-bold text-neutral-text-primary">顧客評價</h2>
       </div>
-      <RouterLink
-        :to="{ name: 'review-index' }"
-        class="inline-flex items-center gap-1 text-base font-semibold text-brand-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
-      >
-        看全部評價
-        <IconChevronRightBold class="size-4 self-center" aria-hidden="true" />
-      </RouterLink>
+      <!-- 10/29：樣式搬到共用的 SectionMoreLink，首頁三個區塊（評價、場地、消息）的「看全部」一致 -->
+      <SectionMoreLink :to="{ name: 'review-index' }">看全部評價</SectionMoreLink>
     </div>
 
     <!-- 載入中：卡片骨架，張數跟輪播一樣（手機 1、平板 2、電腦 3） -->

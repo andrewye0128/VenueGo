@@ -385,7 +385,7 @@ async function openCancel(reservation) {
       <template #actions-cell="{ row }">
         <div class="flex gap-2">
           <!-- 每一列都有「查看」，讀屏軟體只唸「查看」會分不出是哪一筆，所以補上 aria-label
-               外框按鈕（outline）：跟「訂單與付款」頁一致；顏色維持原本的藍（查看）、橘（取消）
+               外框按鈕（outline）：跟「訂單與付款」頁一致；顏色：查看＝藍、取消＝紅（跟明細視窗的「取消預約」一致）
                :loading-auto="false"：全站按鈕預設會在 async 的 @click 執行期間轉圈（vite.config.js 的 loadingAuto），
                openDetail／openCancel 會等視窗關閉才結束，不關掉的話視窗開著時按鈕一直轉圈 -->
           <UButton
@@ -401,7 +401,7 @@ async function openCancel(reservation) {
           </UButton>
           <UButton
             v-if="isCancellable(row.original)"
-            color="action"
+            color="error"
             variant="outline"
             size="sm"
             class="whitespace-nowrap"
@@ -471,7 +471,7 @@ async function openCancel(reservation) {
               </UButton>
               <UButton
                 v-if="isCancellable(row)"
-                color="action"
+                color="error"
                 variant="outline"
                 :aria-label="`取消 ${rowName(row)} 預約`"
                 :loading-auto="false"

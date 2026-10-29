@@ -12,13 +12,13 @@ const reviews = { label: "顧客評價", to: "/reviews" };
 const faq = { label: "常見問題", to: "/faq" };
 
 // Header 主選單
-export const mainNavItems = [about, booking, pricing, venues, news, reviews, faq];
+export const mainNavItems = [about, booking, venues, news, reviews, faq];
 
 // Footer 連結分組
 export const footerLinkGroups = [
   {
     title: "預約服務",
-    links: [booking, pricing],
+    links: [booking],
   },
   {
     title: "會員",

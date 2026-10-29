@@ -12,17 +12,15 @@ namespace VenueGo.Services.CheckIn
     public class CheckInService : ICheckInService
     {
         private readonly dbVenueContext _db;
-        private readonly IVisitReviewTicketFactory _visitReviewTicketFactory;
         private readonly ILogger<CheckInService> _logger;
         private readonly ITimeService _time;
 
-        public CheckInService(dbVenueContext db, IVisitReviewTicketFactory visitReviewTicketFactory, ITimeService time, ILogger<CheckInService> logger)
+        public CheckInService(dbVenueContext db, ITimeService time, ILogger<CheckInService> logger)
         {
 
             _db = db;
             _time = time;
             _logger = logger;
-            _visitReviewTicketFactory = visitReviewTicketFactory;
         }
 
 
@@ -237,11 +235,6 @@ namespace VenueGo.Services.CheckIn
 
             await _db.SaveChangesAsync();
 
-            // 當入場成功時呼叫, 這裡多一個判斷首次入場條件, 優化CreateReviewPerVisitAsync(有防呆)多次不必要查詢
-            if (isFirstEntry)
-            {
-                await _visitReviewTicketFactory.CreateReviewPerVisitAsync(ticket.Qrtoken);
-            }
             // 回傳驗證結果(前台顯示進出成功或是失敗)
             return isVaild ? CheckInResult.Ok() : CheckInResult.Fail(CheckInFailReason.InvalidSequence);
         }
@@ -310,10 +303,6 @@ namespace VenueGo.Services.CheckIn
                 FailReason = isValid ? null : (byte)CheckInFailReason.InvalidSequence
             });
             await _db.SaveChangesAsync();
-            if (isValid)
-            {
-                await _visitReviewTicketFactory.RecordVisitEndTimeAsync(ticketId);
-            }
             return isValid ? CheckInResult.Ok() : CheckInResult.Fail(CheckInFailReason.InvalidSequence);
         }
 
@@ -363,7 +352,7 @@ namespace VenueGo.Services.CheckIn
                 chargelog.Remark = string.IsNullOrWhiteSpace(remark) ? null : remark.Trim();
             }
 
-            //(一次儲存同一個交易)放行並更改票券, 記錄出場 => 評論也能使用 => 回傳超時付款金額
+            //(一次儲存同一個交易)放行並更改票券, 記錄出場 =>  回傳超時付款金額
             ticket.Status = (byte)EntryTicketStatus.Completed;
             _db.CheckInLogs.Add(new CheckInLog
             {
@@ -377,9 +366,6 @@ namespace VenueGo.Services.CheckIn
             });
 
             await _db.SaveChangesAsync();
-
-            await _visitReviewTicketFactory.RecordVisitEndTimeAsync(ticketId);
-
             return OvertimePaymentResult.OK(chargelog.ChargeAmount);
         }
 

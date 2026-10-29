@@ -3,6 +3,7 @@
 // UCarousel、UButton、USkeleton 由 Nuxt UI 自動匯入
 import { computed, onMounted, ref } from "vue";
 import { getVenues } from "@/api/venueApi";
+import SectionMoreLink from "@/components/SectionMoreLink.vue";
 import VenueCard from "@/components/venues/VenueCard.vue";
 import IconMapPin from "@/components/icons/IconMapPin.vue";
 import IconChevronLeftBold from "@/components/icons/IconChevronLeftBold.vue";
@@ -67,20 +68,16 @@ const carouselUi = {
 
 <template>
   <section>
-    <!-- 區塊標題：h2（首頁的 h1 在 HomeView）；右邊「看全部場地」連到場館資訊頁 -->
-    <div class="flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <IconMapPin class="size-6 text-brand-accent" />
+    <!-- 區塊標題：h2（首頁的 h1 在 HomeView）；右邊「看全部場地」連到場館資訊頁
+         10/29：「看全部」改用共用的 SectionMoreLink，標題列的排法跟首頁的顧客評價一致：
+         items-baseline 讓「看全部場地」和「場地介紹」的字對齊同一條底線，窄螢幕放不下時換行 -->
+    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+      <div class="flex items-baseline gap-2">
+        <!-- 標題列改成對齊底線後，圖示要自己置中（self-center），不然會往上跑 -->
+        <IconMapPin class="size-6 shrink-0 self-center text-brand-accent" aria-hidden="true" />
         <h2 class="text-2xl font-bold text-neutral-text-primary">場地介紹</h2>
       </div>
-      <UButton
-        color="primary"
-        variant="link"
-        trailing-icon="i-mdi-chevron-right"
-        :to="allVenuesLink"
-      >
-        看全部場地
-      </UButton>
+      <SectionMoreLink :to="allVenuesLink">看全部場地</SectionMoreLink>
     </div>
 
     <!-- 載入中：灰色卡片骨架，張數跟輪播一樣（手機 1、平板 2、電腦 4） -->

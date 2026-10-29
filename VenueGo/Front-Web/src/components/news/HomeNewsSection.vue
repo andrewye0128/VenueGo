@@ -1,8 +1,9 @@
 <script setup>
-// 首頁「最新消息」區塊：最新 8 則消息的圖卡輪播 + 「看更多」連結到列表頁
-// UButton、UCarousel、UIcon、USkeleton 由 Nuxt UI 自動匯入
+// 首頁「最新消息」區塊：最新 8 則消息的圖卡輪播 + 「看全部消息」連結到列表頁
+// UCarousel、UIcon、USkeleton 由 Nuxt UI 自動匯入
 import { onMounted, ref } from "vue";
 import { getNewsList } from "@/api/newsApi";
+import SectionMoreLink from "@/components/SectionMoreLink.vue";
 import NewsCard from "@/components/news/NewsCard.vue";
 import IconChevronLeftBold from "@/components/icons/IconChevronLeftBold.vue";
 import IconChevronRightBold from "@/components/icons/IconChevronRightBold.vue";
@@ -53,15 +54,20 @@ const carouselUi = {
 
 <template>
   <section>
-    <!-- 區塊標題：h2（首頁的 h1 在 HomeView）；右邊「看更多」連到列表頁 -->
-    <div class="flex items-center justify-between gap-2">
-      <div class="flex items-center gap-2">
-        <UIcon name="i-mdi-newspaper-variant-outline" class="size-6 text-brand-accent" />
+    <!-- 區塊標題：h2（首頁的 h1 在 HomeView）；右邊「看全部消息」連到列表頁
+         10/29：「看全部」改用共用的 SectionMoreLink，標題列的排法跟首頁的顧客評價一致：
+         items-baseline 讓「看全部消息」和「最新消息」的字對齊同一條底線，窄螢幕放不下時換行 -->
+    <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-2">
+      <div class="flex items-baseline gap-2">
+        <!-- 標題列改成對齊底線後，圖示要自己置中（self-center），不然會往上跑 -->
+        <UIcon
+          name="i-mdi-newspaper-variant-outline"
+          class="size-6 shrink-0 self-center text-brand-accent"
+          aria-hidden="true"
+        />
         <h2 class="text-2xl font-bold text-neutral-text-primary">最新消息</h2>
       </div>
-      <UButton color="primary" variant="link" trailing-icon="i-mdi-chevron-right" to="/news">
-        看全部消息
-      </UButton>
+      <SectionMoreLink to="/news">看全部消息</SectionMoreLink>
     </div>
 
     <!-- 載入中：灰色卡片骨架，張數跟輪播一次顯示的一樣（手機 1、平板 2、電腦 4） -->

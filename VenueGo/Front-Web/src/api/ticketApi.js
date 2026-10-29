@@ -39,3 +39,8 @@ export async function cancelTransfer(ticketId) {
 export async function redeemTransfer(code) {
   await http.post("/tickets/redeem", { code });
 }
+
+export async function GetCurrentPeopleCount() {
+  const { data } = await http.get("/tickets/venue-headcount");
+  return data;
+}

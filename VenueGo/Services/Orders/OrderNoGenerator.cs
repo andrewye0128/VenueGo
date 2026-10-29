@@ -1,7 +1,4 @@
-﻿using System;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
+﻿using System.Globalization;
 using Microsoft.EntityFrameworkCore;
 using VenueGo.Data;
 
@@ -25,9 +22,11 @@ namespace VenueGo.Services.Orders
             _db = db;
         }
 
-        public async Task<string> GenerateAsync(CancellationToken cancellationToken = default)
+        public async Task<string> GenerateAsync(
+            DateTime orderCreatedAt, CancellationToken cancellationToken = default)
         {
-            var datePart = $"{Prefix}{DateTime.Now:yyyyMMdd}";
+            // InvariantCulture：不管電腦設定成哪個語系，日期都是西元年的數字（同綠界的日期格式）
+            var datePart = Prefix + orderCreatedAt.ToString("yyyyMMdd", CultureInfo.InvariantCulture);
 
             // 每次呼叫都重新查詢。重試時才會看到對方剛寫進去的那一筆，
             // 否則重試也只會算出同樣的編號。

@@ -27,6 +27,12 @@ namespace VenueGo.Services.Orders
         /// 呼叫端必須接住唯一鍵衝突並重新呼叫本方法重試。
         /// </para>
         /// </summary>
-        Task<string> GenerateAsync(CancellationToken cancellationToken = default);
+        /// <param name="orderCreatedAt">
+        /// 下單時間（Orders.OrderCreatedAt 的同一個值），編號的日期取自它。
+        /// 由呼叫端傳入，不在這裡自己取現在時間：編號日期和下單時間才會一模一樣
+        /// （自己再取一次的話，剛好跨過午夜就會差一天），開時光機時也會跟著網站時間走
+        /// </param>
+        /// <param name="cancellationToken">呼叫的地方要取消時用</param>
+        Task<string> GenerateAsync(DateTime orderCreatedAt, CancellationToken cancellationToken = default);
     }
 }

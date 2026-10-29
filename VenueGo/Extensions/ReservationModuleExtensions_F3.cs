@@ -49,11 +49,31 @@ namespace VenueGo.Extensions
             // 收款確認：後台標記已付款、綠界付款成功共用（改狀態、建票券、逾期後收款的處理）
             services.AddScoped<IPaymentConfirmationService, PaymentConfirmationService>();
 
+            // 開始線上付款：檢查能不能付、付款改成處理中、產生綠界付款單
+            services.AddScoped<IEcpayCheckoutService, EcpayCheckoutService>();
+
+            // 主動問綠界付款結果（QueryTradeInfo）：收到失敗通知時確認、3-C-5 排程也會用。連線 10 秒逾時
+            services.AddHttpClient(EcpayTradeQueryService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(10));
+            services.AddScoped<IEcpayTradeQueryService, EcpayTradeQueryService>();
+
+            // 綠界付款結果：記錄和綠界的每一次往來（PaymentTransactions）、處理伺服器通知和瀏覽器帶回
+            services.AddScoped<IPaymentTransactionRecorder, PaymentTransactionRecorder>();
+
+            // 付款確認員：綠界說付了→收款；問綠界→依回答處理（通知、排程對帳、開始付款共用）
+            services.AddScoped<IEcpayPaymentVerifier, EcpayPaymentVerifier>();
+            services.AddScoped<IEcpayNotificationService, EcpayNotificationService>();
+
             // 逾期排程：每 1 分鐘把超過付款期限、還沒付款的預約改成已逾期，並釋放時段
             services.AddScoped<IReservationExpiryService, ReservationExpiryService>();
 
             // 預約逾期背景排程
             services.AddHostedService<ReservationExpiryHostedService>();
+
+            // 付款對帳：主動問綠界卡在「付款處理中」的付款（3-C-5）
+            services.AddScoped<IPaymentReconciliationService, PaymentReconciliationService>();
+
+            // 付款對帳背景排程：每 1 分鐘一輪
+            services.AddHostedService<PaymentReconciliationHostedService>();
 
             return services;
         }

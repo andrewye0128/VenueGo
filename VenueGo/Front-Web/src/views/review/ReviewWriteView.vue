@@ -26,7 +26,8 @@
     後端回來的欄位錯誤用 UForm 的 setErrors 放回對應的欄位底下，兩邊的錯誤顯示在同一個位置。
 -->
 <script setup>
-import { ref, reactive, computed, watch, onMounted } from "vue";
+// 10/31：多了 nextTick（一進來把焦點放在評論內容）。原本：import { ref, reactive, computed, watch, onMounted } from "vue";
+import { ref, reactive, computed, watch, onMounted, nextTick } from "vue";
 import { useRoute, useRouter } from "vue-router"; // 10/23：useRoute 給「登入後繼續撰寫」帶回這一頁的網址
 import { z } from "zod";
 import { getWriteForm, createReview } from "@/api/reviewApi";
@@ -37,6 +38,10 @@ import { useDraft } from "@/composables/useDraft";
 import { reviewDraftKey } from "@/utils/review/draftKey";
 import { useMemberStore } from "@/stores/member";
 import StarInput from "@/components/review/StarInput.vue";
+// 10/31：標籤文字、回來源、明細視窗
+import { MENTION_TAGS } from "@/constants/review";
+import { reviewSource } from "@/utils/review/reviewSources";
+import { useReviewDetailModals } from "@/composables/useReviewDetailModals";
 import ConfirmModal from "@/components/ConfirmModal.vue";
 
 const props = defineProps({
@@ -49,6 +54,19 @@ const router = useRouter();
 const route = useRoute();
 const memberStore = useMemberStore();
 const confirmModal = useOverlay().create(ConfirmModal);
+
+// 10/31：從哪一頁來（?from=），「← 回…」按鈕回那裡；上方資訊區的「查看預約詳情／查看訂單詳情」
+const source = computed(() => reviewSource(route.query.from));
+const detail = useReviewDetailModals();
+
+// 10/31：還沒選星等時，送出鈕看起來不能按（變淡；滑鼠移上去提示「星等必填」），但還是可以按：
+//   按了照原本的驗證顯示「請選擇星等」，再把畫面捲回頂部，方便選星（onFormError）。
+//   不用 disabled：停用的按鈕不會觸發點擊，有的瀏覽器也不顯示提示文字，顧客只會覺得「按了沒反應」。
+const starMissing = computed(() => state.starRating == null);
+function onFormError(event) {
+  const starError = event.errors.some((e) => e.name === "starRating");
+  if (starError) window.scrollTo({ top: 0, behavior: "smooth" });
+}
 
 // ── 頁面狀態 ──
 const pageState = ref("loading"); // 'loading' | 'blocked' | 'ready'
@@ -141,7 +159,11 @@ function handleEligibility(e) {
       // 已經評過：草稿沒有用了，清掉，直接去看那則評論
       draft.discard();
       // 10/25 改名 ticket → orderId
-      router.replace(mineRoute(props.kind, props.orderId));
+      // 10/31：來源一起帶過去，查看頁的「← 回…」才回得去。原本：router.replace(mineRoute(props.kind, props.orderId));
+      router.replace({
+        ...mineRoute(props.kind, props.orderId),
+        query: { from: route.query.from },
+      });
       return true;
     // 10/23：沒登入（多半是 token 過期，或在別的分頁登出了）分出來，不清草稿：
     //   登入後回到這一頁，草稿會被 draft.start() 代回來，可以接著寫。
@@ -186,6 +208,9 @@ onMounted(async () => {
     state.isPublic = data.form.initial.isPublic;
     pageState.value = "ready";
     draft.start(); // 有草稿就代入；代入之後才開始追蹤「有沒有改過」
+    // 10/31：焦點放在評論內容（文字輸入框用程式移過去也會畫焦點框）。不捲動：上面的星等也要看得到
+    await nextTick();
+    document.querySelector("form textarea")?.focus({ preventScroll: true });
   } catch (e) {
     if (!handleEligibility(e)) {
       pageState.value = "blocked";
@@ -215,7 +240,8 @@ async function onSubmit() {
     draft.discard(); // 先清草稿、停止攔截，下一行換頁才不會跳「尚未儲存」
     // replace 而不是 push：按上一頁不該回到一張已經送出的表單
     // 10/25 改名 ticket → orderId
-    router.replace(mineRoute(props.kind, props.orderId));
+    // 10/31：from=write：查看頁只放「回我的評論 →」（剛寫完，回來源沒意義）。原本：router.replace(mineRoute(props.kind, props.orderId));
+    router.replace({ ...mineRoute(props.kind, props.orderId), query: { from: "write" } });
   } catch (e) {
     if (handleEligibility(e)) return;
     if (e.errorCode === ErrorCodes.ValidationFailed) {
@@ -241,9 +267,14 @@ async function saveDraft(event) {
 
 const kindText = computed(() => kindInfo(props.kind)); // 圖示與文字，見 constants/review.js
 
+// 10/31：文字改成跟其他頁的標籤一樣（場地設施、人員服務，constants/review.js 的 MENTION_TAGS）。原本：
+// const mentionOptions = [
+//   { key: "mentionsVenue", label: "提及場地" },
+//   { key: "mentionsStaff", label: "提及服務" },
+// ];
 const mentionOptions = [
-  { key: "mentionsVenue", label: "提及場地" },
-  { key: "mentionsStaff", label: "提及服務" },
+  { key: "mentionsVenue", label: MENTION_TAGS.venue.label },
+  { key: "mentionsStaff", label: MENTION_TAGS.staff.label },
 ];
 </script>
 
@@ -286,12 +317,22 @@ const mentionOptions = [
         />
       </div>
       <!-- 10/13：撰寫的入口只有「我的評論」，返回也回那裡（原本回評論專區） -->
+      <!-- 10/31：入口多了我的預約、我的票券，回來源（?from=）。原本：
       <UButton
         v-else
         :to="{ name: 'member-reviews' }"
         color="primary"
         variant="outline"
         label="回我的評論"
+      />
+      -->
+      <UButton
+        v-else
+        :to="source.to"
+        color="primary"
+        variant="outline"
+        icon="i-lucide-arrow-left"
+        :label="source.backLabel"
       />
     </div>
 
@@ -302,8 +343,10 @@ const mentionOptions = [
       :state="state"
       class="space-y-6 rounded-lg border border-neutral-border bg-neutral-surface p-4 md:p-6"
       @submit="onSubmit"
+      @error="onFormError"
     >
       <!-- 確認區塊：你正在評哪一筆 -->
+      <!-- 10/31：右邊加「查看預約詳情／查看訂單詳情」，打開明細視窗（現場→預約明細、預約→訂單明細）。原本：
       <div
         v-if="setup.context.primary"
         class="rounded-lg border border-neutral-border bg-brand-background p-3"
@@ -315,6 +358,31 @@ const mentionOptions = [
         <div v-if="setup.context.secondary" class="text-sm text-neutral-text-secondary">
           {{ setup.context.secondary }}
         </div>
+      </div>
+      -->
+      <div
+        v-if="setup.context.primary"
+        class="flex flex-wrap items-center gap-3 rounded-lg border border-neutral-border bg-brand-background p-3"
+      >
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-1 font-semibold text-neutral-text-primary">
+            <UIcon :name="kindText.icon" aria-hidden="true" />
+            {{ setup.context.primary }}
+          </div>
+          <div v-if="setup.context.secondary" class="text-sm text-neutral-text-secondary">
+            {{ setup.context.secondary }}
+          </div>
+        </div>
+        <!-- 按下去先查資料（全站的 loadingAuto 會讓按鈕轉圈），查到才打開視窗 -->
+        <UButton
+          color="primary"
+          variant="outline"
+          size="sm"
+          icon="i-lucide-file-text"
+          :label="detail.label(kind)"
+          class="shrink-0"
+          @click="detail.open(kind, orderId)"
+        />
       </div>
 
       <UFormField label="評分" name="starRating" required>
@@ -332,16 +400,19 @@ const mentionOptions = [
             {{ length }} / {{ maxLength }}
           </span>
         </template>
+        <!-- 10/31：拖右下角縮小時，最少保留一行字的高度（min-h-10：一行字＋上下內距）。原本沒有 :ui -->
         <UTextarea
           v-model="state.reviewContent"
           :rows="8"
           :maxlength="maxLength"
           :placeholder="kindText.placeholder"
+          :ui="{ base: 'min-h-10' }"
           class="w-full"
         />
       </UFormField>
 
-      <UFormField v-if="setup.form.showMentions" label="這則評論提到了⋯（可複選）">
+      <!-- 10/31：原本 label="這則評論提到了⋯（可複選）" -->
+      <UFormField v-if="setup.form.showMentions" label="這則評論是關於⋯（可複選）">
         <div class="flex flex-wrap gap-2">
           <UCheckbox
             v-for="opt in mentionOptions"
@@ -384,9 +455,11 @@ const mentionOptions = [
         role="alert"
       />
 
-      <!-- 送出與草稿。
+      <!-- 10/31：按鈕排列改成「左：← 回來源；右：儲存草稿、送出（最右）」，送出跟儲存草稿一樣寬（min-w-32）。
+           原本（裡面的註解符號改成 <!~~ ~~>）：
+      <!~~ 送出與草稿。
                  送出按鈕關掉全站預設的 loadingAuto：送出前要先等使用者在確認視窗按「送出」，
-                 那段時間按鈕不該轉圈。真正呼叫後端時才用 submitting 顯示轉圈。 -->
+                 那段時間按鈕不該轉圈。真正呼叫後端時才用 submitting 顯示轉圈。 ~~>
       <div class="flex flex-wrap items-center gap-2 border-t border-neutral-border pt-4">
         <UButton
           type="submit"
@@ -405,7 +478,7 @@ const mentionOptions = [
           :loading-auto="false"
           @click="saveDraft"
         />
-        <!-- 10/13：同上，回「我的評論」的待評論分頁 -->
+        <!~~ 10/13：同上，回「我的評論」的待評論分頁 ~~>
         <UButton
           :to="{ name: 'member-reviews' }"
           color="primary"
@@ -414,6 +487,54 @@ const mentionOptions = [
           class="ms-auto"
         />
         <small v-if="savedAtText" class="w-full text-neutral-text-secondary" aria-live="polite">
+          {{ savedAtText }}
+        </small>
+      </div>
+      -->
+      <!-- 送出按鈕關掉全站預設的 loadingAuto：送出前要先等使用者在確認視窗按「送出」，
+           那段時間按鈕不該轉圈。真正呼叫後端時才用 submitting 顯示轉圈。 -->
+      <!-- 10/31 手機版：一行放不下，改成兩行——第一行「← 回…」「儲存草稿」各半，第二行整行「送出」。
+           sm 以上維持一行（左：回…；右：儲存草稿、送出）。原本：<div class="flex flex-wrap items-center gap-2 …"> -->
+      <div
+        class="grid grid-cols-2 gap-2 border-t border-neutral-border pt-4 sm:flex sm:flex-wrap sm:items-center"
+      >
+        <UButton
+          :to="source.to"
+          color="primary"
+          variant="ghost"
+          size="lg"
+          icon="i-lucide-arrow-left"
+          :label="source.backLabel"
+          class="justify-center sm:justify-start"
+        />
+        <UButton
+          color="primary"
+          variant="outline"
+          size="lg"
+          icon="i-lucide-save"
+          label="儲存草稿"
+          :loading-auto="false"
+          class="justify-center sm:ms-auto sm:min-w-32"
+          @click="saveDraft"
+        />
+        <UButton
+          type="submit"
+          color="primary"
+          size="lg"
+          icon="i-lucide-send"
+          label="送出"
+          :loading-auto="false"
+          :loading="submitting"
+          class="col-span-2 justify-center sm:min-w-32"
+          :class="{ 'opacity-50': starMissing }"
+          :title="starMissing ? '星等必填' : undefined"
+          :aria-disabled="starMissing ? 'true' : undefined"
+        />
+        <small
+          v-if="savedAtText"
+          class="col-span-2 w-full text-end text-neutral-text-secondary"
+          aria-live="polite"
+        >
           {{ savedAtText }}
         </small>
       </div>

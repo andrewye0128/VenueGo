@@ -220,7 +220,8 @@ namespace VenueGo.Services.Reviews
                                 {
                                     d.ReviewKind, d.OrderId, d.OrderNo, d.VenueName, d.RentStartTime,
                                     d.StarRating, d.ReviewContent, d.CreatedAt, d.IsPublic,
-                                    d.SpamMarkedAt, d.RepliedAt, d.ReplyViewedAt
+                                    d.SpamMarkedAt, d.RepliedAt, d.ReplyViewedAt,
+                                    d.ReplySatisfaction   // 10/31：AwaitingSatisfaction 用
                                 })
                                 .ToListAsync();
 
@@ -238,7 +239,9 @@ namespace VenueGo.Services.Reviews
                            IsPublic: d.IsPublic,
                            IsSpamMarked: d.SpamMarkedAt != null,
                            HasReply: d.RepliedAt != null,
-                           HasUnviewedReply: d.RepliedAt != null && d.ReplyViewedAt == null))
+                           // 10/31：多了 AwaitingSatisfaction。原本這一行結尾是 "))"
+                           HasUnviewedReply: d.RepliedAt != null && d.ReplyViewedAt == null,
+                           AwaitingSatisfaction: d.RepliedAt != null && d.SpamMarkedAt == null && d.ReplySatisfaction == null))
                        .ToList();
         }
 

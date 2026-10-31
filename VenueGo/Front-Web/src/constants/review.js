@@ -9,6 +9,7 @@ export const REVIEW_KINDS = Object.freeze({
     label: "現場評論", // 10/10：「我的評論」清單的卡片標題
     icon: "i-lucide-map-pin",
     tileClass: "bg-brand-primary/10 text-brand-primary", // 10/12：「我的評論」每列左邊圖示方塊的顏色
+    openClass: "border-brand-primary bg-brand-primary/10", // 10/31：已評論展開時的左邊線＋底色（現場＝淡藍）
     subtitle: "這次到場使用的感想",
     placeholder: "",
   },
@@ -16,6 +17,7 @@ export const REVIEW_KINDS = Object.freeze({
     label: "預約評論",
     icon: "i-lucide-receipt",
     tileClass: "bg-brand-action/10 text-brand-action",
+    openClass: "border-brand-action bg-brand-action/10", // 10/31：已評論展開時的左邊線＋底色（預約＝淡橘，跟圖示方塊同色）
     subtitle: "這次預約流程的感想",
     placeholder: "訂位流程、付款方式、通知是否清楚，都可以暢所欲言",
   },
@@ -66,4 +68,13 @@ export const AVATAR_TONES = Object.freeze([
 export const MENTION_TAGS = Object.freeze({
   venue: { label: "場地設施", color: "primary", icon: "i-lucide-building-2" },
   staff: { label: "人員服務", color: "action", icon: "i-lucide-user-round" },
+});
+
+// 10/31：從哪一頁來到撰寫頁／查看頁（網址的 ?from=），決定「← 回…」按鈕的文字和去處。
+// 我的預約、我的票券上的評論按鈕會帶上 from（composables/useReviewStatuses.js）；沒帶就是從「我的評論」來的。
+// 怎麼查：utils/review/reviewSources.js 的 reviewSource(from)
+export const REVIEW_SOURCES = Object.freeze({
+  reviews: { backLabel: "回我的評論", to: { name: "member-reviews" } },
+  reservations: { backLabel: "回我的預約", to: { name: "reservations" } },
+  tickets: { backLabel: "回我的票券", to: { name: "tickets" } },
 });

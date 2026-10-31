@@ -35,6 +35,7 @@ import { MENTION_TAGS, REPLY_SATISFACTION } from "@/constants/review";
 import { kindInfo } from "@/utils/review/reviewKinds";
 import { shortDate } from "@/utils/review/shortDate";
 import StarView from "@/components/review/StarView.vue";
+import { moveFocusByArrows } from "@/utils/arrowFocus"; // 10/31：表態按鈕之間 ←→
 
 // 顧客模式傳 kind + ticket；預覽模式只傳 previewId（種類由 API 回傳的 kind 決定）
 // 10/25：ticket 改名 orderId（訂單 Id）
@@ -51,7 +52,14 @@ const props = defineProps({
 //   reply-viewed：已記錄「顧客看過回覆」→ 清單的「新回覆」標籤拿掉
 //   visibility-changed：公開狀態切換成功（參數是新的 isPublic）
 //   load-error：讀取失敗（參數是 ErrorCodes），外層依原因決定要放哪些按鈕（10/23）
-const emit = defineEmits(["reply-viewed", "visibility-changed", "load-error"]);
+// 10/31：多了 satisfaction-changed（表態之後，我的評論清單拿掉「您是否滿意？」）。原本：
+// const emit = defineEmits(["reply-viewed", "visibility-changed", "load-error"]);
+const emit = defineEmits([
+  "reply-viewed",
+  "visibility-changed",
+  "load-error",
+  "satisfaction-changed",
+]);
 
 const vm = ref(null);
 const loadError = ref("");
@@ -153,6 +161,7 @@ async function rate(value) {
     const data = await setSatisfaction(props.kind, props.orderId, value);
     vm.value.reply.satisfaction = data.satisfaction;
     vm.value.reply.canRateSatisfaction = false;
+    emit("satisfaction-changed"); // 10/31
   } catch (e) {
     actionError.value = e.message;
     if (e.errorCode === ErrorCodes.AlreadyRated) {
@@ -355,7 +364,12 @@ async function rate(value) {
           <!-- 未表態：三顆按鈕；已表態：顯示結果 -->
           <div v-if="vm.reply.canRateSatisfaction" class="mt-3 border-t border-neutral-border pt-3">
             <div class="mb-2 text-sm text-neutral-text-secondary">這則回覆對你有幫助嗎？</div>
-            <div class="flex flex-wrap gap-2">
+            <!-- 10/31：←→ 在三個選項之間換焦點；data-satisfaction-options 讓我的評論清單從整則評論按 ←→ 跳進來 -->
+            <div
+              class="flex flex-wrap gap-2"
+              data-satisfaction-options
+              @keydown="moveFocusByArrows"
+            >
               <UButton
                 v-for="s in REPLY_SATISFACTION"
                 :key="s.value"

@@ -18,5 +18,7 @@ namespace VenueGo.Dtos.ReviewDtos.MyReviews
         bool IsPublic,
         bool IsSpamMarked,
         bool HasReply,
-        bool HasUnviewedReply);      // 館方回覆了、但顧客還沒看過：清單上顯示「新回覆」
+        bool HasUnviewedReply,       // 館方回覆了、但顧客還沒看過：清單上顯示「新回覆」
+        // 10/31：館方回覆了、顧客還沒表態滿不滿意：清單排在前面，並標「您是否滿意？」。原本 HasUnviewedReply 是最後一個（結尾是 ");"）
+        bool AwaitingSatisfaction);
 }

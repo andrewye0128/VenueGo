@@ -50,12 +50,20 @@ function load() {
   return inflight;
 }
 
-function button(kind, action, orderId) {
+// 10/31：多了 from（從哪一頁來，見 constants/review.js 的 REVIEW_SOURCES），撰寫頁、查看頁的「← 回…」才知道要回哪裡。原本：
+// function button(kind, action, orderId) {
+//   if (action === "write")
+//     return { action, label: "立刻評論", to: writeRoute(kind, String(orderId)), color: "action", variant: "solid" };
+//   if (action === "view")
+//     return { action, label: "查看評論", to: mineRoute(kind, String(orderId)), color: "primary", variant: "outline" };
+//   return null;
+// }
+function button(kind, action, orderId, from) {
   if (action === "write")
     return {
       action,
       label: "立刻評論",
-      to: writeRoute(kind, String(orderId)),
+      to: { ...writeRoute(kind, String(orderId)), query: { from } },
       color: "action",
       variant: "solid",
     };
@@ -63,7 +71,7 @@ function button(kind, action, orderId) {
     return {
       action,
       label: "查看評論",
-      to: mineRoute(kind, String(orderId)),
+      to: { ...mineRoute(kind, String(orderId)), query: { from } },
       color: "primary",
       variant: "outline",
     };
@@ -76,13 +84,15 @@ export function useReviewStatuses() {
   /** 預約評論的按鈕：用 reservationId 對（我的預約的每一列、預約明細視窗） */
   function bookingFor(reservationId) {
     const s = statuses.value.find((x) => x.reservationId === reservationId);
-    return s ? button("booking", s.bookingAction, s.orderId) : null;
+    // 10/31：帶上來源。原本：return s ? button("booking", s.bookingAction, s.orderId) : null;
+    return s ? button("booking", s.bookingAction, s.orderId, "reservations") : null;
   }
 
   /** 現場評論的按鈕：用票券 Id 對。一筆訂單有好幾張票時，只有 visitTicketId 那一張有按鈕（每筆訂單只能評一次） */
   function visitFor(ticketId) {
     const s = statuses.value.find((x) => x.visitTicketId === ticketId);
-    return s ? button("visit", s.visitAction, s.orderId) : null;
+    // 10/31：帶上來源。原本：return s ? button("visit", s.visitAction, s.orderId) : null;
+    return s ? button("visit", s.visitAction, s.orderId, "tickets") : null;
   }
 
   return { bookingFor, visitFor, reload: load };

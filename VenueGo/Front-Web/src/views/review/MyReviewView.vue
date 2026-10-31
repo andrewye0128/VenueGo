@@ -32,10 +32,13 @@
         現在 GET 拿到的是寫入之前的狀態，第一次打開時提示會正常出現。
 -->
 <script setup>
-import { computed, ref } from "vue";
+// 10/31：多了 onMounted、nextTick（一進來把焦點放在「回我的…」）。原本：import { computed, ref } from "vue";
+import { computed, ref, onMounted, nextTick } from "vue";
 import { useRoute } from "vue-router";
 import { ErrorCodes } from "@/constants/errorCodes";
 import MyReviewDetail from "@/components/review/MyReviewDetail.vue";
+import { REVIEW_SOURCES } from "@/constants/review"; // 10/31：底部按鈕回來源
+import { moveFocusByArrows } from "@/utils/arrowFocus"; // 10/31：←→ 換按鈕
 
 // 顧客模式傳 kind + ticket；預覽模式只傳 previewId（種類由 API 回傳的 kind 決定）
 // 10/25：ticket 改名 orderId（訂單 Id）
@@ -53,6 +56,32 @@ const isPreview = computed(() => props.previewId != null);
 const route = useRoute();
 const loadErrorCode = ref("");
 const needsLogin = computed(() => loadErrorCode.value === ErrorCodes.NotLoggedIn);
+
+// ── 10/31：底部按鈕（一整行，左右各半）──
+// 從我的預約／我的票券來（?from=reservations／tickets）：左「← 回我的預約／票券」、右「查看其他評論 →」
+// 從撰寫頁送出後過來（?from=write）、或沒帶 from：只放右半邊的「回我的評論 →」
+// 右邊那顆回「已評論」，並直接展開這一則（?open=，MyReviewsView 的 openFromQuery）
+const backSource = computed(() => {
+  const from = route.query.from;
+  if (from === "reservations" || from === "tickets") return REVIEW_SOURCES[from];
+  if (from === "write" || from == null) return null;
+  return null; // 不認得的值（網址被改過）：當成沒有來源
+});
+// 10/31：一進來焦點放在「回我的…」按鈕（有來源是左邊那顆，沒有就是右邊的「回我的評論」）。
+// 焦點框用 focus:（按鈕的 class）：用程式移過去的焦點，瀏覽器常常不畫 focus-visible 的框，要按個鍵才出現
+// preventScroll：按鈕在頁面最下面，不要一進來就捲到底
+onMounted(async () => {
+  await nextTick();
+  document.querySelector("[data-initial-focus]")?.focus({ preventScroll: true });
+});
+
+// 10/31：焦點在底部按鈕上時，← → 換到另一顆（只有一顆時不動）。寫法搬到 utils/arrowFocus.js，確認視窗也用
+const onButtonsKeydown = moveFocusByArrows;
+
+const reviewedLink = computed(() => ({
+  name: "member-reviews",
+  query: { tab: "reviewed", open: `${props.kind}-${props.orderId}` },
+}));
 </script>
 
 <template>
@@ -103,6 +132,7 @@ const needsLogin = computed(() => loadErrorCode.value === ErrorCodes.NotLoggedIn
       class="mt-6"
     />
     <!-- 10/23：需要登入時，上面的錯誤框已經有按鈕，這顆不顯示 -->
+    <!-- 10/31：改成一整行、左右各半（說明在 script 的 backSource）。原本：
     <UButton
       v-else-if="!needsLogin"
       :to="{ name: 'member-reviews', query: { tab: 'reviewed' } }"
@@ -112,5 +142,30 @@ const needsLogin = computed(() => loadErrorCode.value === ErrorCodes.NotLoggedIn
       label="回我的評論"
       class="mt-6"
     />
+    -->
+    <!-- 10/31：左右方向鍵在兩顆按鈕之間換焦點（onButtonsKeydown）。原本沒有 @keydown -->
+    <div v-else-if="!needsLogin" class="mt-6 grid grid-cols-2 gap-3" @keydown="onButtonsKeydown">
+      <UButton
+        v-if="backSource"
+        :to="backSource.to"
+        color="primary"
+        variant="outline"
+        size="lg"
+        icon="i-lucide-arrow-left"
+        :label="backSource.backLabel"
+        class="justify-center focus:outline-2 focus:outline-offset-2 focus:outline-brand-primary"
+        data-initial-focus
+      />
+      <UButton
+        :to="reviewedLink"
+        color="primary"
+        variant="outline"
+        size="lg"
+        trailing-icon="i-lucide-arrow-right"
+        :label="backSource ? '查看其他評論' : '回我的評論'"
+        class="col-start-2 justify-center focus:outline-2 focus:outline-offset-2 focus:outline-brand-primary"
+        :data-initial-focus="backSource ? undefined : ''"
+      />
+    </div>
   </main>
 </template>

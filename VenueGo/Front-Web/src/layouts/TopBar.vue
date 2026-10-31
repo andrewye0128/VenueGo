@@ -93,6 +93,7 @@ async function confirmReset() {
       { value: "cancel", label: "取消", variant: "outline" },
       { value: "reset", label: "回到現在" },
     ],
+    block: true, // 10/31 評論組（昱）新增：兩顆按鈕佔滿一整行、各一半
   });
   if (choice !== "reset") return;
 

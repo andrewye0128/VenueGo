@@ -23,11 +23,14 @@
   Tab 鍵的焦點順序和眼睛看到的上下順序相同。
 -->
 <script setup>
+import { moveFocusByArrows } from "@/utils/arrowFocus"; // 10/31：←→（直排時↑↓）在按鈕之間換焦點
 defineProps({
   title: { type: String, required: true },
   description: { type: String, default: "" },
   // 每顆按鈕：{ value, label, color?, variant? }。第一顆是預設焦點，請放最安全的選項。
   actions: { type: Array, required: true },
+  // 10/31：true＝按鈕佔滿一整行、平分寬度（例如兩顆就各 50%）。預設 false，原本的排法不變
+  block: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(["close"]);
@@ -36,7 +39,30 @@ const emit = defineEmits(["close"]);
 <template>
   <UModal :title="title" :description="description" :close="false">
     <template #footer>
-      <div class="flex w-full flex-col gap-2 md:flex-row md:flex-wrap md:justify-end">
+      <!-- 10/31：block 時改成平分的格子。原本只有這個 class：flex w-full flex-col gap-2 md:flex-row md:flex-wrap md:justify-end -->
+      <div
+        v-if="block"
+        class="grid w-full gap-2"
+        @keydown="moveFocusByArrows($event, { vertical: true })"
+        :style="{ gridTemplateColumns: `repeat(${actions.length}, minmax(0, 1fr))` }"
+      >
+        <UButton
+          v-for="(action, i) in actions"
+          :key="action.value"
+          :label="action.label"
+          :color="action.color ?? 'primary'"
+          :variant="action.variant ?? 'solid'"
+          :autofocus="i === 0"
+          class="w-full justify-center"
+          @click="emit('close', action.value)"
+        />
+      </div>
+      <!-- 10/31：方向鍵換焦點（第一顆仍是預設焦點，放最安全的選項） -->
+      <div
+        v-else
+        class="flex w-full flex-col gap-2 md:flex-row md:flex-wrap md:justify-end"
+        @keydown="moveFocusByArrows($event, { vertical: true })"
+      >
         <UButton
           v-for="(action, i) in actions"
           :key="action.value"

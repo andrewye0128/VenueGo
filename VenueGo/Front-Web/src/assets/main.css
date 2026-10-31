@@ -38,7 +38,14 @@
     background-color: var(--color-brand-background);
   }
   /* 10/23 防跑版保險：內容比畫面寬時裁掉，不要把整頁撐寬（手機會整頁縮小、右邊多一塊空白） */
+  /* 10/31 評論組（昱）修正：只設在 body。html 也設的話，body 的 overflow 就不會交給整個視窗（viewport）管，
+     視窗（Modal）打開時 Nuxt UI 在 body 上鎖捲動會失效：捲軸還在、頁面還能捲，
+     它補上的「捲軸寬度」右內距就變成畫面右邊一條留白。只設在 body，一樣會交給視窗、一樣防撐寬。原本：
   html,
+  body {
+    overflow-x: clip;
+  }
+  */
   body {
     overflow-x: clip;
   }

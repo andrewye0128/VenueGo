@@ -80,7 +80,10 @@ namespace VenueGo.Mappers
                                ? new PublicReplyDto(r.ReplyContent ?? "", TimeView.From(at))
                                : null,
             // 10/15：到館日期（第一次有效入場的那一天）。公開卡只給日期，不給幾點：公開掛名「某人幾點在場館」算個人行蹤
-            VisitedOn:     r.CheckInAt is DateTime inAt ? DateOnly.FromDateTime(inAt) : null);
+            // 10/31：多了 VenueId、SportTypeId。原本這一行結尾是 ");"
+            VisitedOn:     r.CheckInAt is DateTime inAt ? DateOnly.FromDateTime(inAt) : null,
+            VenueId:       r.VenueId,
+            SportTypeId:   r.SportTypeId);
 
         /// <summary>
         /// 星等分布 → 平均分數、總則數、五條長條（5 星在最上面）。

@@ -18,5 +18,9 @@ namespace VenueGo.Dtos.ReviewDtos.PublicReviews
         string? VenueName,           // 場地名稱。10/15 起來自 v_ReviewPublicCard（INNER JOIN），實際上不會是 null
         string DisplayName,          // 匿名時是隨機暱稱，實名時是會員姓名
         PublicReplyDto? Reply,       // 沒有回覆是 null
-        DateOnly? VisitedOn);        // 10/15：到館日期（第一次有效入場的那天），JSON 是 "2026-10-12"。只有日期，不給幾點
+        DateOnly? VisitedOn,         // 10/15：到館日期（第一次有效入場的那天），JSON 是 "2026-10-12"。只有日期，不給幾點
+        // 10/31：場地 Id、運動類型 Id。卡片上的場地名稱點了直接去預約這個場地（/booking?sportTypeId=&venueId=）。
+        // 場地是公開資訊，不是個資。原本 VisitedOn 是最後一個參數（結尾是 ");"）
+        int VenueId,
+        int SportTypeId);
 }

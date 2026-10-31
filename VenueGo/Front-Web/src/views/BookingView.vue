@@ -244,8 +244,35 @@ const selectedVenue = computed(() =>
 //   原本選的場地還在 → 保留（例如只是換日期）
 //   指定了運動 → 自動選第一個有空位的場地（從首頁查詢進來的人，直接看到時段）
 //   全部運動 → 不自動選，讓使用者自己挑
+// 10/31 評論組（昱）新增：網址只帶 venueId、沒帶日期（評論卡的「立即預約此場地」）時，額滿就往後順延（最多 7 天）。
+// 有帶日期就是使用者自己選的日子，不順延
+let presetShiftsLeft = route.query.venueId && !route.query.date ? 7 : 0;
+let presetStartDate = presetShiftsLeft > 0 ? date.value : null;
 function autoSelectVenue() {
   if (selectedVenue.value) return;
+  // 10/31 評論組（昱）新增：網址帶 venueId（評論卡的場地名稱、場地卡片的「預約」）就先選那個場地；
+  // 那個場地今天不能預約，就照下面原本的規則
+  const presetId = Number(route.query.venueId);
+  const preset = allVenues.value.find((v) => v.venueId === presetId && v.isBookable);
+  if (preset) {
+    // 這天已經沒有空位（額滿，或今天的時段都過了）：往後一天再找，最多順延 7 天。
+    // 換日期之後 watch 會重新讀取，讀完又回到這裡；找到有空位的那天才選它
+    if (preset.availableCount === 0 && presetShiftsLeft > 0 && date.value < maxDate.value) {
+      presetShiftsLeft -= 1;
+      updateQuery({ date: parseDate(date.value).add({ days: 1 }).toString() });
+      return;
+    }
+    selectedVenueId.value = preset.venueId;
+    if (presetStartDate !== null && presetStartDate !== date.value) {
+      toast.add({
+        title: `${formatDateWithWeekday(presetStartDate)} 已額滿`,
+        description: `已改為顯示 ${formatDateWithWeekday(date.value)}，這個場地最近有空位的一天`,
+        icon: "i-lucide-calendar-arrow-down",
+      });
+    }
+    presetStartDate = null; // 只提示一次
+    return;
+  }
   selectedVenueId.value =
     sportTypeId.value === null
       ? null

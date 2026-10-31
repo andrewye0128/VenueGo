@@ -91,6 +91,16 @@ const isShort = computed(
 
 // ── 到館日期（10/15，檔頭第 10 點）──
 // 只有日期，不寫幾點（第 10 點）。10/16 晚：評論日期移到星等右邊，跟到館同一天也照寫（第 15 點）
+// 10/31：場地名稱連到預約頁，直接預約今天的這個場地（沒帶日期，預約頁預設就是今天）。
+// 舊資料或員工預覽沒有場地 Id 時是 null，就只顯示文字。
+const bookingLink = computed(() =>
+  props.item.venueId
+    ? {
+        name: "booking",
+        query: { sportTypeId: props.item.sportTypeId, venueId: props.item.venueId },
+      }
+    : null,
+);
 const visitedText = computed(() => (props.item.visitedOn ? shortDate(props.item.visitedOn) : ""));
 const reviewedText = computed(() =>
   props.item.createdAt?.value ? shortDate(props.item.createdAt.value) : "",
@@ -183,8 +193,19 @@ onBeforeUnmount(() => observer?.disconnect());
           v-if="item.venueName || visitedText"
           class="flex shrink-0 flex-col items-end gap-1 pt-0.5 text-right leading-tight"
         >
+          <!-- 10/31：有場地 Id 就改成連結，點了去預約今天的這個場地；滑鼠移上去才顯示底線。原本只有下面那個 span -->
+          <RouterLink
+            v-if="item.venueName && bookingLink"
+            :to="bookingLink"
+            class="inline-flex items-center gap-1 font-semibold text-brand-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-primary"
+            :class="sz.venue"
+            title="立即預約此場地"
+          >
+            <UIcon name="i-lucide-map-pin" class="size-3.5 shrink-0" aria-hidden="true" />
+            {{ item.venueName }}
+          </RouterLink>
           <span
-            v-if="item.venueName"
+            v-else-if="item.venueName"
             class="inline-flex items-center gap-1 font-semibold text-brand-primary"
             :class="sz.venue"
           >

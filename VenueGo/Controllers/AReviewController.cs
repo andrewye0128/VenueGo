@@ -718,7 +718,9 @@ namespace VenueGo.Controllers
             string? tab, string? source, string? range,
             string? field, string? keyword, bool grouped,
             int? sportTypeId, int? venueId, int? page,
-            string? satisfaction = null)   // 10/27 新增：已完成清單的滿意度篩選
+            string? satisfaction = null,   // 10/27 新增：已完成清單的滿意度篩選
+            IReadOnlyCollection<int>? keep = null,   // 11/1 新增：這個分頁讀過、還要留在未讀的評論（見下方 ApplyTab 那裡）
+            int? focus = null)                       // 11/1 新增：要顯示哪一則所在的那一頁（見下方分頁）
         {
             string t = NormalizeTab(tab);
             // 10/27：只有已完成清單用得到；其他清單一律當作「全部」，才不會被當成有篩選條件（例如不會因此列出只有星等的評論）
@@ -767,7 +769,21 @@ namespace VenueGo.Controllers
             // 10/27：已完成清單依滿意度篩選
             if (t == QueueTab.Completed) listBase = ApplySatisfaction(listBase, sat);
 
-            var reviews = ApplyTab(listBase, t).ToList();
+            /* 11/1：員工在未讀清單展開（＝已閱覽）的評論，在這個瀏覽器分頁關掉之前都留在未讀，不移到待回覆：
+                 剛看過、還沒處理完的評論突然不見，員工會找不到。這些評論的 Id 由前端放在 sessionStorage，每次載入清單帶過來（keep）。
+                 已經回覆或標記垃圾的就不留（處理完了）。待回覆清單相對地先不列這些，同一則才不會兩邊都有。原本只有這一行：
+               var reviews = ApplyTab(listBase, t).ToList(); */
+            IReadOnlyCollection<int> keepIds = keep ?? Array.Empty<int>();
+            List<Review> reviews = [];
+            if (t == QueueTab.Unread && keepIds.Count > 0)
+                reviews = listBase.Where(r => r.ReadAt == null
+                                           || (keepIds.Contains(r.ReviewId) && r.RepliedAt == null && r.SpamMarkedAt == null))
+                                  .OrderBy(r => r.CreatedAt)
+                                  .ToList();
+            if (t == QueueTab.Pending && keepIds.Count > 0)
+                reviews = ApplyTab(listBase.Where(r => !keepIds.Contains(r.ReviewId)), t).ToList();
+            if (keepIds.Count == 0 || (t != QueueTab.Unread && t != QueueTab.Pending))
+                reviews = ApplyTab(listBase, t).ToList();
 
             // 10/26：全部、已完成清單在預設條件下，不列「只有星等」的評論（跟顧客端評論專區一樣）。
             //   任一個篩選條件不是預設值（來源、時間範圍、運動類型或場地、搜尋、依訂單分組）就一起列出：例如用訂單編號搜尋時，員工要找的就是那一則。
@@ -834,7 +850,12 @@ namespace VenueGo.Controllers
             else if (!hasGroups) ordered = items;
 
             int totalPages = Math.Max(1, (ordered.Count + PageSize - 1) / PageSize);
+            // 11/1：留在未讀的評論裡，現在其實是待回覆的有幾則（分頁上的數字用）
+            int keptPending = keepIds.Count > 0 ? countBase.Where(PendingRule).Count(r => keepIds.Contains(r.ReviewId)) : 0;
             // 超出範圍（手動改網址、處理完最後一頁的評論）調整到範圍內，不回錯誤
+            // 11/1：指定了 focus（切回待回覆時，要回到剛才展開的那一則），就改成顯示那一則所在的頁；不在清單裡就照原本的頁
+            int focusIndex = focus is int focusId ? ordered.FindIndex(i => i.ReviewId == focusId) : -1;
+            if (focusIndex >= 0) page = focusIndex / PageSize + 1;
             int currentPage = Math.Clamp(page ?? 1, 1, totalPages);
             int skip = (currentPage - 1) * PageSize;
             var pageItems = ordered.Skip(skip).Take(PageSize).ToList();
@@ -905,8 +926,11 @@ namespace VenueGo.Controllers
                 Satisfaction           = sat,
                 SatisfactionCounts     = satisfactionCounts,
 
-                UnreadCount  = countBase.Count(UnreadRule),
-                PendingCount = countBase.Count(PendingRule),
+                // 11/1：留在未讀的（keep）算未讀，不算待回覆，數字才跟清單對得上。原本：
+                // UnreadCount  = countBase.Count(UnreadRule),
+                // PendingCount = countBase.Count(PendingRule),
+                UnreadCount  = countBase.Count(UnreadRule) + keptPending,
+                PendingCount = countBase.Count(PendingRule) - keptPending,
                 SpamCount    = countBase.Count(SpamRule),
 
                 // 10/29：順序改成固定（ReviewPolicy 裡的順序），按鈕位置不變，員工才不容易按錯。原本：
@@ -928,9 +952,11 @@ namespace VenueGo.Controllers
             string? tab, string? source, string? range,
             string? field, string? keyword, bool grouped,
             int? sportTypeId, int? venueId, int? page,
-            string? satisfaction)
+            string? satisfaction,
+            IReadOnlyCollection<int>? keep = null, int? focus = null)   // 11/1 新增，見 BuildQueueVm
         {
-            var vm = BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction);
+            // 11/1：多傳 keep、focus。原本：var vm = BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction);
+            var vm = BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction, keep, focus);
 
             bool widens = vm.Tab switch
             {
@@ -948,7 +974,8 @@ namespace VenueGo.Controllers
             {
                 string? wider = QueueRange.Widen(vm.Range);
                 if (wider == null) break;   // 已經是「全部」
-                vm = BuildQueueVm(vm.Tab, source, wider, field, keyword, grouped, sportTypeId, venueId, page: null, satisfaction);
+                // 11/1：多傳 keep、focus。原本：vm = BuildQueueVm(vm.Tab, source, wider, field, keyword, grouped, sportTypeId, venueId, page: null, satisfaction);
+                vm = BuildQueueVm(vm.Tab, source, wider, field, keyword, grouped, sportTypeId, venueId, page: null, satisfaction, keep, focus);
             }
             return vm.Range == from ? vm : vm with { WidenedFromRange = from };
         }
@@ -981,14 +1008,24 @@ namespace VenueGo.Controllers
         [HttpGet]
         // 10/27：多了 satisfaction（已完成清單的滿意度篩選）
         // 10/27：依訂單分組預設開啟。原本：bool grouped = false
+        // 11/1：多了 keep（逗號分隔的評論 Id，見 BuildQueueVm）、focus（要顯示哪一則所在的頁）
         public IActionResult QueueList(string? tab, string? source, string? range,
                                        string? field, string? keyword, bool grouped = true,
                                        int? sportTypeId = null, int? venueId = null, int? page = null,
-                                       string? satisfaction = null)
+                                       string? satisfaction = null, string? keep = null, int? focus = null)
         {
+            // 11/1：看不懂的 Id 直接略過，不回錯誤（只是讓清單多留幾則，不影響資料）
+            var keepIds = (keep ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                                      .Select(x => int.TryParse(x, out var id) ? id : 0)
+                                      .Where(id => id > 0)
+                                      .Distinct()
+                                      .Take(200)
+                                      .ToList();
+            return PartialView("_QueueList", BuildQueueVmWidened(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction, keepIds, focus));
             // 10/29：未讀、待回覆是空的就自動放寬時間範圍。原本：
             // return PartialView("_QueueList", BuildQueueVm(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
-            return PartialView("_QueueList", BuildQueueVmWidened(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
+            // 11/1：多傳 keep、focus（上一行）。原本：
+            // return PartialView("_QueueList", BuildQueueVmWidened(tab, source, range, field, keyword, grouped, sportTypeId, venueId, page, satisfaction));
         }
 
         /// <summary>

@@ -226,6 +226,7 @@ async function onSubmit() {
   const choice = await confirmModal.open({
     title: "確定要送出評論嗎？",
     description: "送出後無法修改呦。",
+    block: true, // 11/1：兩顆按鈕各佔一半（ConfirmModal 的 block）
     actions: [
       { value: "cancel", label: "再看一下", variant: "outline" },
       { value: "submit", label: "送出" },

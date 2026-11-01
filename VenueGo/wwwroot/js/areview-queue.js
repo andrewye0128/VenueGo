@@ -95,6 +95,39 @@
             }
       }
 
+      /* 11/1：在未讀清單讀過的評論，關閉這個分頁之前都留在未讀（後端看 keep 參數，見 AReviewController.BuildQueueVm）。
+         存在 sessionStorage：同一個分頁重新整理還在，關掉分頁就清掉，正好是「同一次處理」的範圍。
+         sessionStorage 被瀏覽器封鎖時會丟例外：當作沒有，清單照原本的規則（讀過就移到待回覆），不讓頁面壞掉。 */
+      const KEEP_KEY = 'areview-keep-unread';
+
+      function keptUnread() {
+            try {
+                  const ids = JSON.parse(sessionStorage.getItem(KEEP_KEY) || '[]');
+                  return Array.isArray(ids) ? ids : [];
+            } catch {
+                  return [];
+            }
+      }
+
+      function keepUnread(id) {
+            const ids = keptUnread();
+            if (ids.indexOf(id) !== -1) return;
+            ids.push(id);
+            try {
+                  sessionStorage.setItem(KEEP_KEY, JSON.stringify(ids.slice(-200)));
+            } catch {
+                  // 存不了就算了：只是這一則會照原本的規則移到待回覆
+            }
+      }
+
+      /* 11/1：待回覆清單離開時展開著的那一則（評論 Id）。切回待回覆時展開它、跳到它所在的頁（focusOnEnter、loadList 的 focus）。 */
+      // 11/1（同日改）：未讀也一樣，改成兩個清單各記一則。原本：let pendingOpenId = null;
+      const openIdByTab = { unread: null, pending: null };
+
+      function remembersOpen(tab) {
+            return tab === 'unread' || tab === 'pending';
+      }
+
       // 清單換掉之前：記下哪一則是展開的、這一頁有哪些沒送出的回覆
       function captureBeforeRender() {
             const open = root.querySelector('.accordion-collapse.show');
@@ -148,7 +181,9 @@
             const gone = before.onPage.filter(function (id) { return !restored.has(id) && replyDrafts.has(id); });
             // 11/1：「全部」清單不能回覆，草稿一定填不回去，說法改成「回到未讀或待回覆就會填回」，不要說「不在這一頁」。原本只有 if (gone.length) 那一段
             if (gone.length && inAll) {
-                  flash('「全部」清單不能回覆。有 ' + gone.length + ' 則還沒送出的回覆已經幫你留著，回到「待回覆」就會自動填回。', 'warning');
+                  // 11/1：未讀也能填回了，說法補上「未讀」。原本：
+                  // flash('「全部」清單不能回覆。有 ' + gone.length + ' 則還沒送出的回覆已經幫你留著，回到「待回覆」就會自動填回。', 'warning');
+                  flash('「全部」清單不能回覆。有 ' + gone.length + ' 則還沒送出的回覆已經幫你留著，回到「未讀」或「待回覆」就會自動填回。', 'warning');
             }
             if (gone.length && !inAll) {
                   flash('有 ' + gone.length + ' 則還沒送出的回覆不在這一頁。內容已經幫你留著，回到那則評論就會自動填回。', 'warning');
@@ -520,7 +555,12 @@
       function loadList(filter, options) {
             options = options || {};
 
-            return axios.get(listUrl, { params: filter, responseType: 'text' })
+            // 11/1：多帶 keep（未讀要留著的）；切回待回覆時帶 focus，後端會換到那一則所在的頁。原本：
+            // return axios.get(listUrl, { params: filter, responseType: 'text' })
+            const params = Object.assign({}, filter, { keep: keptUnread().join(',') });
+            // 11/1（同日改）：未讀也帶。原本：if (options.enter && filter.tab === 'pending' && pendingOpenId) params.focus = pendingOpenId;
+            if (options.enter && remembersOpen(filter.tab) && openIdByTab[filter.tab]) params.focus = openIdByTab[filter.tab];
+            return axios.get(listUrl, { params: params, responseType: 'text' })
                   .then(function (res) {
                         // 同樣的登入逾時陷阱：這裡拿回來的本來就是 HTML，
                         // 所以改用「裡面有沒有 queueState」來判斷是不是真的清單。
@@ -531,6 +571,10 @@
 
                         const draftsBefore = captureBeforeRender();   // 10/24：沒送出的回覆
                         const venueBefore = currentFilter().venueId;   // 11/1：換清單前有沒有在篩選場地（見下方「取消場地篩選」）
+                        // 11/1：從待回覆換走時，記下展開著的那一則（沒展開就清掉）
+                        // 11/1（同日改）：未讀也記。原本：if (currentFilter().tab === 'pending') pendingOpenId = draftsBefore.openId ? draftsBefore.openId.slice(4) : null;
+                        const leavingTab = currentFilter().tab;
+                        if (remembersOpen(leavingTab)) openIdByTab[leavingTab] = draftsBefore.openId ? draftsBefore.openId.slice(4) : null;
                         root.innerHTML = res.data;
                         // 11/1：接住填回草稿的評論 Id（進入「待回覆」時用）。原本：restoreAfterRender(draftsBefore);
                         const restored = restoreAfterRender(draftsBefore);
@@ -659,7 +703,17 @@
             }
             if (!first) return;   // 沒有任何一則（例如空清單但後端沒有推薦的下一步）
 
-            if (tab === 'pending' && restored.size > 0) {
+            // 11/1：切回待回覆時，先展開剛才離開時展開著的那一則（比填回草稿的優先）
+            // 11/1（同日改）：未讀也一樣。原本條件是 tab === 'pending' && pendingOpenId，下一行是 'rev-' + pendingOpenId
+            if (remembersOpen(tab) && openIdByTab[tab]) {
+                  const collapse = document.getElementById('rev-' + openIdByTab[tab]);
+                  if (collapse && root.contains(collapse)) {
+                        openAndFocus(collapse);
+                        return;
+                  }
+            }
+            // 11/1：未讀現在也會留著讀過的評論（可以回覆），填回草稿的一樣展開。原本：if (tab === 'pending' && restored.size > 0) {
+            if (remembersOpen(tab) && restored.size > 0) {
                   // 照畫面上的順序找第一則填回草稿的
                   const form = Array.from(root.querySelectorAll('.js-reply-form')).find(function (f) {
                         return restored.has(reviewIdOfForm(f));
@@ -1558,7 +1612,10 @@
                         if (waitingPin) waitingPin.classList.remove('pin-await');
 
                         // data 為 true 代表這次才讀的；false 代表別人剛讀過，數字早就不對了
-                        if (res.data.data === true) {
+                        // 11/1：在未讀清單讀的，關分頁前都留在未讀（keepUnread），數字也不動。原本只有 if 裡面那兩行
+                        const inUnread = currentFilter().tab === 'unread';
+                        if (res.data.data === true && inUnread) keepUnread(item.querySelector('.accordion-collapse[id^="rev-"]').id.slice(4));
+                        if (res.data.data === true && !inUnread) {
                               adjustCount('unread', -1);
                               adjustCount('pending', +1);
                         }
@@ -1700,6 +1757,12 @@
       // 11/1：剛打開這一頁也算「進入清單」，焦點依清單放；放寬時間範圍的提示也在這裡顯示。原本：focusEmptyAction();
       focusOnEnter(new Set());
       noticeWidened();
+      // 11/1：整頁是伺服器 render 的，不知道 sessionStorage 裡要留在未讀的評論：有的話用同樣的條件重讀一次清單
+      if (keptUnread().length > 0 && (currentFilter().tab === 'unread' || currentFilter().tab === 'pending')) {
+            // 11/1：讀完（成功或失敗）才把清單顯示出來（Index.cshtml 先藏起來的）
+            loadList(currentFilter(), { enter: true, quiet: true })
+                  .finally(function () { document.documentElement.classList.remove('areview-await-keep'); });
+      }
 
 })();
 

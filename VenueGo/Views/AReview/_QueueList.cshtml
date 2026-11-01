@@ -956,12 +956,20 @@
             另有 @Model.RatingOnlyHidden 則只給星等、沒有文字的評論沒有列出；選任一個篩選條件就會一起顯示。
       </p>
 }
+@* 11/1：已閱覽的評論改成在關閉分頁前都留在未讀（areview-queue.js 的 keepUnread），說明跟著改。原本：
 @if (Model.Tab == QueueTab.Unread)
 {
       <p class="small text-muted mb-2">
             展開即記錄為「已閱覽」。已閱覽的評論會移到待回覆清單，
             <a class="js-queue-link" href="@Url.Action("Index", RouteFor(tab: QueueTab.Unread))">重新整理清單</a>
             後就不會出現在這裡。
+      </p>
+}
+*@
+@if (Model.Tab == QueueTab.Unread)
+{
+      <p class="small text-muted mb-2">
+            展開即記錄為「已閱覽」。已閱覽的評論在關閉這個分頁之前會留在這裡，方便接著處理；關閉分頁後，沒處理完的會移到待回覆清單。
       </p>
 }
 

@@ -62,6 +62,19 @@
       })();
 </script>
 
+@* 11/1：整頁是伺服器 render 的，不知道這個分頁讀過、要留在未讀的評論（存在 sessionStorage，見 areview-queue.js 的 keepUnread），
+   所以 JS 會再讀一次清單；在那之前先把清單藏起來，免得先閃一下「恭喜，都讀完了」的空清單。
+   這段要在清單之前執行（畫面畫出來之前），所以直接寫在這裡；讀完由 areview-queue.js 拿掉 areview-await-keep。 *@
+@if (Model.Tab == QueueTab.Unread || Model.Tab == QueueTab.Pending)
+{
+      <script>
+            try {
+                  if (JSON.parse(sessionStorage.getItem('areview-keep-unread') || '[]').length > 0)
+                        document.documentElement.classList.add('areview-await-keep');
+            } catch { /* sessionStorage 不能用：不藏，照原本顯示 */ }
+      </script>
+}
+
 @* 清單容器。data-list-url 讓 JS 知道要去哪裡拿新清單，
    網址由 Url.Action 產生，路由改了這裡會自動跟著改。 *@
 <div id="queueRoot" data-list-url="@Url.Action("QueueList")">

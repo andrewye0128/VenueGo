@@ -364,6 +364,11 @@ html[data-spam-count-seen] .js-spam-count {
 }
 
 /* 11/1：程式移焦點時補畫的藍框（例如篩選場地後的「取消場地篩選」），跟 Bootstrap 按鈕的焦點框一樣 */
+/* 11/1：整頁剛載入、還在等「留在未讀」的評論時，先藏起清單（Index.cshtml、areview-queue.js） */
+html.areview-await-keep #queueRoot {
+    visibility: hidden;
+}
+
 .queue-focus-ring:focus {
     outline: 0;
     border-radius: .25rem;

@@ -12,7 +12,7 @@ namespace VenueGo.Services.Ticket
         //  QR 內容格式：v1.{ticketId}.{時間窗}.{簽章}
         // 驗證順序：格式 → 撈票 → 簽章 → 時間窗。
         private const string Version = "v1";
-        private const int WindowSeconds = 30;   // 時間窗：30 秒一格
+        private const int WindowSeconds = 300;   // 時間窗：30 秒一格
         private const int SignatureBytes = 16; // 簽章只取 16 bytes(128位元)
 
         private static readonly DateTime Epoch = new(1970, 1, 1);

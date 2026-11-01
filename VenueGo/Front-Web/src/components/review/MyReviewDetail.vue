@@ -410,6 +410,11 @@ async function rate(value) {
         v-model="isPublic"
         :disabled="savingVisibility || isPreview"
         :loading="savingVisibility"
+        :ui="
+          savingVisibility || isPreview
+            ? undefined
+            : { base: 'cursor-pointer', label: 'cursor-pointer' }
+        "
         label="公開這則評論"
         :description="visibilityText"
         :class="compact ? 'mt-3' : 'mt-4'"

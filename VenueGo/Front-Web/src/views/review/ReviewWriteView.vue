@@ -219,6 +219,10 @@ onMounted(async () => {
   }
 });
 
+// 11/1：開關本身和文字標籤都點得到，游標改成手指（說明文字點了沒反應，所以不改）。
+//       停用時不套用：不然會蓋掉 Nuxt UI 停用時的「禁止」游標。
+const CLICKABLE_SWITCH_UI = Object.freeze({ base: "cursor-pointer", label: "cursor-pointer" });
+
 // ── 送出 ──
 // UForm 前端驗證通過才會呼叫這裡
 async function onSubmit() {
@@ -421,7 +425,9 @@ const mentionOptions = [
             v-model="state[opt.key]"
             :label="opt.label"
             variant="card"
+            :ui="{ root: 'cursor-pointer', base: 'cursor-pointer', label: 'cursor-pointer' }"
           />
+          <!-- 11/1：card 樣式整張卡都能點（Nuxt UI 把整張卡做成 label），游標改成手指，讓顧客知道點哪裡有用 -->
         </div>
       </UFormField>
 
@@ -431,6 +437,7 @@ const mentionOptions = [
         v-model="state.isAnonymous"
         label="匿名發表"
         :disabled="!setup.form.canChooseAnonymous"
+        :ui="setup.form.canChooseAnonymous ? CLICKABLE_SWITCH_UI : undefined"
         :description="
           setup.form.canChooseAnonymous
             ? '開啟後會以系統給的隨機暱稱顯示，不會出現你的姓名。'
@@ -444,6 +451,7 @@ const mentionOptions = [
         v-if="setup.form.showPublic"
         v-model="state.isPublic"
         label="公開此評論"
+        :ui="CLICKABLE_SWITCH_UI"
         :description="`公開的評論會在館方回覆後、或最晚 ${setup.form.publicBufferDays} 天後，顯示在評論專區。送出後仍可隨時在評論頁切換。`"
       />
 

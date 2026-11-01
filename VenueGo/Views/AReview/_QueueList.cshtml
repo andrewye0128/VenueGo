@@ -966,6 +966,7 @@
 }
 
 @* 10/29：未讀、待回覆在原本的時間範圍裡是空的，後端自動放寬了（BuildQueueVmWidened），告訴員工範圍被改過 *@
+@* 11/1：改成右下角的提示視窗，清單上方不再放提示條（會把清單往下推）。原本：
 @if (Model.WidenedFromRange != null)
 {
       <div class="alert alert-info small py-2 mb-2 d-flex align-items-center gap-2" role="status">
@@ -974,6 +975,15 @@
                   「@RangeText(Model.WidenedFromRange)」沒有@(Model.Tab == QueueTab.Pending ? "待回覆" : "未讀")的評論，已改為顯示@(Model.Range == QueueRange.All ? "不限時間範圍" : "「" + RangeText(Model.Range) + "」")的評論。
             </span>
       </div>
+}
+*@
+@* 11/1：只放文字，JS（areview-queue.js 的 noticeWidened）讀 data-message 顯示在右下角 *@
+@if (Model.WidenedFromRange != null)
+{
+      var widenedTab = Model.Tab == QueueTab.Pending ? "待回覆" : "未讀";
+      var widenedTo = Model.Range == QueueRange.All ? "不限時間範圍" : "「" + RangeText(Model.Range) + "」";
+      var widenedMessage = "「" + RangeText(Model.WidenedFromRange) + "」沒有" + widenedTab + "的評論，已改為顯示" + widenedTo + "的評論。";
+      <div id="queueWidenedNotice" data-message="@widenedMessage" hidden></div>
 }
 
 @* 10/23 分頁：清單外面包一層，長按快轉的遮罩蓋在這一層上（只蓋清單，不蓋篩選列）。

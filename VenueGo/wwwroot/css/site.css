@@ -327,3 +327,45 @@ html[data-spam-count-seen] .js-spam-count {
 .queue-toast.show {
     transform: translateX(0);
 }
+
+/* 11/1：評論管理右下角的提示視窗（警告、錯誤、資訊，areview-queue.js 的 showNotice）。
+   蓋在時光機的 ⏰ 上面：⏰ 在 right/bottom 16px、z-index 2000（time-machine.js），這裡用同樣位置、z-index 2001。 */
+.queue-notice {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 2001;
+    width: min(360px, calc(100vw - 32px));
+    min-height: 40px;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity .2s ease-out, transform .2s ease-out;
+}
+.queue-notice.show {
+    opacity: 1;
+    transform: translateY(0);
+}
+.queue-notice .bi {
+    line-height: 1.5;
+}
+.queue-notice .btn-close {
+    font-size: .6rem;
+    margin-top: .35rem;
+}
+/* 左邊一條顏色，一眼看出是哪一種（.border 有 !important，要蓋過它也得加） */
+.queue-notice-info {
+    border-left: 4px solid var(--bs-primary) !important;
+}
+.queue-notice-warning {
+    border-left: 4px solid var(--bs-warning) !important;
+}
+.queue-notice-danger {
+    border-left: 4px solid var(--bs-danger) !important;
+}
+
+/* 11/1：程式移焦點時補畫的藍框（例如篩選場地後的「取消場地篩選」），跟 Bootstrap 按鈕的焦點框一樣 */
+.queue-focus-ring:focus {
+    outline: 0;
+    border-radius: .25rem;
+    box-shadow: 0 0 0 .25rem rgba(var(--bs-primary-rgb), .5);
+}

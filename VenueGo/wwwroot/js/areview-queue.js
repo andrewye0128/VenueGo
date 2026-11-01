@@ -123,8 +123,12 @@
             });
 
             // 畫面上有這則評論、卻沒有回覆框：已經被處理掉了（例如別的員工回覆了），草稿留著也送不出去
+            // 11/1：「全部」清單本來就不放回覆框，沒有回覆框不代表處理掉了，不能刪（原本切到「全部」草稿會被清空）。
+            //       其他清單照舊：未讀、待回覆沒有回覆框＝已處理；已完成、封存裡本來就都是處理掉的。原本沒有 inAll 這個條件
+            const inAll = currentFilter().tab === 'all';
             root.querySelectorAll('.accordion-collapse[id^="rev-"]').forEach(function (el) {
                   const id = el.id.slice(4);
+                  if (inAll) return;
                   if (replyDrafts.has(id) && !el.querySelector('.js-reply-form')) replyDrafts.delete(id);
             });
 
@@ -142,9 +146,15 @@
             }
 
             const gone = before.onPage.filter(function (id) { return !restored.has(id) && replyDrafts.has(id); });
-            if (gone.length) {
+            // 11/1：「全部」清單不能回覆，草稿一定填不回去，說法改成「回到未讀或待回覆就會填回」，不要說「不在這一頁」。原本只有 if (gone.length) 那一段
+            if (gone.length && inAll) {
+                  flash('「全部」清單不能回覆。有 ' + gone.length + ' 則還沒送出的回覆已經幫你留著，回到「待回覆」就會自動填回。', 'warning');
+            }
+            if (gone.length && !inAll) {
                   flash('有 ' + gone.length + ' 則還沒送出的回覆不在這一頁。內容已經幫你留著，回到那則評論就會自動填回。', 'warning');
             }
+            // 11/1 新增：回傳這次填回草稿的評論 Id，進入「待回覆」時要展開第一則（focusOnEnter）
+            return restored;
       }
 
       window.addEventListener('beforeunload', function (e) {
@@ -330,12 +340,78 @@
             }, TOAST_MS);
       }
 
+      /* 11/1：右下角的提示視窗（警告、錯誤、資訊），取代原本清單上方整行的提示條：
+         提示條會把清單往下推（畫面跳一下），又在員工視線外，不容易注意到。
+         - 位置跟時光機的 ⏰ 一樣在右下角，顯示時直接蓋住它（z-index 比它高），消失後 ⏰ 再露出來。
+         - 不放倒數條，時間到就淡出；滑鼠移上去時暫停計時，讀長一點的訊息不會讀到一半就消失。
+         - 一次只顯示一個，新的直接換掉舊的；右上角的 × 可以先關掉。
+         樣式在 site.css 的 .queue-notice。 */
+      let noticeEl = null;
+      let noticeTimer = null;
+      const NOTICE_MS = { info: 5000, warning: 6000, danger: 8000 };   // 錯誤多留一點時間
+      const NOTICE_ICON = {
+            info: 'bi-info-circle-fill text-primary',
+            warning: 'bi-exclamation-triangle-fill text-warning',
+            danger: 'bi-x-circle-fill text-danger'
+      };
+
+      function hideNotice(el) {
+            el.classList.remove('show');
+            el.addEventListener('transitionend', function () { el.remove(); }, { once: true });
+            setTimeout(function () { el.remove(); }, 400);   // 系統關掉動畫時不會有 transitionend，保險再移除一次
+            if (noticeEl === el) noticeEl = null;
+      }
+
+      function showNotice(message, type) {
+            const kind = Object.hasOwn(NOTICE_MS, type) ? type : 'warning';   // 不認得的類型當警告
+            if (noticeEl) noticeEl.remove();
+            clearTimeout(noticeTimer);
+
+            const el = document.createElement('div');
+            el.setAttribute('role', kind === 'danger' ? 'alert' : 'status');
+            el.setAttribute('aria-live', kind === 'danger' ? 'assertive' : 'polite');
+            el.className = 'queue-notice queue-notice-' + kind + ' bg-white border rounded shadow d-flex align-items-start gap-2 px-3 py-2';
+            const icon = document.createElement('i');
+            icon.className = 'bi ' + NOTICE_ICON[kind] + ' flex-shrink-0';
+            const text = document.createElement('span');
+            text.className = 'flex-grow-1 small';
+            text.textContent = message;   // 用 textContent，訊息裡有特殊字元也不會被當成 HTML
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'btn-close flex-shrink-0';
+            close.setAttribute('aria-label', '關閉');
+            close.addEventListener('click', function () {
+                  clearTimeout(noticeTimer);
+                  hideNotice(el);
+            });
+            el.append(icon, text, close);
+            document.body.appendChild(el);
+            noticeEl = el;
+
+            function startTimer() {
+                  clearTimeout(noticeTimer);
+                  noticeTimer = setTimeout(function () { hideNotice(el); }, NOTICE_MS[kind]);
+            }
+            // 已經被新的提示換掉的話，不能動到新提示的計時
+            el.addEventListener('mouseenter', function () { if (noticeEl === el) clearTimeout(noticeTimer); });
+            el.addEventListener('mouseleave', function () { if (noticeEl === el) startTimer(); });
+
+            // 先放好（透明、往下一點），下一個畫格再浮上來，才有動畫
+            requestAnimationFrame(function () {
+                  requestAnimationFrame(function () { el.classList.add('show'); });
+            });
+            startTimer();
+      }
+
       function flash(message, type) {
             // 10/29：沒指定類型（預設就是成功）或指定 success，改用 toast
             if (type === undefined || type === 'success') {
                   showToast(message);
                   return;
             }
+            // 11/1：其他類型（warning、danger、info）改用右下角的提示視窗，#queueFlash 不再使用
+            showNotice(message, type);
+            /* 原本：清單上方整行的提示條
             const div = document.createElement('div');
             div.className = 'alert alert-' + (type || 'success') + ' alert-dismissible fade show';
             div.textContent = message;     // 用 textContent，訊息裡有特殊字元也不會被當成 HTML
@@ -349,6 +425,7 @@
 
             flashBox.replaceChildren(div);
             setTimeout(function () { div.remove(); }, 4000);
+            */
       }
 
       /* 10/25 新增：在原地切換圖釘的樣子（未讀清單用，不重新載入）。
@@ -453,12 +530,16 @@
                         }
 
                         const draftsBefore = captureBeforeRender();   // 10/24：沒送出的回覆
+                        const venueBefore = currentFilter().venueId;   // 11/1：換清單前有沒有在篩選場地（見下方「取消場地篩選」）
                         root.innerHTML = res.data;
-                        restoreAfterRender(draftsBefore);
+                        // 11/1：接住填回草稿的評論 Id（進入「待回覆」時用）。原本：restoreAfterRender(draftsBefore);
+                        const restored = restoreAfterRender(draftsBefore);
                         highlight();
                         // 10/29：未讀、待回覆是空的時，後端會自動放寬時間範圍，所以網址改用後端實際採用的條件（#queueState）。原本：
                         // syncUrl(filter);
                         syncUrl(currentFilter());
+                        // 11/1：後端放寬了時間範圍，用右下角的提示告訴員工（切回視窗時的自動重讀不提示，免得一直跳出來）
+                        if (!options.quiet) noticeWidened();
                         // 10/23：換頁之後，如果清單開頭已經捲到畫面外（例如在最後一則按了下一頁），捲回清單開頭
                         if (options.revealList) revealListTop();
 
@@ -478,7 +559,26 @@
                               }
                         }
                         // 10/29：清單是空的時候，焦點改移到畫面推薦的下一步
-                        focusEmptyAction();
+                        // 11/1：從分頁標籤、空清單的按鈕進入清單時，改由 focusOnEnter 決定焦點（空清單時它一樣交給 focusEmptyAction）。
+                        //       原本只有 focusEmptyAction(); 這一行
+                        // 11/1：用方向鍵換篩選（預約／現場、滿意度）之後，焦點留在新選的那一顆（switchFilter）
+                        if (options.focusSelector) {
+                              const target = root.querySelector(options.focusSelector);
+                              if (target) target.focus();
+                        }
+                        if (options.enter) focusOnEnter(restored);
+                        // 11/1：有 focusSelector 時不搶焦點（換篩選後清單空了，也要能接著按方向鍵換回去）。原本：if (!options.enter) focusEmptyAction();
+                        if (!options.enter && !options.focusSelector) focusEmptyAction();
+                        // 11/1：剛開始篩選某個場地時，焦點放在「取消場地篩選」：按 Enter 就回到篩選前。切回視窗的自動重讀不動
+                        if (!options.quiet && !venueBefore && currentFilter().venueId) {
+                              const reset = venueResetLink();
+                              if (reset) {
+                                    // 程式移過去的焦點，瀏覽器不一定畫焦點框（:focus-visible），所以自己加 class 畫，離開就拿掉
+                                    reset.classList.add('queue-focus-ring');
+                                    reset.addEventListener('blur', function () { reset.classList.remove('queue-focus-ring'); }, { once: true });
+                                    reset.focus();
+                              }
+                        }
                   })
                   .catch(function (err) {
                         flash(errorMessage(err), 'danger');
@@ -520,6 +620,72 @@
             if (!id) return;
             const el = root.querySelector('#' + id);
             if (el) el.focus();
+      }
+
+      /* 11/1：進入一個清單（點分頁標籤、空清單的「前往…」按鈕、剛打開這一頁）時，焦點放哪裡：
+           未讀：第一則（不展開）
+           待回覆：有自動填回的草稿 → 展開第一則填回草稿的評論；沒有 → 第一則（不展開）
+           已完成：展開第一則
+           全部、封存：留在分頁標籤上，可以用 ←→ 換到別的分頁標籤（見下方「分頁標籤的方向鍵」）
+         焦點都放在那一則的標題列（accordion-button）：按 Enter 就能展開／收合。
+         清單是空的時候照舊，交給 focusEmptyAction（焦點移到畫面推薦的下一步）。 */
+      function firstItemButton() {
+            return root.querySelector('#reviewQueue .accordion-button');
+      }
+
+      function openAndFocus(collapse) {
+            const btn = root.querySelector('[data-bs-target="#' + collapse.id + '"]');
+            const alreadyOpen = collapse.classList.contains('show');
+            // 第一則展開不捲動：清單開頭本來就在畫面上，捲了反而把分頁標籤捲走（shown.bs.collapse 那裡看這個記號）
+            if (!alreadyOpen && btn === firstItemButton()) collapse.dataset.noScroll = 'true';
+            if (!alreadyOpen) bootstrap.Collapse.getOrCreateInstance(collapse, { toggle: false }).show();
+            // 正在展開的，畫面交給 shown.bs.collapse 處理；已經展開的，讓瀏覽器把它捲進畫面
+            if (btn) btn.focus({ preventScroll: !alreadyOpen });
+      }
+
+      function focusOnEnter(restored) {
+            const st = stateEl();
+            if (st && st.dataset.emptyFocus) {
+                  focusEmptyAction();
+                  return;
+            }
+            const tab = currentFilter().tab;
+            const first = firstItemButton();
+
+            if (tab === 'all' || tab === 'spam') {
+                  const activeTab = root.querySelector('.nav-tabs .nav-link.active');
+                  if (activeTab) activeTab.focus();
+                  return;
+            }
+            if (!first) return;   // 沒有任何一則（例如空清單但後端沒有推薦的下一步）
+
+            if (tab === 'pending' && restored.size > 0) {
+                  // 照畫面上的順序找第一則填回草稿的
+                  const form = Array.from(root.querySelectorAll('.js-reply-form')).find(function (f) {
+                        return restored.has(reviewIdOfForm(f));
+                  });
+                  const collapse = form ? form.closest('.accordion-collapse') : null;
+                  if (collapse) {
+                        openAndFocus(collapse);
+                        return;
+                  }
+            }
+            if (tab === 'completed') {
+                  const collapse = document.querySelector(first.dataset.bsTarget);
+                  if (collapse) {
+                        openAndFocus(collapse);
+                        return;
+                  }
+            }
+            if (tab === 'unread' || tab === 'pending' || tab === 'completed') {
+                  first.focus({ preventScroll: true });
+            }
+      }
+
+      // 11/1：未讀、待回覆是空的、後端自動放寬了時間範圍時，用右下角的提示告訴員工（原本是清單上方的提示條，見 _QueueList.cshtml）
+      function noticeWidened() {
+            const el = root.querySelector('#queueWidenedNotice');
+            if (el) showNotice(el.dataset.message, 'info');
       }
 
       // 展開：這一則的頂端貼齊頁首（白色 bar）下緣，展開的內容才看得完整
@@ -778,7 +944,15 @@
             const link = e.target.closest('.js-queue-link');
             if (link) {
                   e.preventDefault();
-                  loadList(filterFromHref(link.href));
+                  // 11/1：從分頁標籤、空清單的推薦按鈕（#emptyAction）進來，焦點依清單放（focusOnEnter）。原本：
+                  // loadList(filterFromHref(link.href));
+                  const entering = link.matches('.nav-tabs .nav-link') || link.id === 'emptyAction';
+                  // 11/1：點篩選按鈕組（預約／現場、滿意度）時，焦點留在新選的那一顆，才能接著用 ←→ 換。原本：
+                  // loadList(filterFromHref(link.href), { enter: entering });
+                  const group = link.closest('.btn-group[aria-label]');
+                  const options = { enter: entering };
+                  if (group) options.focusSelector = '.btn-group[aria-label="' + group.getAttribute('aria-label') + '"] .btn-secondary';
+                  loadList(filterFromHref(link.href), options);
                   return;
             }
 
@@ -983,6 +1157,192 @@
             loadList(f, { focusId: 'searchKeyword' });
       });
 
+      /* ── 11/1：鍵盤操作（方向鍵、Alt+Enter）────────────────
+         （同一天上午先加過「分頁標籤上 ←→ 只移焦點」，還沒 commit 就改成下面這套，所以直接換掉，沒有留註解）
+
+         ←→（左右鍵）：
+           - 視窗開著：在視窗底部的按鈕之間移動（例如預覽視窗的「返回修改」「確定送出」）
+           - 焦點在篩選按鈕組（預約／現場、滿意度）：直接換成左右那一個篩選
+           - 焦點在分頁標籤：直接換到左右的分頁（任何清單都一樣）
+           - 未讀、待回覆：焦點在「展開的評論標題」「空的回覆框」「罐頭回覆」時，在這一則的罐頭回覆之間移動，按 Enter 插入
+           - 全部、已完成、封存：其他地方都直接換分頁；焦點在輸入框、下拉選單時不換，維持原本的行為
+           到頭都會繞回另一端。
+         ↑↓（上下鍵）：焦點在「收合的評論標題」時，移到上一則／下一則的標題；展開的評論維持原本的捲動畫面。
+         Alt+Enter：在回覆框裡＝按「預覽並送出」；預覽視窗開著時＝按「確定送出」。
+         有按 Ctrl、Shift 等其他組合鍵時一律不管，留給瀏覽器。 */
+      const REVIEW_HEADER = '.accordion-button[data-bs-target^="#rev-"]';
+
+      function isTyping(el) {
+            return el.matches('input, select, textarea, [contenteditable="true"]') || el.closest('.dropdown-menu') !== null;
+      }
+
+      function stepIn(list, current, step) {
+            const i = list.indexOf(current);
+            if (i === -1) return step > 0 ? list[0] : list[list.length - 1];
+            return list[(i + step + list.length) % list.length];
+      }
+
+      // 換到左右的分頁：跟點分頁標籤一樣算「進入清單」，焦點依清單放（focusOnEnter）
+      function switchTab(step) {
+            const links = Array.from(root.querySelectorAll('.nav-tabs .nav-link'));
+            const active = links.find(function (l) { return l.classList.contains('active'); });
+            if (!active) return;
+            loadList(filterFromHref(stepIn(links, active, step).href), { enter: true });
+      }
+
+      // 換成左右的篩選；清單換好之後焦點留在新選的那一顆（loadList 的 focusSelector），才能接著按
+      function switchFilter(link, step) {
+            const group = link.closest('.btn-group[aria-label]');
+            const links = Array.from(group.querySelectorAll('.js-queue-link'));
+            const label = group.getAttribute('aria-label');
+            loadList(filterFromHref(stepIn(links, link, step).href), {
+                  focusSelector: '.btn-group[aria-label="' + label + '"] .btn-secondary'
+            });
+      }
+
+      // 讓用方向鍵移過去的那一則留在畫面裡（不被頁首蓋住、不跑到畫面下面）
+      function keepInView(el) {
+            const header = document.querySelector('.admin-header');
+            const topLimit = (header ? header.getBoundingClientRect().bottom : 0) + 8;
+            const r = el.getBoundingClientRect();
+            if (r.top < topLimit) window.scrollBy({ top: r.top - topLimit, behavior: 'smooth' });
+            if (r.bottom > window.innerHeight - 8) window.scrollBy({ top: r.bottom - window.innerHeight + 8, behavior: 'smooth' });
+      }
+
+      document.addEventListener('keydown', function (e) {
+            if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+            const isLeftRight = e.key === 'ArrowLeft' || e.key === 'ArrowRight';
+            const isUpDown = e.key === 'ArrowUp' || e.key === 'ArrowDown';
+            if (!isLeftRight && !isUpDown) return;
+            const t = e.target;
+            const step = (e.key === 'ArrowRight' || e.key === 'ArrowDown') ? 1 : -1;
+
+            // 1. 視窗開著：只處理底部按鈕之間的左右移動，其他都不管
+            if (document.querySelector('.modal.show')) {
+                  const actions = t.closest('.modal.show .queue-modal-actions');
+                  if (!isLeftRight || !actions || !t.matches('button')) return;
+                  const buttons = Array.from(actions.querySelectorAll('button')).filter(function (b) {
+                        return !b.disabled && b.offsetParent !== null;   // 看得到、按得了的
+                  });
+                  if (buttons.length < 2) return;
+                  e.preventDefault();
+                  stepIn(buttons, t, step).focus();
+                  return;
+            }
+            if (!root.contains(t) && t !== document.body) return;   // 頁首、側邊欄的東西不管
+
+            // 2. 上下鍵：收合的評論標題 → 上一則／下一則
+            if (isUpDown) {
+                  const header = t.closest(REVIEW_HEADER);
+                  if (!header || header.getAttribute('aria-expanded') === 'true') return;
+                  const headers = Array.from(root.querySelectorAll(REVIEW_HEADER));
+                  const next = headers[headers.indexOf(header) + step];
+                  if (!next) return;   // 已經是第一則／最後一則：不攔，維持原本的捲動
+                  e.preventDefault();
+                  next.focus({ preventScroll: true });
+                  keepInView(next);
+                  return;
+            }
+
+            // 3. 篩選按鈕組（預約／現場、滿意度）
+            const filterLink = t.closest('.btn-group[aria-label] .js-queue-link');
+            if (filterLink) {
+                  e.preventDefault();
+                  switchFilter(filterLink, step);
+                  return;
+            }
+
+            // 4. 分頁標籤：平常直接換分頁；按過 Esc 回到分頁標籤時只移焦點，按 Enter 才換（11/1 加 tabBrowsing）
+            const tabLink = t.closest('.nav-tabs .nav-link');
+            if (tabLink) {
+                  e.preventDefault();
+                  if (tabBrowsing) {
+                        stepIn(Array.from(root.querySelectorAll('.nav-tabs .nav-link')), tabLink, step).focus();
+                        return;
+                  }
+                  switchTab(step);
+                  return;
+            }
+
+            const tab = currentFilter().tab;
+
+            // 5. 未讀、待回覆：罐頭回覆之間移動
+            if (tab === 'unread' || tab === 'pending') {
+                  const item = t.closest('.accordion-item');
+                  if (!item) return;
+                  const header = t.closest(REVIEW_HEADER);
+                  const onOpenHeader = header !== null && header.getAttribute('aria-expanded') === 'true';
+                  const onEmptyReply = t.matches('.js-reply-text') && t.value === '';
+                  const onCanned = t.matches('.js-canned');
+                  if (!onOpenHeader && !onEmptyReply && !onCanned) return;
+                  const canned = Array.from(item.querySelectorAll('.js-canned'));
+                  if (canned.length === 0) return;
+                  e.preventDefault();
+                  stepIn(canned, t, step).focus();
+                  return;
+            }
+
+            // 6. 全部、已完成、封存：直接換分頁（打字、選下拉選單時不換）
+            if (tab === 'all' || tab === 'completed' || tab === 'spam') {
+                  if (isTyping(t)) return;
+                  e.preventDefault();
+                  switchTab(step);
+            }
+      });
+
+      /* 11/1：Esc＝焦點回到目前清單的分頁標籤（視窗開著時不管，留給視窗自己關）。
+         回到分頁標籤後進入「瀏覽分頁」：←→ 只移焦點，按 Enter 才換清單；焦點離開分頁標籤列、或清單換掉就結束。 */
+      let tabBrowsing = false;
+
+      function venueResetLink() {
+            const icon = root.querySelector('a.js-queue-link .bi-x-circle');   // 「取消場地篩選」連結（_QueueList.cshtml 目前條件的說明）
+            return icon ? icon.closest('a') : null;
+      }
+
+      document.addEventListener('keydown', function (e) {
+            if (e.key !== 'Escape') return;
+            if (document.querySelector('.modal.show')) return;
+            const active = root.querySelector('.nav-tabs .nav-link.active');
+            if (!active) return;
+            e.preventDefault();
+            tabBrowsing = true;
+            active.focus();
+      });
+
+      root.addEventListener('focusin', function (e) {
+            if (!e.target.closest('.nav-tabs')) tabBrowsing = false;
+      });
+      document.addEventListener('queue:rendered', function () { tabBrowsing = false; });
+
+      // Alt+Enter：回覆框裡＝預覽並送出；預覽視窗開著＝確定送出（按鈕停用時不動）
+      document.addEventListener('keydown', function (e) {
+            if (!e.altKey || e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.shiftKey) return;
+            const preview = document.getElementById('replyPreviewModal');
+            if (preview && preview.classList.contains('show')) {
+                  e.preventDefault();
+                  const send = document.getElementById('replyPreviewSend');
+                  if (send && !send.disabled) send.click();
+                  return;
+            }
+            const textarea = e.target.closest('.js-reply-text');
+            if (!textarea || !root.contains(textarea)) return;
+            e.preventDefault();
+            const submit = textarea.closest('.js-reply-form').querySelector('.js-reply-submit');
+            if (submit && !submit.disabled) submit.click();
+      });
+
+      /* 11/1：點展開的評論裡的空白處（不是按鈕、連結、輸入框），焦點移到這一則的標題列：
+         接著按 Enter 就能收合，未讀、待回覆按 ←→ 可以選罐頭回覆。選取文字時不動，免得選到一半焦點跑掉。 */
+      root.addEventListener('click', function (e) {
+            const body = e.target.closest('.accordion-collapse.show[id^="rev-"]');
+            if (!body) return;
+            if (e.target.closest('a, button, input, textarea, select, label, summary, [tabindex], [contenteditable="true"]')) return;
+            const selection = window.getSelection();
+            if (selection && !selection.isCollapsed) return;
+            const header = root.querySelector('[data-bs-target="#' + body.id + '"]');
+            if (header) header.focus({ preventScroll: true });
+      });
+
       /* ── 回覆框自動長高（昱，10/14）───────────────────────
        初始 3 行；內容寫到最後一行時就多長一行，永遠替員工留一行空白，最多 10 行，再多才出現捲軸。
        用 scrollHeight 量「內容實際佔幾行」，所以一句太長自動折行也算得到，不是只數換行符號。
@@ -1161,6 +1521,12 @@
                   if (previewSending) e.preventDefault();
             });
 
+            // 11/1：預覽視窗打開時，焦點放在「返回修改」：誤按 Enter 不會直接送出；←→ 換到「確定送出」（見上方鍵盤操作）
+            previewModalEl.addEventListener('shown.bs.modal', function () {
+                  const back = previewModalEl.querySelector('.queue-modal-actions [data-bs-dismiss="modal"]');
+                  if (back) back.focus();
+            });
+
             previewModalEl.addEventListener('hidden.bs.modal', function () {
                   // 沒送出就關掉：提示「還沒送出」，游標放回輸入框，方便接著改
                   if (previewForm && !previewSent && document.contains(previewForm)) {
@@ -1208,6 +1574,11 @@
          只看每一則本身的展開區（accordion-collapse），不管裡面其他可能會展開的東西。 */
       root.addEventListener('shown.bs.collapse', function (e) {
             if (!e.target.classList.contains('accordion-collapse')) return;
+            // 11/1：進入清單時自動展開的第一則不捲（記號在 openAndFocus 放的，用一次就拿掉）
+            if (e.target.dataset.noScroll === 'true') {
+                  delete e.target.dataset.noScroll;
+                  return;
+            }
             const item = e.target.closest('.accordion-item');
             if (item) scrollItemBelowHeader(item);
       });
@@ -1312,9 +1683,23 @@
          整頁是由伺服器 render 的，沒有經過 loadList，
          所以要在這裡補標註一次（例如從書籤或別人給的網址進來）。 */
       highlight();
+
+      /* 10/31：員工切回這個視窗時，重新讀取清單：顧客剛寫的評論、剛表態的滿意度，不用重新整理整頁就看得到。
+         不用 SignalR（還沒做）。正在打字、選條件，或預覽、標記垃圾的視窗開著時不動，免得打斷員工；
+         清單換掉時，沒送出的回覆、展開中的那一則都會保留（restoreAfterRender）。 */
+      window.addEventListener('focus', function () {
+            if (document.querySelector('.modal.show')) return;
+            const active = document.activeElement;
+            if (active && root.contains(active) && active.matches('input, textarea, select')) return;
+            // 11/1：加 quiet：自動重讀不跳「已放寬時間範圍」的提示。原本：loadList(currentFilter());
+            loadList(currentFilter(), { quiet: true });
+      });
+
       // 10/29：送出鈕的狀態（瀏覽器可能把上一次的輸入框內容自己填回去，不會觸發 input），空清單的焦點
       root.querySelectorAll('.js-reply-form').forEach(syncReplySubmit);
-      focusEmptyAction();
+      // 11/1：剛打開這一頁也算「進入清單」，焦點依清單放；放寬時間範圍的提示也在這裡顯示。原本：focusEmptyAction();
+      focusOnEnter(new Set());
+      noticeWidened();
 
 })();
 

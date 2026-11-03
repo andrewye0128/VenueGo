@@ -28,16 +28,58 @@ const loginTo = computed(() =>
     : { name: "login", query: { redirect: route.fullPath } },
 );
 
+// ── 會員選單的開關 ──
+// 手機＆平板：點頭像才打開、再點一次關閉（toggleMobileDropdown）
+// 電腦版：滑鼠移到頭像上就打開、移開就關閉；點一下會「固定」打開，移開也不關（點外面或再點一次才關）
+//   為什麼點擊不是單純切換：滑鼠移上去時選單已經打開了，點下去如果切換，選單反而會被關掉
+// 移開時等一下才關：頭像和選單中間有 8px 的空隙（mt-2），滑鼠經過空隙時不能馬上關掉
+const HOVER_CLOSE_DELAY_MS = 150;
+const isDropdownPinned = ref(false);
+let hoverCloseTimer = null;
+
+const closeDropdown = () => {
+  clearTimeout(hoverCloseTimer);
+  isDropdownOpen.value = false;
+  isDropdownPinned.value = false;
+};
+
+const toggleMobileDropdown = () => {
+  if (isDropdownOpen.value) closeDropdown();
+  else isDropdownOpen.value = true;
+};
+
+// pointerType 只認滑鼠：用手指點觸控螢幕的電腦時，不要被當成「滑過」
+const openOnHover = (event) => {
+  if (event.pointerType !== "mouse") return;
+  clearTimeout(hoverCloseTimer);
+  isDropdownOpen.value = true;
+};
+
+const closeOnLeave = (event) => {
+  if (event.pointerType !== "mouse" || isDropdownPinned.value) return;
+  hoverCloseTimer = setTimeout(closeDropdown, HOVER_CLOSE_DELAY_MS);
+};
+
+const toggleDesktopPin = () => {
+  if (isDropdownPinned.value) {
+    closeDropdown();
+    return;
+  }
+  clearTimeout(hoverCloseTimer);
+  isDropdownOpen.value = true;
+  isDropdownPinned.value = true;
+};
+
 // 處理登出邏輯
 const handleLogout = async () => {
-  isDropdownOpen.value = false;
+  closeDropdown();
   memberStore.logout();
   await router.push({ name: "login" });
 };
 
 // 點擊「會員中心」
 const goToProfile = async () => {
-  isDropdownOpen.value = false;
+  closeDropdown();
   await router.push("/member/profile");
 };
 
@@ -49,7 +91,7 @@ const handleClickOutside = (event) => {
     mobileDropdownRef.value &&
     !mobileDropdownRef.value.contains(event.target)
   ) {
-    isDropdownOpen.value = false;
+    closeDropdown();
   }
 };
 onMounted(() => {
@@ -58,6 +100,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener("click", handleClickOutside);
+  clearTimeout(hoverCloseTimer);
 });
 </script>
 
@@ -83,7 +126,8 @@ onUnmounted(() => {
             type="button"
             class="flex size-9 cursor-pointer items-center justify-center rounded-full bg-brand-primary text-sm font-bold text-white ring ring-neutral-border transition hover:ring-brand-primary focus:outline-none"
             aria-label="會員功能選單"
-            @click="isDropdownOpen = !isDropdownOpen"
+            :aria-expanded="isDropdownOpen"
+            @click="toggleMobileDropdown"
           >
             <span>{{ memberStore.member?.name?.charAt(0) }}</span>
           </button>
@@ -163,12 +207,19 @@ onUnmounted(() => {
         <div class="flex items-center gap-4">
           <!-- 根據登入狀態切換：已登入顯示小頭，未登入顯示登入按鈕 -->
           <template v-if="memberStore.isLoggedIn">
-            <div ref="dropdownRef" class="relative">
+            <!-- 滑過的事件放在外層：滑鼠從頭像移到選單上時，還在外層裡面，選單不會關掉 -->
+            <div
+              ref="dropdownRef"
+              class="relative"
+              @pointerenter="openOnHover"
+              @pointerleave="closeOnLeave"
+            >
               <button
                 type="button"
                 class="flex cursor-pointer items-center gap-2 rounded-full p-1.5 transition hover:bg-brand-primary/8 focus:outline-none"
                 aria-label="會員功能選單"
-                @click="isDropdownOpen = !isDropdownOpen"
+                :aria-expanded="isDropdownOpen"
+                @click="toggleDesktopPin"
               >
                 <div
                   class="flex size-10 items-center justify-center rounded-full bg-brand-primary text-base font-bold text-white"

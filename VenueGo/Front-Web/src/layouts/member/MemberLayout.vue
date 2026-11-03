@@ -8,18 +8,12 @@ import { useMemberStore } from "@/stores/member";
 import { nextTick, onMounted, ref, watch } from "vue";
 // 10/25 評論組（昱）新增：選單「我的評論」右邊的提醒（快到期的則數／館方新回覆），規則寫在那個元件的檔頭
 import MemberReviewsMarker from "@/components/review/MemberReviewsMarker.vue";
+import { memberNavItems } from "@/constants/navigation";
 const memberStore = useMemberStore();
 const route = useRoute();
 const router = useRouter();
-// 網址用路徑字串：頁面還沒做好時會自動顯示 404；組員做好頁面、路由加上同樣的路徑後，這裡不用改
-// 圖示名稱要寫完整，Nuxt UI 打包時才掃描得到
-const sideMenuItems = [
-  { label: "個人資料", to: "/member/profile", icon: "i-mdi-card-account-details-outline" },
-  { label: "我的預約", to: "/member/reservations", icon: "i-mdi-calendar-month-outline" },
-  { label: "訂單與付款", to: "/member/orders", icon: "i-mdi-credit-card-outline" },
-  { label: "我的票券", to: "/member/tickets", icon: "i-mdi-ticket-confirmation-outline" },
-  { label: "我的評論", to: "/member/reviews", icon: "i-mdi-star-outline" },
-];
+// 11/03：選單項目搬到 constants/navigation.js 的 memberNavItems，跟 Header 頭像的下拉選單、Footer 共用
+const sideMenuItems = memberNavItems;
 //測試資料
 // const user = {
 //   name: "王小明",

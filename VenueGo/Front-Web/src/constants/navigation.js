@@ -14,6 +14,17 @@ const faq = { label: "常見問題", to: "/faq" };
 // Header 主選單
 export const mainNavItems = [about, booking, venues, news, reviews, faq];
 
+// 會員中心的頁面：會員中心左側選單（MemberLayout）、Header 頭像的下拉選單（MemberMenuPanel）、
+// Footer「會員」分組共用。新增頁面、改名稱只要改這裡，三個地方會一起更新
+// 圖示名稱要寫完整，Nuxt UI 打包時才掃描得到（Footer 沒有顯示圖示）
+export const memberNavItems = [
+  { label: "個人資料", to: "/member/profile", icon: "i-mdi-card-account-details-outline" },
+  { label: "我的預約", to: "/member/reservations", icon: "i-mdi-calendar-month-outline" },
+  { label: "訂單與付款", to: "/member/orders", icon: "i-mdi-credit-card-outline" },
+  { label: "我的票券", to: "/member/tickets", icon: "i-mdi-ticket-confirmation-outline" },
+  { label: "我的評論", to: "/member/reviews", icon: "i-mdi-star-outline" },
+];
+
 // Footer 連結分組
 export const footerLinkGroups = [
   {
@@ -21,14 +32,9 @@ export const footerLinkGroups = [
     links: [booking],
   },
   {
+    // 11/03：改用 memberNavItems（原本自己寫一份，「訂單與付款」寫成「訂單付款」，跟會員中心不一致）
     title: "會員",
-    links: [
-      { label: "個人資料", to: "/member/profile" },
-      { label: "我的預約", to: "/member/reservations" },
-      { label: "訂單付款", to: "/member/orders" },
-      { label: "我的票券", to: "/member/tickets" },
-      { label: "我的評論", to: "/member/reviews" },
-    ],
+    links: memberNavItems,
   },
   {
     title: "場館",

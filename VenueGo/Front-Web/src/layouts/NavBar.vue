@@ -1,10 +1,11 @@
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { RouterLink, useRoute, useRouter } from "vue-router";
 import Logo from "@/components/Logo.vue";
 import IconMenu from "@/components/icons/IconMenu.vue";
 import IconCalendarPlus from "@/components/icons/IconCalendarPlus.vue";
 import NavDrawer from "./NavDrawer.vue";
+import MemberMenuPanel from "./MemberMenuPanel.vue";
 // 選單資料統一放在 constants/navigation.js，和 Footer 共用
 import { mainNavItems as navItems } from "@/constants/navigation";
 import { useMemberStore } from "@/stores/member";
@@ -77,11 +78,8 @@ const handleLogout = async () => {
   await router.push({ name: "login" });
 };
 
-// 點擊「會員中心」
-const goToProfile = async () => {
-  closeDropdown();
-  await router.push("/member/profile");
-};
+// 換頁就關閉選單：選單裡的連結不用各自處理，按瀏覽器的上一頁換頁時也會關掉
+watch(() => route.fullPath, closeDropdown);
 
 // 點擊選單外部自動關閉下拉選單
 const handleClickOutside = (event) => {
@@ -132,28 +130,14 @@ onUnmounted(() => {
             <span>{{ memberStore.member?.name?.charAt(0) }}</span>
           </button>
 
-          <!-- 手機版彈出選單 -->
-          <div
+          <!-- 手機版彈出選單（內容跟電腦版共用 MemberMenuPanel） -->
+          <MemberMenuPanel
             v-if="isDropdownOpen"
-            class="absolute right-0 mt-2 w-36 rounded-md border border-neutral-border bg-neutral-surface py-1 shadow-lg z-50"
-          >
-            <button
-              type="button"
-              class="flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-left text-sm text-neutral-text-primary hover:bg-brand-primary/8"
-              @click="goToProfile"
-            >
-              <UIcon name="i-mdi-card-account-details-outline" class="size-4" />
-              會員中心
-            </button>
-            <button
-              type="button"
-              class="flex w-full cursor-pointer items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-              @click="handleLogout"
-            >
-              <UIcon name="i-mdi-logout" class="size-4" />
-              登出
-            </button>
-          </div>
+            :name="memberStore.member?.name"
+            :email="memberStore.member?.email"
+            class="absolute right-0 z-50 mt-2"
+            @logout="handleLogout"
+          />
         </div>
         <!-- 未登入：放在頭像的同一個位置，登入、登出時畫面不會跳動
              顏色跟電腦版一樣（外框的 primary），跟旁邊實心的「立即預約」區分主次
@@ -232,28 +216,14 @@ onUnmounted(() => {
                 <!-- <UIcon name="i-mdi-chevron-down" class="size-4 text-neutral-text-secondary" /> -->
               </button>
 
-              <!-- 電腦版彈出選單 -->
-              <div
+              <!-- 電腦版彈出選單（內容跟手機版共用 MemberMenuPanel） -->
+              <MemberMenuPanel
                 v-if="isDropdownOpen"
-                class="absolute right-0 mt-2 w-40 rounded-md border border-neutral-border bg-neutral-surface py-1 shadow-lg z-50"
-              >
-                <button
-                  type="button"
-                  class="flex cursor-pointer w-full items-center gap-2 px-4 py-2 text-left text-sm text-neutral-text-primary hover:bg-brand-primary/8"
-                  @click="goToProfile"
-                >
-                  <UIcon name="i-mdi-card-account-details-outline" class="size-4" />
-                  會員中心
-                </button>
-                <button
-                  type="button"
-                  class="flex cursor-pointer w-full items-center gap-2 px-4 py-2 text-left text-sm text-red-600 hover:bg-red-50"
-                  @click="handleLogout"
-                >
-                  <UIcon name="i-mdi-logout" class="size-4" />
-                  登出
-                </button>
-              </div>
+                :name="memberStore.member?.name"
+                :email="memberStore.member?.email"
+                class="absolute right-0 z-50 mt-2"
+                @logout="handleLogout"
+              />
             </div>
           </template>
           <template v-else>

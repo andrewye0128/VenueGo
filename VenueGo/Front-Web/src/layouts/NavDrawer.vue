@@ -7,6 +7,9 @@ import IconClose from "@/components/icons/IconClose.vue";
 const props = defineProps({
   open: { type: Boolean, default: false },
   items: { type: Array, required: true },
+  // 登入狀態、登入連結由 NavBar 傳進來（跟頂部的登入按鈕同一份，登入後會回到原本的頁面）
+  isLoggedIn: { type: Boolean, default: false },
+  loginTo: { type: [String, Object], default: "/login" },
 });
 const emit = defineEmits(["close"]);
 
@@ -87,6 +90,14 @@ onUnmounted(() => {
             </RouterLink>
           </li>
         </ul>
+
+        <!-- 未登入：選單底部放登入、註冊（手機上註冊只有這個入口）
+             已登入不顯示：頂部頭像的選單已經有「會員中心」「登出」
+             點了會換頁，上面的 watch 會自動關閉選單 -->
+        <div v-if="!isLoggedIn" class="grid grid-cols-2 gap-2 border-t border-neutral-border p-4">
+          <UButton color="primary" variant="outline" :to="loginTo" block>登入</UButton>
+          <UButton color="primary" :to="{ name: 'register' }" block>註冊</UButton>
+        </div>
       </aside>
     </Transition>
   </Teleport>

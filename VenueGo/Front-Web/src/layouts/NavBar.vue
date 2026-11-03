@@ -1,6 +1,6 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from "vue";
-import { RouterLink, useRouter } from "vue-router";
+import { RouterLink, useRoute, useRouter } from "vue-router";
 import Logo from "@/components/Logo.vue";
 import IconMenu from "@/components/icons/IconMenu.vue";
 import IconCalendarPlus from "@/components/icons/IconCalendarPlus.vue";
@@ -14,6 +14,19 @@ const isDropdownOpen = ref(false);
 const dropdownRef = ref(null);
 const mobileDropdownRef = ref(null);
 const router = useRouter();
+const route = useRoute();
+
+// 登入按鈕的目的地（電腦版、手機＆平板版、側邊選單共用）：
+// 帶上 ?redirect=目前網址，登入成功後 LoginView 會帶回原本的頁面（網址是否安全由 LoginView 檢查）
+// 以下情況不帶 redirect：
+//   - 已經在登入頁、註冊頁：帶了會變成「登入完回到登入頁」
+//   - 首頁：沒帶的話 LoginView 本來就會回首頁，網址比較乾淨
+const NO_REDIRECT_ROUTES = ["home", "login", "register"];
+const loginTo = computed(() =>
+  NO_REDIRECT_ROUTES.includes(route.name)
+    ? { name: "login" }
+    : { name: "login", query: { redirect: route.fullPath } },
+);
 
 // 處理登出邏輯
 const handleLogout = async () => {
@@ -98,6 +111,24 @@ onUnmounted(() => {
             </button>
           </div>
         </div>
+        <!-- 未登入：放在頭像的同一個位置，登入、登出時畫面不會跳動
+             顏色跟電腦版一樣（外框的 primary），跟旁邊實心的「立即預約」區分主次
+             手機右邊那一格太窄（320px 手機約 96px），只放圖示；平板放文字
+             圖示用 Lucide：線條粗細、圓角跟旁邊的 IconCalendarPlus 一致 -->
+        <template v-else>
+          <UButton
+            color="primary"
+            variant="outline"
+            :to="loginTo"
+            square
+            icon="i-lucide-user-round"
+            aria-label="登入"
+            class="md:hidden"
+          />
+          <UButton color="primary" variant="outline" :to="loginTo" class="hidden md:inline-flex">
+            登入
+          </UButton>
+        </template>
         <!-- 手機：只有 icon -->
         <div class="md:hidden">
           <!-- 圖示沿用 IconCalendarPlus，放在 UButton 裡面，外觀跟原本一樣 -->
@@ -175,13 +206,19 @@ onUnmounted(() => {
             </div>
           </template>
           <template v-else>
-            <UButton color="primary" variant="outline" size="lg" to="/login">登入</UButton>
+            <UButton color="primary" variant="outline" size="lg" :to="loginTo">登入</UButton>
           </template>
           <UButton color="action" size="lg" to="/booking">立即預約</UButton>
         </div>
       </div>
     </div>
 
-    <NavDrawer :open="isDrawerOpen" :items="navItems" @close="isDrawerOpen = false" />
+    <NavDrawer
+      :open="isDrawerOpen"
+      :items="navItems"
+      :is-logged-in="memberStore.isLoggedIn"
+      :login-to="loginTo"
+      @close="isDrawerOpen = false"
+    />
   </nav>
 </template>

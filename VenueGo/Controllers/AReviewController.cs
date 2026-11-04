@@ -628,6 +628,14 @@ namespace VenueGo.Controllers
             };
         }
 
+        /* 11/4：未讀清單裡「這個分頁讀過、先留著」的評論（keep），排序時照閱覽期限算，位置才不會跳。
+             原本用 DueAt：讀過之後 DueAt 變成回覆期限（4–5★ 是 7 天、1–2★ 是 3 天），比其他未讀的閱覽期限晚，
+             切回視窗自動重讀清單時，剛展開的那一則就從最上面跑到最下面。畫面上的期限文字不變（仍顯示回覆期限）。 */
+        private static DateTime SortDueOf(ReviewQueueItemVM i, string tab) =>
+            tab == QueueTab.Unread && i.ReadAt != null
+                ? ReviewUrgency.ReadDue(i.CreatedAt, i.StarRating)
+                : i.DueAt ?? DateTime.MaxValue;
+
         /// <summary>
         /// 10/26 負評優先：清單（或一組裡面）的順序。
         ///   未讀、待回覆：置頂 → 有文字的在前、只有星等的放最後 → 期限早的在前 → 評論早的在前。
@@ -639,7 +647,8 @@ namespace VenueGo.Controllers
         {
             QueueTab.Unread or QueueTab.Pending => items.OrderByDescending(i => i.IsPinned)
                                                         .ThenBy(i => i.IsRatingOnly)
-                                                        .ThenBy(i => i.DueAt ?? DateTime.MaxValue)
+                                                        // 11/4：改用 SortDueOf。原本：.ThenBy(i => i.DueAt ?? DateTime.MaxValue)
+                                                        .ThenBy(i => SortDueOf(i, tab))
                                                         .ThenBy(i => i.CreatedAt)
                                                         .ThenBy(i => i.ReviewId)
                                                         .ToList(),
@@ -652,7 +661,8 @@ namespace VenueGo.Controllers
         private static List<ReviewQueueGroupVM> SortGroups(IOrderedEnumerable<ReviewQueueGroupVM> groups, string tab) => tab switch
         {
             QueueTab.Unread or QueueTab.Pending => groups.ThenBy(g => g.Items[0].IsRatingOnly)
-                                                         .ThenBy(g => g.Items[0].DueAt ?? DateTime.MaxValue)
+                                                         // 11/4：改用 SortDueOf。原本：.ThenBy(g => g.Items[0].DueAt ?? DateTime.MaxValue)
+                                                         .ThenBy(g => SortDueOf(g.Items[0], tab))
                                                          .ThenBy(g => g.Items[0].CreatedAt)
                                                          .ToList(),
             QueueTab.Completed => groups.ThenByDescending(g => g.Items[0].RepliedAt).ToList(),

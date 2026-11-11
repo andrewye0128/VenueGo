@@ -2,10 +2,15 @@
 import { RouterView } from "vue-router";
 import AppHeader from "@/layouts/AppHeader.vue";
 import AppFooter from "@/layouts/AppFooter.vue";
-import { onMounted } from "vue";
+import { onMounted, watch } from "vue";
 import { useMemberStore } from "@/stores/member";
+import { setMemberNotificationsEnabled } from "@/composables/useMemberNotifications";
 
 const memberStore = useMemberStore();
+
+// 會員即時通知（例如預約逾期）：登入中就連上後端，登出就斷線（說明見 useMemberNotifications.js）
+// immediate：一打開網站就依目前的登入狀態處理；之後登入、登出時會再呼叫一次
+watch(() => memberStore.isLoggedIn, setMemberNotificationsEnabled, { immediate: true });
 
 // 網站啟動時，恢復目前登入會員的資料
 onMounted(async () => {

@@ -11,9 +11,12 @@
 
   「付款」按鈕跟列表一樣用 canPay 判斷，現在時間用 useSiteClock：
   視窗開著的時候時間到了，按鈕會自動消失
+
+  視窗開著的時候列表重新讀取了（例如收到逾期通知），頁面會用 patch 送進最新的 order，
+  這裡會安靜地重新讀一次明細，付款狀態、付款紀錄才會跟列表一致
 -->
 <script setup>
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import BookingPriceTable from "@/components/booking/BookingPriceTable.vue";
 import StatusBadge from "@/components/list/StatusBadge.vue";
 import { getMyOrder } from "@/api/orderApi";
@@ -42,18 +45,30 @@ const detail = ref(null);
 const loading = ref(true);
 const errorMessage = ref("");
 
-async function load() {
-  loading.value = true;
-  errorMessage.value = "";
+/**
+ * @param {object} [options]
+ * @param {boolean} [options.silent] 頁面送進新資料時用：不顯示讀取中，失敗時保留原本的明細、不顯示錯誤
+ */
+async function load({ silent = false } = {}) {
+  if (!silent) {
+    loading.value = true;
+    errorMessage.value = "";
+  }
   try {
     detail.value = await getMyOrder(props.order.orderId);
   } catch (err) {
-    errorMessage.value = err.message || "讀取訂單明細失敗，請稍後再試";
+    if (!silent) errorMessage.value = err.message || "讀取訂單明細失敗，請稍後再試";
   } finally {
     loading.value = false;
   }
 }
-onMounted(load);
+onMounted(() => load());
+
+// 頁面用 patch 送進最新的 order（列表重新讀取過）→ 明細也重新讀，畫面才不會停在舊的狀態
+watch(
+  () => props.order,
+  () => load({ silent: true }),
+);
 
 // 明細讀到之前先用列表的資料，視窗一打開就有內容，不會整個空白
 const o = computed(() => detail.value ?? props.order);

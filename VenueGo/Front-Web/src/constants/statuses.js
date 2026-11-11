@@ -1,7 +1,18 @@
 // 狀態對照表：後端回傳的數字 → 畫面上的文字、顏色、圖示
-// ⚠️ 數字要跟後端 Models/Enums 一致（ReservationStatus.cs、PaymentStatus .cs），後端新增狀態時這裡也要補
+// ⚠️ 數字要跟後端 Enums 一致（ReservationStatus.cs、PaymentStatus.cs），後端新增狀態時這裡也要補
 // color 是 Nuxt UI 的顏色名稱：success 綠、warning 橘、error 紅、primary 藍、neutral 灰（對應設計規範，見 main.css）
 // 圖示名稱要寫完整，Nuxt UI 打包時才掃描得到
+
+// 預約狀態的代碼：程式判斷時用（同下方的 PAYMENT_STATUS_CODE），不要直接寫數字
+export const RESERVATION_STATUS_CODE = Object.freeze({
+  PENDING: 0,
+  CONFIRMED: 1,
+  CANCELLED: 2,
+  EXPIRED: 3,
+  COMPLETED: 4,
+  CANCELLED_BY_VENUE: 6,
+  VOIDED: 7,
+});
 
 // 預約狀態（Reservations.ReservationStatus）
 export const RESERVATION_STATUS = {

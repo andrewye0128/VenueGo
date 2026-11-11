@@ -9,6 +9,7 @@ using VenueGo.Models.PaymentModels;
 using VenueGo.Services.ReviewTickets;
 using VenueGo.Services.Ticket;
 using VenueGo.Services.Time;
+using VenueGo.Services.VenueSchedules;
 
 namespace VenueGo.Services.Payments
 {
@@ -23,6 +24,11 @@ namespace VenueGo.Services.Payments
     /// 【逾期後才收到錢】（3-B 決定）時段還空著就重新佔位、恢復成已確認；
     /// 被別人訂走、或使用時段已經開始，付款改成退款處理中，由櫃檯退款（Refunds 尚未實作）。
     /// </para>
+    /// <para>
+    /// 【重新佔位前先問場地模組】逾期時佔位資料已經刪掉了，這段期間館方可能把時段設為不開放、
+    /// 改了營業時間、或刪除場地。這些都不在 ReservationSlots 裡，唯一鍵擋不到，
+    /// 所以重新佔位前先用 IVenueScheduleService 確認時段還能使用，不能用就改成退款處理中。
+    /// </para>
     /// </summary>
     public class PaymentConfirmationService : IPaymentConfirmationService
     {
@@ -33,6 +39,7 @@ namespace VenueGo.Services.Payments
         private readonly ITimeService _timeService;
         private readonly IEntryTicketService _entryTicketService;
         private readonly IBookingReviewTicketFactory _bookingFactory;
+        private readonly IVenueScheduleService _venueSchedule;
         private readonly ILogger<PaymentConfirmationService> _logger;
 
         public PaymentConfirmationService(
@@ -40,12 +47,14 @@ namespace VenueGo.Services.Payments
             ITimeService timeService,
             IEntryTicketService entryTicketService,
             IBookingReviewTicketFactory bookingFactory,
+            IVenueScheduleService venueSchedule,
             ILogger<PaymentConfirmationService> logger)
         {
             _db = db;
             _timeService = timeService;
             _entryTicketService = entryTicketService;
             _bookingFactory = bookingFactory;
+            _venueSchedule = venueSchedule;
             _logger = logger;
         }
 
@@ -189,6 +198,13 @@ namespace VenueGo.Services.Payments
                 return await MarkRefundingAsync(t, req, now, "查無預約時段", ct);
             }
 
+            // 逾期這段期間，館方可能把時段設為不開放、改了營業時間、或刪除場地（說明見類別上方）
+            var unusableReason = await FindUnusableReasonAsync(t, slotTimes, ct);
+            if (unusableReason is not null)
+            {
+                return await MarkRefundingAsync(t, req, now, unusableReason, ct);
+            }
+
             int ticketCount;
             try
             {
@@ -248,6 +264,40 @@ namespace VenueGo.Services.Payments
             return new PaymentConfirmResult(
                 PaymentConfirmOutcome.ReoccupiedAfterExpiry,
                 "已收款。預約原本已逾期，時段還空著，已恢復成已確認。", t.OrderNo, ticketCount);
+        }
+
+        /// <summary>
+        /// 重新佔位前，確認這些時段現在還能使用。
+        /// <para>
+        /// 透過場地模組的 IVenueScheduleService 判斷，不直接查 VenueUnavailableSlots 等資料表：
+        /// 場地模組規定「能不能用」的規則只由它維護一份（見 IVenueScheduleService 的說明）。
+        /// </para>
+        /// </summary>
+        /// <returns>不能用的原因（寫進 log 和回傳訊息）；null＝都可以用</returns>
+        private async Task<string?> FindUnusableReasonAsync(
+            Target t, IReadOnlyCollection<TimeOnly> slotTimes, CancellationToken ct)
+        {
+            // null＝場地不能使用（已刪除、運動類型已刪除）；空清單＝這天公休
+            var daySchedule = await _venueSchedule.GetDayScheduleAsync(t.VenueId, t.BookingDate, ct);
+            if (daySchedule is null)
+            {
+                return "場地已停止使用";
+            }
+
+            // 清單只包含營業時段，所以「找不到這一格」就是不在營業時間內（公休日整個清單是空的）
+            var slotsByTime = daySchedule.ToDictionary(slot => slot.SlotTime);
+
+            if (slotTimes.Any(time => !slotsByTime.ContainsKey(time)))
+            {
+                return "時段已不在營業時間內";
+            }
+
+            if (slotTimes.Any(time => slotsByTime[time].IsUnavailable))
+            {
+                return "時段已設為不開放";
+            }
+
+            return null;
         }
 
         // ══ 預約已失效，錢要退回去 ═══════════════════════════════

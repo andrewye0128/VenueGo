@@ -301,4 +301,6 @@ app.MapControllerRoute(
 
 app.MapControllers();   // 讓 [Route("api/...")] 的 API 路由生效
 
+app.MapMemberNotifications();   // 前台會員即時通知（SignalR，/hubs/member-notifications），設定在 ReservationModuleExtensions_F3
+
 app.Run();

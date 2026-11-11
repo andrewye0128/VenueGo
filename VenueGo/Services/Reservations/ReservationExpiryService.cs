@@ -4,6 +4,7 @@ using VenueGo.Constants;
 using VenueGo.Data;
 using VenueGo.Enums;
 using VenueGo.Models.Entities;
+using VenueGo.Services.Notifications;
 using VenueGo.Services.Time;
 
 namespace VenueGo.Services.Reservations
@@ -34,15 +35,18 @@ namespace VenueGo.Services.Reservations
 
         private readonly dbVenueContext _db;
         private readonly ITimeService _timeService;
+        private readonly IMemberNotifier _notifier;
         private readonly ILogger<ReservationExpiryService> _logger;
 
         public ReservationExpiryService(
             dbVenueContext db,
             ITimeService timeService,
+            IMemberNotifier notifier,
             ILogger<ReservationExpiryService> logger)
         {
             _db = db;
             _timeService = timeService;
+            _notifier = notifier;
             _logger = logger;
         }
 
@@ -61,6 +65,10 @@ namespace VenueGo.Services.Reservations
                     if (await ExpireOneAsync(candidate, now, cancellationToken))
                     {
                         expiredCount++;
+
+                        // ExpireOneAsync 已經 Commit 了，這時通知，前端讀到的一定是已逾期
+                        await _notifier.NotifyReservationChangedAsync(
+                            candidate.UserId, candidate.ReservationId, cancellationToken);
                     }
                 }
                 catch (OperationCanceledException)
@@ -80,9 +88,11 @@ namespace VenueGo.Services.Reservations
             return expiredCount;
         }
 
-        /// <summary>一筆要逾期的預約：處理時需要的 Id，以及寫操作紀錄用的「改之前的狀態」。</summary>
+        /// <summary>
+        /// 一筆要逾期的預約：處理時需要的 Id、寫操作紀錄用的「改之前的狀態」，以及要通知的會員。
+        /// </summary>
         private sealed record DueCandidate(
-            int ReservationId, int OrderId, byte OrderStatus, int PaymentId, byte PaymentStatus);
+            int ReservationId, int UserId, int OrderId, byte OrderStatus, int PaymentId, byte PaymentStatus);
 
         /// <summary>
         /// 找出要逾期的預約，期限最早的先處理。
@@ -106,7 +116,7 @@ namespace VenueGo.Services.Reservations
                        && payment.PaymentDueAt <= now
                     orderby payment.PaymentDueAt
                     select new DueCandidate(
-                        r.ReservationId, o.OrderId, o.OrderStatus, payment.PaymentId, payment.PaymentStatus))
+                        r.ReservationId, r.UserId, o.OrderId, o.OrderStatus, payment.PaymentId, payment.PaymentStatus))
                    .Take(BatchSize)
                    .ToListAsync(ct);
         }

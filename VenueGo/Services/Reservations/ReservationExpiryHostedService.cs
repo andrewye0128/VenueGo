@@ -1,7 +1,7 @@
 ﻿namespace VenueGo.Services.Reservations
 {
     /// <summary>
-    /// 預約逾期的背景排程：每 1 分鐘呼叫一次 IReservationExpiryService。寫法比照 TicketSettlementHostedService。
+    /// 預約逾期的背景排程：每 10 秒呼叫一次 IReservationExpiryService。寫法比照 TicketSettlementHostedService。
     /// <para>
     /// 【為什麼不能直接注入 IReservationExpiryService】
     /// 背景服務整個網站只有一個，從開站活到關站（Singleton）；
@@ -16,8 +16,13 @@
     /// </summary>
     public class ReservationExpiryHostedService : BackgroundService
     {
-        /// <summary>多久檢查一次。線上付款期限只有 50 分鐘，間隔要短，時段才會盡快釋放。</summary>
-        private static readonly TimeSpan Interval = TimeSpan.FromMinutes(1);
+        /// <summary>
+        /// 多久檢查一次。期限一到要盡快改成已逾期，前端才能即時收到通知（MemberNotificationHub）、時段也盡快釋放。
+        /// <para>
+        /// 平常沒有到期的預約，每一輪只是一句查詢、查到 0 筆，資料庫負擔很小（11/11 從 1 分鐘改成 10 秒）。
+        /// </para>
+        /// </summary>
+        private static readonly TimeSpan Interval = TimeSpan.FromSeconds(10);
 
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<ReservationExpiryHostedService> _logger;
@@ -38,7 +43,7 @@
 
             try
             {
-                // 開站先跑一次，不用等第一個 1 分鐘
+                // 開站先跑一次，不用等第一個間隔
                 await RunOnceAsync(stoppingToken);
 
                 while (await timer.WaitForNextTickAsync(stoppingToken))

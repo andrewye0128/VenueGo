@@ -2,7 +2,7 @@
 {
     /// <summary>
     /// 預約逾期處理：把「超過付款期限、還沒付款」的預約改成已逾期，並釋放時段。
-    /// <para>由 ReservationExpiryHostedService 每 1 分鐘呼叫一次。</para>
+    /// <para>由 ReservationExpiryHostedService 每 10 秒呼叫一次；改成已逾期的預約會通知會員（IMemberNotifier）。</para>
     /// </summary>
     public interface IReservationExpiryService
     {

@@ -1,9 +1,9 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using System.Threading;
 using System.Threading.Tasks;
 using VenueGo.Enums;
+using VenueGo.Filters;
 using VenueGo.Constants;
 using VenueGo.Models.ReservationModels;
 using VenueGo.Services.Auth;
@@ -17,7 +17,20 @@ using VenueGo.Options;
 
 namespace VenueGo.Controllers.Reservations
 {
-    //[Authorize(Roles = RoleNames.BackOffice)]  //2/ 登入權限，該頁面要求登入
+    /// <summary>
+    /// 後台代客預約（選會員 → 選場地 → 選日期 → 選時段 → 確認）。
+    /// <para>
+    /// 【登入檢查】跟後台預約列表（ReservationController）用同一個 EmployeeAuthorizeFilters：
+    /// 要登入、帳號啟用中、是在職員工，而且角色是 Admin、Manager 或 Staff。
+    /// 沒登入或不符合時，會被導向後台登入頁。
+    /// </para>
+    /// <para>
+    /// 11/12：原本的 [Authorize(Roles = RoleNames.BackOffice)] 被註解掉，沒登入也能進來看到會員的電話、Email，
+    /// 改成跟 ReservationController 一致。ASP.NET Core 預設不檢查登入（沒有 FallbackPolicy），
+    /// 這一行拿掉的話，這個 Controller 就會對所有人開放。
+    /// </para>
+    /// </summary>
+    [EmployeeAuthorizeFilters(RoleNames.Admin, RoleNames.Manager, RoleNames.Staff)]
     [Route("Reservation/Create")]
     public class ReservationCreateController : Controller
     {

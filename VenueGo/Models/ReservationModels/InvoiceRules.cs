@@ -15,9 +15,13 @@ namespace VenueGo.Models.ReservationModels
         /// <summary>
         /// 手機條碼載具的格式：斜線加 7 碼大寫英數字或 + - . 三個符號，例如 /AB12345。
         /// <para>前端 src/constants/payment.js 的 CARRIER_NO_PATTERN 要跟這裡一致。</para>
+        /// <para>
+        /// 結尾用 \z 不用 $：C# 的 $ 允許結尾多一個換行（"/AB12345\n" 會通過），
+        /// \z 才是真正的結尾，跟前端 JavaScript 的 $ 一樣嚴格。
+        /// </para>
         /// </summary>
         public static readonly Regex CarrierNoPattern =
-            new(@"^/[0-9A-Z+\-.]{7}$", RegexOptions.Compiled);
+            new(@"^/[0-9A-Z+\-.]{7}\z", RegexOptions.Compiled);
 
         /// <summary>
         /// 載具號碼格式是否正確。

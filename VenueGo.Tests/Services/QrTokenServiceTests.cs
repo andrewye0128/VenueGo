@@ -1,5 +1,4 @@
-﻿
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using NSubstitute;
 using Shouldly;
 using VenueGo.Enums;
@@ -15,8 +14,13 @@ namespace VenueGo.Tests.Services
     /// </summary>
     public class QrTokenServiceTests
     {
-        // 剛好是某一格時間窗的開頭（14:00:30 能被 30 秒整除），這樣「+59 秒還有效、+60 秒過期」的邊界才清楚
-        private static readonly DateTime WindowStart = new(2026, 10, 18, 14, 0, 30);
+        // 一格時間窗幾秒：要跟 QrTokenService.WindowSeconds 一致。
+        // 2026-10-30 暫改成 300 秒方便測試（原本 30 秒）；改回 30 秒時，只要改這一行
+        private const int WindowSeconds = 300;
+
+        // 剛好是某一格時間窗的開頭（14:00:00 能被 30 和 300 整除），
+        // 這樣「兩格內還有效、剛好兩格就過期」的邊界才清楚
+        private static readonly DateTime WindowStart = new(2026, 10, 18, 14, 0, 0);
 
         private const int TicketId = 42;
         private const string Qrtoken = "TCK-test-qrtoken-0001";
@@ -78,18 +82,18 @@ namespace VenueGo.Tests.Services
         }
 
         [Fact]
-        public void Generate_到期時間是這一格的結束_也就是30秒後()
+        public void Generate_到期時間是這一格的結束_也就是一格之後()
         {
             var (_, expiresAt) = _sut.Generate(TicketId, Qrtoken);
 
-            expiresAt.ShouldBe(WindowStart.AddSeconds(30));
+            expiresAt.ShouldBe(WindowStart.AddSeconds(WindowSeconds));
         }
 
         [Fact]
         public void 同一格時間窗內產生兩次_內容相同()
         {
             var (first, _) = _sut.Generate(TicketId, Qrtoken);
-            _time.Now.Returns(WindowStart.AddSeconds(29));
+            _time.Now.Returns(WindowStart.AddSeconds(WindowSeconds - 1));
             var (second, _) = _sut.Generate(TicketId, Qrtoken);
 
             second.ShouldBe(first);
@@ -99,7 +103,7 @@ namespace VenueGo.Tests.Services
         public void 跨到下一格時間窗_內容不同()
         {
             var (first, _) = _sut.Generate(TicketId, Qrtoken);
-            _time.Now.Returns(WindowStart.AddSeconds(30));
+            _time.Now.Returns(WindowStart.AddSeconds(WindowSeconds));
             var (second, _) = _sut.Generate(TicketId, Qrtoken);
 
             second.ShouldNotBe(first);
@@ -110,11 +114,11 @@ namespace VenueGo.Tests.Services
         // ════════════════════════════════════════════════════════
 
         [Theory]
-        [InlineData(0)]    // 同一格
-        [InlineData(29)]   // 同一格的最後一秒
-        [InlineData(30)]   // 下一格開頭：QR 是前一格的，仍然有效
-        [InlineData(59)]   // 下一格的最後一秒：仍然有效
-        public void 產生後59秒內_仍然有效(int secondsLater)
+        [InlineData(0)]                       // 同一格
+        [InlineData(WindowSeconds - 1)]       // 同一格的最後一秒
+        [InlineData(WindowSeconds)]           // 下一格開頭：QR 是前一格的，仍然有效
+        [InlineData(WindowSeconds * 2 - 1)]   // 下一格的最後一秒：仍然有效
+        public void 產生後兩格內_仍然有效(int secondsLater)
         {
             var (payload, _) = _sut.Generate(TicketId, Qrtoken);
             _time.Now.Returns(WindowStart.AddSeconds(secondsLater));
@@ -123,9 +127,9 @@ namespace VenueGo.Tests.Services
         }
 
         [Theory]
-        [InlineData(60)]    // 剛好隔兩格
-        [InlineData(300)]
-        public void 產生後60秒以上_已過期(int secondsLater)
+        [InlineData(WindowSeconds * 2)]    // 剛好隔兩格
+        [InlineData(WindowSeconds * 10)]   // 隔很久
+        public void 產生後兩格以上_已過期(int secondsLater)
         {
             var (payload, _) = _sut.Generate(TicketId, Qrtoken);
             _time.Now.Returns(WindowStart.AddSeconds(secondsLater));
@@ -139,9 +143,9 @@ namespace VenueGo.Tests.Services
         [Fact]
         public void QR的時間窗比現在還新_視為過期()
         {
-            // 在 14:00:30 產生，卻拿到 14:00:00（上一格）去驗證，代表時鐘對不上
+            // 在 14:00:00 這一格產生，卻拿到上一格的時間去驗證，代表時鐘對不上
             var (payload, _) = _sut.Generate(TicketId, Qrtoken);
-            _time.Now.Returns(WindowStart.AddSeconds(-30));
+            _time.Now.Returns(WindowStart.AddSeconds(-WindowSeconds));
 
             QrVerifyResult result = VerifyPayload(payload, Qrtoken);
 

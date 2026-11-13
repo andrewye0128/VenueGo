@@ -1,0 +1,73 @@
+# ────────────────────────────────────────────────────────────────
+#  自動檢查（GitHub Actions）
+#  推上 GitHub 之後，GitHub 會借一台乾淨的電腦：
+#    後端：編譯 → 跑 VenueGo.Tests 的全部單元測試
+#    前端：安裝套件 → npm run build
+#  結果顯示在 GitHub 的「Actions」分頁；失敗時會寄信給推程式的人
+#
+#  測試不連資料庫、不上網，所以這裡不需要任何連線字串或金鑰
+# ────────────────────────────────────────────────────────────────
+name: CI
+
+on:
+  push:               # 任何分支推上 GitHub 時
+  pull_request:       # 發 Pull Request 時
+  workflow_dispatch:  # 在 Actions 分頁手動按「Run workflow」
+
+# 同一個分支短時間內推好幾次：只檢查最新的那一次，舊的直接取消
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+# 只需要讀取程式碼，不給檢查員其他權限
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: 後端：編譯與單元測試
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: 下載程式碼
+        uses: actions/checkout@v5
+
+      - name: 安裝 .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - name: 還原 NuGet 套件
+        run: dotnet restore VenueGo.Tests/VenueGo.Tests.csproj
+
+      - name: 編譯（會一起編譯 VenueGo）
+        run: dotnet build VenueGo.Tests/VenueGo.Tests.csproj --configuration Release --no-restore
+
+      # .NET 10 不能用 dotnet test（VSTest 已不支援），要用 dotnet run 執行 xUnit v3 測試
+      - name: 執行單元測試
+        run: dotnet run --project VenueGo.Tests --configuration Release --no-build
+
+  frontend:
+    name: 前端：建置
+    runs-on: windows-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: VenueGo/Front-Web
+    steps:
+      - name: 下載程式碼
+        uses: actions/checkout@v5
+
+      - name: 安裝 Node 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: VenueGo/Front-Web/package-lock.json
+
+      # npm ci：完全照 package-lock.json 安裝，跟大家電腦上的版本一模一樣
+      - name: 安裝套件
+        run: npm ci
+
+      - name: 建置
+        run: npm run build

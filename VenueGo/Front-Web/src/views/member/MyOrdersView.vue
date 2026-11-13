@@ -2,7 +2,8 @@
   會員中心／訂單與付款：篩選、列表（電腦表格／手機卡片）、分頁、明細、付款
   跟「我的預約」的差別：這頁的重點是「錢付了沒、要付多少、什麼時候前要付」，排序是下單時間新到舊
   資料來自 [GET] /api/orders（api/orderApi.js）；明細視窗另外讀 /api/orders/{orderId}
-  付款期限到了會自動重新讀取（useDueRefresh），後端排程改成已逾期後不用重新整理
+  後端把預約改成已逾期時會立刻通知（onReservationChanged），收到就重新讀取，不用重新整理
+  付款期限到了也會自動重新讀取（useDueRefresh），即時通知連不上時的備案
   「付款」按鈕：向後端開一張綠界付款單（[POST] /api/orders/{orderId}/payment/start），再整頁跳到綠界刷卡頁（onPay）
   付完錢綠界會把客人帶回這一頁（?keyword=訂單編號&from=ecpay），跳出付款結果視窗（PaymentResultModal）
   訂單編號跟「我的預約」同一個編號；點編號跳到我的預約並只查這一筆
@@ -21,6 +22,7 @@ import PaymentResultModal from "@/components/orders/PaymentResultModal.vue";
 import { getMyOrders } from "@/api/orderApi";
 import { useDueRefresh } from "@/composables/useDueRefresh";
 import { useKeywordQuery } from "@/composables/useKeywordQuery";
+import { onReservationChanged } from "@/composables/useMemberNotifications";
 import { useOrderPayment } from "@/composables/useOrderPayment";
 import { useSiteClock } from "@/composables/useSiteClock";
 import { ErrorCodes } from "@/constants/errorCodes";
@@ -142,7 +144,12 @@ onMounted(async () => {
   showPaymentResultIfReturned();
 });
 
-// 付款期限到了自動重新讀取，不用重新整理就會看到「已逾期」（說明見 useDueRefresh.js）
+// 後端通知預約有變化（例如逾期）：這一頁有受影響的才重新讀（剛重新連上時一律重新讀）
+onReservationChanged((change) => {
+  if (change.affects(result.value.items.map((item) => item.reservationId))) load({ silent: true });
+});
+
+// 付款期限到了自動重新讀取：即時通知連不上時的備案（說明見 useDueRefresh.js）
 useDueRefresh(
   computed(() => result.value.items),
   () => load({ silent: true }),
@@ -199,11 +206,29 @@ function deadlineText(order) {
 
 // ── 明細、付款 ──
 const detailModal = useOverlay().create(OrderDetailModal);
+// 明細視窗開著的是哪一筆（null＝沒開）：列表重新讀取後，要把最新的那一筆送進視窗
+let openedOrderId = null;
 
 async function openDetail(order) {
-  const choice = await detailModal.open({ order });
-  if (choice === "pay") onPay(order);
+  openedOrderId = order.orderId;
+  try {
+    const choice = await detailModal.open({ order });
+    if (choice === "pay") onPay(order);
+  } finally {
+    openedOrderId = null;
+  }
 }
+
+// 列表重新讀取了（即時通知、期限到了、付款狀態變了），明細視窗還開著的話，換成最新的資料
+// patch 是 Nuxt UI useOverlay 的功能：更新已經打開的視窗的 props，不用關掉重開
+watch(
+  () => result.value.items,
+  (items) => {
+    if (openedOrderId === null) return;
+    const latest = items.find((item) => item.orderId === openedOrderId);
+    if (latest) detailModal.patch({ order: latest });
+  },
+);
 
 // 表格、手機卡片、明細視窗三個入口都走這裡：向後端開付款單 → 整頁跳到綠界刷卡頁（說明見 useOrderPayment.js）
 // 付款狀態可能變了（另一個分頁付過了、從綠界按上一頁回來）就安靜地重新讀取列表

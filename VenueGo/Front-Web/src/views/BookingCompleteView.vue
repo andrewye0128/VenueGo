@@ -9,6 +9,8 @@
       → 打開頁面時用訂單編號向後端查這一筆（[GET] /api/orders?keyword=），拿到訂單 Id 和最新的付款狀態
     - 能不能付款用 canPay 判斷（同「訂單與付款」頁），按鈕顯示「剩 N 分鐘」，時間到了自動消失
     - 付款流程（開付款單、跳到綠界、錯誤處理）由 useOrderPayment 處理，跟「訂單與付款」頁共用
+  付款期限過了還沒付：後端改成已逾期時會立刻通知（onReservationChanged），收到就重新查詢，
+    畫面改成「預約已逾期」；即時通知連不上時，期限到了也會自動重新查詢（useDueRefresh）
   UButton、UIcon 由 Nuxt UI 自動匯入
 -->
 <script setup>
@@ -16,10 +18,12 @@ import { computed, onMounted, ref } from "vue";
 import BookingSteps from "@/components/booking/BookingSteps.vue";
 import EmptyState from "@/components/EmptyState.vue";
 import { getMyOrders } from "@/api/orderApi";
+import { useDueRefresh } from "@/composables/useDueRefresh";
+import { onReservationChanged } from "@/composables/useMemberNotifications";
 import { useOrderPayment } from "@/composables/useOrderPayment";
 import { useSiteClock } from "@/composables/useSiteClock";
 import { PAYMENT_METHOD, PAYMENT_METHOD_LABEL } from "@/constants/payment";
-import { PAYMENT_STATUS_CODE } from "@/constants/statuses";
+import { PAYMENT_STATUS_CODE, RESERVATION_STATUS_CODE } from "@/constants/statuses";
 import { formatAmount, formatDateTime, formatDateWithWeekday } from "@/utils/format";
 import { canPay, formatRemaining } from "@/utils/order";
 
@@ -35,13 +39,21 @@ const { now } = useSiteClock();
 const order = ref(null); // 後端查到的訂單（有 orderId、最新的付款狀態、最晚開始付款時間）
 const orderStatus = ref("loading"); // "loading" 查詢中、"ready" 查到了、"error" 查不到
 
-async function loadOrder() {
+/**
+ * @param {object} [options]
+ * @param {boolean} [options.silent] 自動重新查詢用（收到通知、期限到了）：失敗時保留原本的資料，
+ *   不要突然把付款按鈕拿掉、改成「請到訂單與付款頁付款」
+ */
+async function loadOrder({ silent = false } = {}) {
   try {
     const data = await getMyOrders({ keyword: reservation.orderNo, pageSize: 1 });
     // keyword 是「包含」：用完整的訂單編號查，最多只會有這一筆，還是比對一次比較保險
-    order.value = data.items.find((item) => item.orderNo === reservation.orderNo) ?? null;
-    orderStatus.value = order.value ? "ready" : "error";
+    const found = data.items.find((item) => item.orderNo === reservation.orderNo) ?? null;
+    if (silent && !found) return;
+    order.value = found;
+    orderStatus.value = found ? "ready" : "error";
   } catch {
+    if (silent) return;
     // 查不到也不擋客人：付款按鈕不顯示，提示到「訂單與付款」頁付款
     orderStatus.value = "error";
   }
@@ -51,7 +63,24 @@ onMounted(() => {
 });
 
 // 付款狀態可能變了（另一個分頁付過了、從綠界按上一頁回來）就重新查一次
-const { isBusy, isPaying, pay } = useOrderPayment({ onStateChanged: loadOrder });
+const { isBusy, isPaying, pay } = useOrderPayment({ onStateChanged: () => loadOrder() });
+
+// 後端通知預約有變化（例如逾期）：有這一筆、或剛重新連上就重新查詢
+onReservationChanged((change) => {
+  if (order.value === null) return; // 現場付款、還沒查到訂單：不用處理
+  if (change.affects([order.value.reservationId])) loadOrder({ silent: true });
+});
+
+// 付款期限到了自動重新查詢：即時通知連不上時的備案（說明見 useDueRefresh.js）
+useDueRefresh(
+  computed(() => (order.value ? [order.value] : [])),
+  () => loadOrder({ silent: true }),
+);
+
+// 預約已逾期（付款期限過了還沒付，後端已經取消預約、釋放時段）
+const isExpired = computed(
+  () => order.value?.reservationStatus === RESERVATION_STATUS_CODE.EXPIRED,
+);
 
 const payable = computed(() => order.value !== null && canPay(order.value, now.value));
 // 查詢中先顯示（轉圈、不能按），查到之後可以付才留著
@@ -62,6 +91,7 @@ const showPayButton = computed(
 // 付款期限提示框的情況：付款處理中、已付款時，不再提醒「請在期限前付款」
 const paymentStage = computed(() => {
   if (!isOnline.value) return "onsite";
+  if (isExpired.value) return "expired";
   const status = order.value?.paymentStatus;
   if (status === PAYMENT_STATUS_CODE.PROCESSING) return "processing";
   if (status === PAYMENT_STATUS_CODE.PAID) return "paid";
@@ -110,10 +140,20 @@ const details = computed(() => {
         class="mx-auto max-w-xl rounded border border-neutral-border bg-neutral-surface p-6 md:p-8"
       >
         <div class="text-center">
-          <!-- 圖示是 inline 元素，text-center 不一定置中，改成 block＋mx-auto -->
-          <UIcon name="i-mdi-check-circle" class="mx-auto block size-14 text-semantic-success" />
+          <!-- 圖示是 inline 元素，text-center 不一定置中，改成 block＋mx-auto
+               已逾期：預約已經被取消了，不能再顯示綠色的「預約成功」 -->
+          <UIcon
+            v-if="isExpired"
+            name="i-mdi-clock-alert-outline"
+            class="mx-auto block size-14 text-neutral-text-secondary"
+          />
+          <UIcon
+            v-else
+            name="i-mdi-check-circle"
+            class="mx-auto block size-14 text-semantic-success"
+          />
           <h2 id="complete-heading" class="mt-2 text-xl font-bold text-neutral-text-primary">
-            預約成功
+            {{ isExpired ? "預約已逾期" : "預約成功" }}
           </h2>
           <p class="mt-1 text-sm text-neutral-text-secondary">
             訂單編號 <span class="font-semibold tabular-nums">{{ reservation.orderNo }}</span>
@@ -146,6 +186,9 @@ const details = computed(() => {
             付款確認中，結果確認後會顯示在「訂單與付款」頁。
           </span>
           <span v-else-if="paymentStage === 'paid'">已完成付款，預約已確認。</span>
+          <span v-else-if="paymentStage === 'expired'">
+            已超過付款期限，預約已自動取消，時段已開放給其他人預約。如果還想使用這個場地，請重新預約。
+          </span>
           <span v-else-if="paymentStage === 'closed'">
             已超過可以開始線上付款的時間，逾期未付款的預約將自動取消。
           </span>
@@ -174,11 +217,15 @@ const details = computed(() => {
               >（{{ formatRemaining(order.paymentStartDeadline, now) }}）</template
             >
           </UButton>
-          <!-- 沒有付款按鈕時，「查看我的預約」就是主要的按鈕 -->
+          <!-- 已逾期：主要的下一步是重新預約 -->
+          <UButton v-if="isExpired" :to="{ name: 'booking' }" color="action" size="lg">
+            重新預約
+          </UButton>
+          <!-- 沒有付款按鈕、也沒有重新預約時，「查看我的預約」就是主要的按鈕 -->
           <UButton
             :to="{ name: 'reservations' }"
-            :color="showPayButton ? 'primary' : 'action'"
-            :variant="showPayButton ? 'outline' : 'solid'"
+            :color="showPayButton || isExpired ? 'primary' : 'action'"
+            :variant="showPayButton || isExpired ? 'outline' : 'solid'"
             size="lg"
           >
             查看我的預約

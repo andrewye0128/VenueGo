@@ -250,6 +250,14 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      // 會員即時通知（SignalR，後端 MemberNotificationHub）：
+      // 連線時先發一般請求（negotiate），再升級成 WebSocket，所以要加 ws: true，WebSocket 才會一起轉過去
+      '/hubs': {
+        target: 'https://localhost:7078',
+        changeOrigin: true,
+        secure: false,
+        ws: true,
+      },
     },
   },
 })

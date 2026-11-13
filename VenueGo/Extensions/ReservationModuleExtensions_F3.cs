@@ -1,4 +1,7 @@
-﻿using VenueGo.Options;
+﻿using Microsoft.AspNetCore.Authentication.JwtBearer;
+using VenueGo.Hubs;
+using VenueGo.Options;
+using VenueGo.Services.Notifications;
 using VenueGo.Services.Orders;
 using VenueGo.Services.Payments;
 using VenueGo.Services.Reservations;
@@ -63,7 +66,7 @@ namespace VenueGo.Extensions
             services.AddScoped<IEcpayPaymentVerifier, EcpayPaymentVerifier>();
             services.AddScoped<IEcpayNotificationService, EcpayNotificationService>();
 
-            // 逾期排程：每 1 分鐘把超過付款期限、還沒付款的預約改成已逾期，並釋放時段
+            // 逾期排程：每 10 秒把超過付款期限、還沒付款的預約改成已逾期，並釋放時段
             services.AddScoped<IReservationExpiryService, ReservationExpiryService>();
 
             // 預約逾期背景排程
@@ -75,7 +78,58 @@ namespace VenueGo.Extensions
             // 付款對帳背景排程：每 1 分鐘一輪
             services.AddHostedService<PaymentReconciliationHostedService>();
 
+            // 前台會員的即時通知（SignalR）：逾期排程改完狀態後，通知會員的瀏覽器重新讀取
+            // MemberNotifier 只用到 IHubContext（整個網站一份），所以註冊成 Singleton
+            services.AddSignalR();
+            services.AddSingleton<IMemberNotifier, MemberNotifier>();
+            services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, AllowHubAccessTokenFromQuery);
+
             return services;
+        }
+
+        /// <summary>
+        /// 讓會員連即時通知時，JWT 可以放在網址的 ?access_token=。
+        /// <para>
+        /// 【為什麼】瀏覽器建立 WebSocket 時沒辦法自訂標頭，SignalR 的做法是把 token 放在網址上（微軟官方文件的做法）。
+        /// </para>
+        /// <para>
+        /// 【為什麼用 PostConfigure】JWT 的設定在 Program.cs（全組共用）。PostConfigure 會在 Program.cs 的設定之後
+        /// 再補上這一段，Program.cs 的 JWT 區塊不用改。
+        /// </para>
+        /// <para>
+        /// 【安全】只有即時通知的網址才從網址讀 token，其他 API 一律只看 Authorization 標頭；
+        /// 標頭已經有 token 時也不看網址。連線一律是 HTTPS（wss://），網址在傳送途中是加密的。
+        /// 注意：不要開啟會記錄完整網址的請求 log，token 會被寫進 log。
+        /// </para>
+        /// </summary>
+        private static void AllowHubAccessTokenFromQuery(JwtBearerOptions options)
+        {
+            options.Events ??= new JwtBearerEvents();
+
+            // 保留原本的處理（目前沒有，預設什麼都不做），以後 Program.cs 加了也不會被蓋掉
+            var original = options.Events.OnMessageReceived;
+
+            options.Events.OnMessageReceived = async context =>
+            {
+                await original(context);
+
+                if (string.IsNullOrEmpty(context.Token)
+                    && context.Request.Path.StartsWithSegments(MemberNotificationHub.Path)
+                    && context.Request.Query.TryGetValue("access_token", out var accessToken))
+                {
+                    context.Token = accessToken;
+                }
+            };
+        }
+
+        /// <summary>
+        /// 掛上前台會員的即時通知（MemberNotificationHub）。
+        /// Program.cs 在 app.MapControllers() 之後呼叫：要放在 UseAuthentication、UseAuthorization 之後，登入檢查才有效。
+        /// </summary>
+        public static IEndpointRouteBuilder MapMemberNotifications(this IEndpointRouteBuilder endpoints)
+        {
+            endpoints.MapHub<MemberNotificationHub>(MemberNotificationHub.Path);
+            return endpoints;
         }
     }
 }

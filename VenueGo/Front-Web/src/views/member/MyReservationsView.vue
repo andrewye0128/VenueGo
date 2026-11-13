@@ -1,7 +1,8 @@
 <!--
   會員中心／我的預約：篩選、列表（電腦表格／手機卡片）、分頁、明細、取消
   資料來自後端 GET /api/reservations（api/reservationApi.js），會員身分由登入的 JWT 決定
-  付款期限到了會自動重新讀取（useDueRefresh），後端排程改成已逾期後不用重新整理
+  後端把預約改成已逾期時會立刻通知（onReservationChanged），收到就重新讀取，不用重新整理
+  付款期限到了也會自動重新讀取（useDueRefresh），即時通知連不上時的備案
   編號只顯示訂單編號（VG…），跟「訂單與付款」同一個編號；點編號跳到訂單頁並只查這一筆
   預約編號（R012）只在後台使用，這裡的 reservationId 只拿來呼叫 API
   UFormField、UInput、USelect、UAlert、UButton 與 useOverlay、useToast 由 Nuxt UI 自動匯入
@@ -19,6 +20,7 @@ import ReservationDetailModal from "@/components/reservations/ReservationDetailM
 import { cancelMyReservation, getMyReservations } from "@/api/reservationApi";
 import { useDueRefresh } from "@/composables/useDueRefresh";
 import { useKeywordQuery } from "@/composables/useKeywordQuery";
+import { onReservationChanged } from "@/composables/useMemberNotifications";
 import { useSiteClock } from "@/composables/useSiteClock";
 import { ErrorCodes } from "@/constants/errorCodes";
 import { useMemberStore } from "@/stores/member";
@@ -153,7 +155,12 @@ watch(filters, () => {
 watch(page, () => load());
 onMounted(() => load());
 
-// 付款期限到了自動重新讀取，不用重新整理就會看到「已逾期」（說明見 useDueRefresh.js）
+// 後端通知預約有變化（例如逾期）：這一頁有受影響的才重新讀（剛重新連上時一律重新讀）
+onReservationChanged((change) => {
+  if (change.affects(result.value.items.map((item) => item.reservationId))) load({ silent: true });
+});
+
+// 付款期限到了自動重新讀取：即時通知連不上時的備案（說明見 useDueRefresh.js）
 useDueRefresh(
   computed(() => result.value.items),
   () => load({ silent: true }),
@@ -211,14 +218,33 @@ const detailModal = overlay.create(ReservationDetailModal);
 const cancelModal = overlay.create(CancelConfirmModal);
 const toast = useToast();
 
+// 明細視窗開著的是哪一筆（null＝沒開）：列表重新讀取後，要把最新的那一筆送進視窗
+let openedReservationId = null;
+
 async function openDetail(reservation) {
-  // 能不能取消由頁面決定後傳進去：判斷要用網站時間，明細視窗不必自己處理
-  const choice = await detailModal.open({
-    reservation,
-    cancellable: isCancellable(reservation),
-  });
-  if (choice === "cancel") openCancel(reservation);
+  openedReservationId = reservation.reservationId;
+  try {
+    // 能不能取消由頁面決定後傳進去：判斷要用網站時間，明細視窗不必自己處理
+    const choice = await detailModal.open({
+      reservation,
+      cancellable: isCancellable(reservation),
+    });
+    if (choice === "cancel") openCancel(reservation);
+  } finally {
+    openedReservationId = null;
+  }
 }
+
+// 列表重新讀取了（即時通知、期限到了、取消之後），明細視窗還開著的話，換成最新的資料
+// patch 是 Nuxt UI useOverlay 的功能：更新已經打開的視窗的 props，不用關掉重開
+watch(
+  () => result.value.items,
+  (items) => {
+    if (openedReservationId === null) return;
+    const latest = items.find((item) => item.reservationId === openedReservationId);
+    if (latest) detailModal.patch({ reservation: latest, cancellable: isCancellable(latest) });
+  },
+);
 
 // 表格、手機卡片、明細視窗三個入口都走這裡
 async function openCancel(reservation) {

@@ -6,6 +6,7 @@ export const ErrorCodes = Object.freeze({
   // ── 後端回傳 ──
   NotFound: "NotFound", // 找不到資料
   LoginFailed: "LoginFailed", // 備用，理論上登入失敗現在都會有更明確的代碼
+  ServerError: "ServerError", // 伺服器發生沒預料到的錯誤（HTTP 500，後端 Helpers/ApiExceptionHandler.cs）；message 附有錯誤代碼
 
   // ── 會員登入（MemberAuthApiController）──
   InvalidCredentials: "InvalidCredentials", // 帳號不存在 / 密碼錯誤

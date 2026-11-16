@@ -98,6 +98,12 @@ namespace VenueGo.Services.Reservations
         /// 找出要逾期的預約，期限最早的先處理。
         /// <para>只查資料、不修改，所以用 AsNoTracking。</para>
         /// <para>付款取最新一筆（CreatedAt 最晚），跟「我的預約」「訂單與付款」同一個規則。</para>
+        /// <para>
+        /// 【索引】資料庫有篩選索引 IX_Reservations_Pending（只收 ReservationStatus = 0）：
+        /// 每 10 秒只看待確認的那幾筆，不用把全部預約讀一遍（10 萬筆時 13 ms → 2 ms，2026-11-15 量測）。
+        /// 狀態要寫成固定的列舉值（現在的 ReservationStatus.Pending），SQL 才會是 = 0、用得到索引；
+        /// 改成變數或參數的話索引會默默失效（不會出錯，只是變慢）
+        /// </para>
         /// </summary>
         private Task<List<DueCandidate>> FindDueAsync(DateTime now, CancellationToken ct)
         {

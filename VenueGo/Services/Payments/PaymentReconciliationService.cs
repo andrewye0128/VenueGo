@@ -88,6 +88,11 @@ namespace VenueGo.Services.Payments
         /// <summary>
         /// 找出該問的付款：付款處理中、最新那張付款單送出超過 FirstQueryAfter、
         /// 而且最近 RequeryInterval 內沒問過。送出最早的先問，最多 MaxQueriesPerRound 筆
+        /// <para>
+        /// 【索引】資料庫有篩選索引 IX_Payments_Processing（只收 PaymentStatus = 1）：
+        /// 平常沒有處理中的付款，一頁都不用讀（10 萬筆時 8 ms → 0 ms，2026-11-15 量測）。
+        /// 狀態要寫成固定的列舉值（現在的 PaymentStatus.Processing），改成變數的話索引會默默失效
+        /// </para>
         /// </summary>
         private Task<List<Candidate>> FindCandidatesAsync(DateTime now, CancellationToken ct)
         {

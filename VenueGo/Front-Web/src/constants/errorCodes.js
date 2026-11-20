@@ -14,6 +14,8 @@ export const ErrorCodes = Object.freeze({
   AccountSuspended: "AccountSuspended", // 帳號已被停權
   AccountInactive: "AccountInactive", // 帳號已註銷 / 狀態異常
   NotLoggedIn: "NotLoggedIn", // 沒登入（/api 開頭的網址，後端 ApiResponses.RedirectToLogin 回的）
+  InvalidToken: "InvalidToken", // 登入憑證有效，但找不到這個會員，例如重跑初始化腳本後帳號不見了（401，/me、個人資料）
+  // 「要不要登出」請用 utils/authErrors.js 的 isSessionInvalidError（看 401），不要只比對 NotLoggedIn
   Forbidden: "Forbidden", // 登入了但身分不對，例如員工帳號打會員專用的 API
 
   // ── 會員個人資料（MemberProfileApiController）──

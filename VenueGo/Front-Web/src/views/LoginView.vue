@@ -1,8 +1,9 @@
 <script setup>
-import { reactive, ref, onMounted } from "vue";
+import { reactive, ref } from "vue";
 import { z } from "zod";
 import { useRouter, useRoute } from "vue-router";
 import { useMemberStore } from "@/stores/member";
+import { safeRedirect } from "@/utils/safeRedirect";
 
 const router = useRouter();
 const route = useRoute();
@@ -30,37 +31,7 @@ const successMessage = ref(
   route.query.registered === "1" ? "註冊成功，請使用您的 Email 與密碼登入。" : "",
 );
 
-// 已登入會員進入登入頁時，導回首頁或原本指定的頁面
-onMounted(async () => {
-  const token = localStorage.getItem("token");
-
-  if (!token) return;
-
-  try {
-    // Store 尚未取得會員資料時，重新向後端確認
-    if (!memberStore.member) {
-      await memberStore.fetchCurrentMember();
-    }
-
-    if (memberStore.member) {
-      const redirect = safeRedirect(route.query.redirect);
-      await router.replace(redirect ?? { name: "home" });
-    }
-  } catch {
-    // Token 無效或取得會員資料失敗，清除登入狀態
-    memberStore.logout();
-  }
-});
-
-// 只接受本網站內的路徑（"/" 開頭），其他一律忽略
-// 防止「開放式重新導向」：壞人做一個 /login?redirect=https://假網站 的連結，
-// 客人看到網址是 VenueGo 放心登入，登入後卻被帶到假網站
-// "//假網站"、"/\假網站" 瀏覽器也會當成外部網址，所以也要擋
-function safeRedirect(value) {
-  if (typeof value !== "string") return null;
-  if (!value.startsWith("/") || value.startsWith("//") || value.startsWith("/\\")) return null;
-  return value;
-}
+// 已登入會員打開登入頁時，導回首頁或原本指定的頁面：由路由守衛處理（router/index.js 的 skipLoginIfLoggedIn）
 
 // 登入
 async function onSubmit() {

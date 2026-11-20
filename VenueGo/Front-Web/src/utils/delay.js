@@ -1,5 +1,6 @@
 // 等待一段時間：await delay(300)
-// 目前只用在假資料「模擬網路等待」（串接真的 API 後就不需要了）
+// 用在：假資料「模擬網路等待」（串接真的 API 後就不需要了）、
+//       「暫時無法連線」頁的重試按鈕至少轉一下（ServiceUnavailableView.vue）
 //
 // 為什麼要用 new Promise 包一層：
 //   setTimeout 是「時間到了呼叫一個函式」的舊式寫法，本身不回傳 Promise，不能直接 await，

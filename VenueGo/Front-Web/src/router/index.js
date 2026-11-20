@@ -1,6 +1,8 @@
 import { createRouter, createWebHistory } from "vue-router";
 // import HomeView from "../views/HomeView.vue";
-import { useMemberStore } from "@/stores/member";
+import { useMemberStore, SessionStatus } from "@/stores/member";
+import { safeRedirect } from "@/utils/safeRedirect";
+import { trackNavigationLoading } from "@/composables/useNavigationLoading";
 // 顧客端評論的路由（昱）：評論專區、撰寫、我的評論、員工預覽
 import reviewRoutes from "./reviewRoutes";
 
@@ -157,6 +159,13 @@ const router = createRouter({
     // 顧客端評論（昱）：要放在 404 前面
     ...reviewRoutes,
     {
+      // 暫時無法確認登入狀態（後端沒回應、資料庫斷線）時，路由守衛帶來這裡
+      // ?redirect= 是原本要去的頁面，按「重試」會回去；登入狀態保留，不會登出
+      path: "/service-unavailable",
+      name: "service-unavailable",
+      component: () => import("../views/ServiceUnavailableView.vue"),
+    },
+    {
       // 404：網址不符合上面任何路由時顯示（一定要放在最後一個）
       path: "/:pathMatch(.*)*",
       name: "not-found",
@@ -174,88 +183,56 @@ const router = createRouter({
     return { top: 0 };
   },
 });
-// 路由守衛：未登入或 Token 無效時，禁止進入需要登入的頁面。
-// 哪些頁面要登入：路由設定加上 meta: { requiresAuth: true }（子頁面會跟著父頁面）
-//   目前有：會員中心 /member/...、場地預約的填寫資料、預約完成
-// 帶去登入頁時，把原本要去的網址放在 ?redirect=，登入成功後 LoginView 會帶回來
-// router.beforeEach(async (to) => {
-//   // to.matched：這個網址對應到的所有路由（含父路由），任一個要求登入就算
-//   if (!to.matched.some((record) => record.meta.requiresAuth)) return;
+// ════════════════════════════════════════════════════════════════
+//  路由守衛：每次換頁前，確認能不能進去
+//  - 哪些頁面要登入：路由設定加上 meta: { requiresAuth: true }（子頁面會跟著父頁面）
+//    目前有：會員中心 /member/...、場地預約的填寫資料、預約完成
+//  - 登入狀態由 memberStore.ensureSession() 確認（「什麼情況要登出」的規則寫在那裡）：
+//      有登入 → 放行
+//      沒登入、登入失效（401）→ 帶去登入頁
+//      後端暫時不能回答（沒開、資料庫斷線）→ 帶去「暫時無法連線」頁，不登出
+//  - 帶走時把原本要去的網址放在 ?redirect=，登入成功或按「重試」後會帶回來
+// ════════════════════════════════════════════════════════════════
 
-//   const token = localStorage.getItem("token");
-//   const memberStore = useMemberStore();
-//   // fullPath 含查詢字串，例如 /booking/confirm?venueId=7&date=...，選擇才不會遺失
-//   const toLogin = { name: "login", query: { redirect: to.fullPath } };
+// 這一頁要不要登入：路由或它的上層路由有寫 meta: { requiresAuth: true } 就要
+function requiresAuth(to) {
+  return to.matched.some((record) => record.meta.requiresAuth);
+}
 
-//   if (!token) {
-//     return toLogin;
-//   }
+// 要登入的頁面：依登入狀態放行、帶去登入頁，或帶去「暫時無法連線」頁
+async function guardMemberPage(to) {
+  // fullPath 含查詢字串，例如 /booking/confirm?venueId=7&date=...，選擇才不會遺失
+  const backHere = { redirect: to.fullPath };
 
-//   if (!memberStore.member) {
-//     try {
-//       await memberStore.fetchCurrentMember();
-//     } catch (error) {
-//       memberStore.logout();
-//       return toLogin;
-//     }
-//   }
-// });
-
-router.beforeEach(async (to) => {
-  const token = localStorage.getItem("token");
-  const memberStore = useMemberStore();
-
-  // 1. 已登入會員進入登入頁，先確認登入狀態，再導回首頁
-  if (to.name === "login" && token) {
-    if (!memberStore.member) {
-      try {
-        await memberStore.fetchCurrentMember();
-      } catch (error) {
-        memberStore.logout();
-        // Token 無效，允許繼續進入登入頁
-        return true;
-      }
-    }
-
-    // 已登入且會員資料有效，不應再次顯示登入頁
-    if (memberStore.member) {
-      const redirect = to.query.redirect;
-
-      // 若登入頁原本帶有 redirect，保留原本要前往的頁面
-      if (typeof redirect === "string" && redirect.startsWith("/")) {
-        return redirect;
-      }
-
-      return { name: "home", replace: true };
-    }
+  switch (await useMemberStore().ensureSession()) {
+    case SessionStatus.LoggedIn:
+      return true;
+    case SessionStatus.Unavailable:
+      return { name: "service-unavailable", query: backHere };
+    default:
+      // LoggedOut；以後多了新的結果卻沒處理時，也先請客人登入，不會不小心放行
+      return { name: "login", query: backHere };
   }
+}
 
-  // 2. 原本的需要登入頁面檢查
-  if (!to.matched.some((record) => record.meta.requiresAuth)) {
+// 已經登入的人打開登入頁：直接帶去 ?redirect= 指定的頁面，沒有就回首頁
+// 沒登入、或後端暫時不能回答：照常顯示登入頁（不登出）
+async function skipLoginIfLoggedIn(to) {
+  const status = await useMemberStore().ensureSession();
+  if (status !== SessionStatus.LoggedIn) {
     return true;
   }
+  // replace：登入頁不留在「上一頁」紀錄裡
+  return safeRedirect(to.query.redirect) ?? { name: "home", replace: true };
+}
 
-  const toLogin = {
-    name: "login",
-    query: { redirect: to.fullPath },
-  };
+// 換頁停頓時顯示進度條：一定要寫在路由守衛「之前」，換頁一開始就開始計時
+trackNavigationLoading(router);
 
-  if (!token) {
-    memberStore.logout();
-    return toLogin;
-  }
-
-  // 3. 確認目前會員資料
-  if (!memberStore.member) {
-    try {
-      await memberStore.fetchCurrentMember();
-    } catch (error) {
-      memberStore.logout();
-      return toLogin;
-    }
-  }
-
-  return true;
+router.beforeEach((to) => {
+  if (to.name === "login") return skipLoginIfLoggedIn(to);
+  if (!requiresAuth(to)) return true;
+  return guardMemberPage(to);
 });
 
 export default router;

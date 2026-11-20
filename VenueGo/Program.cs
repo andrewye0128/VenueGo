@@ -254,8 +254,17 @@ builder.Services.AddSwaggerGen(options =>
 
 //builder.Services.AddScoped<ICurrentUser, FakeCurrentUser>();
 builder.Services.AddSwaggerGen();
+
 // ── API 文件：OpenAPI＋Scalar（Extensions/ApiDocsExtensions）──────
 builder.Services.AddApiDocs();
+
+
+// ── API 統一例外處理（Helpers/ApiExceptionHandler）──────────────
+// API（/api 開頭）發生沒預料到的錯誤時，統一回 500＋ApiResult（errorCode: ServerError）
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+
+// 裝例外處理的規定：一定要有一個「備胎」，萬一總機沒接住，就回標準的錯誤格式（ProblemDetails）
+builder.Services.AddProblemDetails();
 
 var app = builder.Build();
 
@@ -270,6 +279,12 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
+// API 統一例外處理：只看守 /api，後台頁面照舊用上面的 /Home/Error（開發時是錯誤細節頁）
+// 放在最前面，後面所有關卡（登入、權限、Controller…）丟出的錯都接得住
+app.UseWhen(
+    context => ApiExceptionHandler.IsApiRequest(context.Request),
+    api => api.UseExceptionHandler());
+
 // API 文件（OpenAPI JSON＋Scalar 網頁）只在開發環境開啟
 if (app.Environment.IsDevelopment())
 {
@@ -281,8 +296,10 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseRouting();
+
 //啟動 Sesion
 app.UseSession();
+
 // 啟用速率限制
 app.UseRateLimiter();
 // ==========================================
